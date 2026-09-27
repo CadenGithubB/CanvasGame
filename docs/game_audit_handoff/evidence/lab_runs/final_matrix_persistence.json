@@ -1,0 +1,1760 @@
+[
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "enemies",
+  "flips": [
+   {
+    "check": "enemies: no enemy spawns on a wall cell",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: surface chest gold rises with chest tier",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#0",
+  "kind": "FIX",
+  "desc": "FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#1",
+  "kind": "FIX",
+  "desc": "FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#2",
+  "kind": "FIX",
+  "desc": "FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "enemies",
+  "flips": [
+   {
+    "check": "enemies: after a window re-centre a cave enemy chasing through its cave still stands on the cave floor",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#3",
+  "kind": "FIX",
+  "desc": "FIX [D19]: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#4",
+  "kind": "FIX",
+  "desc": "FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#5",
+  "kind": "FIX",
+  "desc": "FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#6",
+  "kind": "FIX",
+  "desc": "FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#7",
+  "kind": "FIX",
+  "desc": "FIX [D20]: do not shift statPickups a second time",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#8",
+  "kind": "FIX",
+  "desc": "FIX [D20]: rebase fortressAllies with everything else",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#9",
+  "kind": "FIX",
+  "desc": "FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#10",
+  "kind": "FIX",
+  "desc": "FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#11",
+  "kind": "FIX",
+  "desc": "FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#12",
+  "kind": "FIX",
+  "desc": "FIX [H7]: relic rolls ignore the equipped relic",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#13",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: restart: a world started while the previous one is mid-jump behaves like one started from a fresh page",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "physics",
+  "flips": [
+   {
+    "check": "physics: a new world starts with the player on the ground even if the previous world ended mid-jump",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#14",
+  "kind": "FIX",
+  "desc": "FIX [N5]: resetEndlessMode clears the jump state",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#15",
+  "kind": "FIX",
+  "desc": "FIX [D24]: only fixed levels spawn an exit goal",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#16",
+  "kind": "FIX",
+  "desc": "FIX [D24]: finishing calibration rebuilds fixed level 1 only outside Endless/Cave Test",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#17",
+  "kind": "FIX",
+  "desc": "FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#18",
+  "kind": "FIX",
+  "desc": "FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#19",
+  "kind": "FIX",
+  "desc": "FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#20",
+  "kind": "FIX",
+  "desc": "FIX [H8]: store an explored delta only for a chunk with explored cells",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#21",
+  "kind": "FIX",
+  "desc": "FIX [H8]: evictDistantChunks also drops cave-network memo entries more than 3 regions from the window centre",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#22",
+  "kind": "FIX",
+  "desc": "FIX [H8] both stores: skip all-zero explored deltas and evict cave-network memo entries outside the reachable working set",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "persistence#23",
+  "kind": "FIX",
+  "desc": "FIX [H4]: a restart restores the page-load spell table (resetEndlessMode wrapped at load time)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

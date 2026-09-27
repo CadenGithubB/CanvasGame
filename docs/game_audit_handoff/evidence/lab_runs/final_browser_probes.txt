@@ -1,0 +1,348 @@
+===== BROWSER_PROBE 00 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0 | ok s12345e0 inside_out renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0 | ok s12345e0 inside_out pixelsDiffering=0]
+PASS browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=55.31% (need >= 2%) cap=0.00% surface=0.00% sky=30.42%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=30.42% (sky 30.42% surface 0.00% cap 0.00%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=92.91% (need >= 5%) floorDark=1.74%]
+PASS browser: looking back out from inside the tunnel the ceiling is visible overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top ceiling=27.72% (need >= 2%) sky=26.58% cap=0.00% surface=0.00%]
+PASS browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top surface+cap=0.00% (surface 0.00% cap 0.00%; need < 5%; sky ahead is allowed)]
+PASS browser: looking back out from inside the tunnel includes the cave entrance arch   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] arch=44.72% of frame (need >= 1%)]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"ceiling":0.2766,"tilted":0.0003,"caveFloor":0.4818,"floorDark":0.0125,"gray":0.0006,"caveWall":0.0726,"wall":0.0022,"sky":0.1521,"other":0.0014}
+METRIC browser.s12345e0.inside_in.top {"ceiling":0.5531,"tilted":0,"caveFloor":0.0345,"floorDark":0.0076,"gray":0.001,"caveWall":0.0943,"wall":0.003,"sky":0.3042,"other":0.0022}
+METRIC browser.s12345e0.inside_in.bottom {"tilted":0.0007,"caveFloor":0.9291,"floorDark":0.0174,"gray":0.0001,"caveWall":0.0509,"wall":0.0014,"other":0.0005}
+METRIC browser.s12345e0.inside_in.luma 31.81
+METRIC browser.s12345e0.inside_out.all {"ceiling":0.1386,"caveFloor":0.2551,"floorDark":0.0259,"arch":0.4472,"sky":0.1329,"other":0.0002}
+METRIC browser.s12345e0.inside_out.top {"ceiling":0.2772,"caveFloor":0.0005,"floorDark":0.0087,"arch":0.4472,"sky":0.2658,"other":0.0005}
+METRIC browser.s12345e0.inside_out.bottom {"caveFloor":0.5097,"floorDark":0.0431,"arch":0.4472}
+METRIC browser.s12345e0.inside_out.luma 48.09
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in","inside_out"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":2}
+METRIC browser.run_ms 766.2 ms
+HARNESS_RESULT FAIL 6
+
+===== BROWSER_PROBE 01 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0 | ok s12345e0 inside_out renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0 | ok s12345e0 inside_out pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=0.00% surface=0.03% sky=1.41%]
+PASS browser: inside the tunnel no sky, grass or surface cap is visible overhead   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=1.44% (sky 1.41% surface 0.03% cap 0.00%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=92.90% (need >= 5%) floorDark=0.00%]
+PASS browser: looking back out from inside the tunnel the ceiling is visible overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top ceiling=17.85% (need >= 2%) sky=0.46% cap=0.00% surface=0.02%]
+PASS browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top surface+cap=0.02% (surface 0.02% cap 0.00%; need < 5%; sky ahead is allowed)]
+PASS browser: looking back out from inside the tunnel includes the cave entrance arch   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] arch=44.72% of frame (need >= 1%)]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"ceiling":0,"surface":0.0001,"tilted":0.0005,"caveFloor":0.4832,"floorDark":0.0028,"gray":0.3798,"caveWall":0.0724,"wall":0.0023,"sky":0.0079,"other":0.0509}
+METRIC browser.s12345e0.inside_in.top {"ceiling":0,"surface":0.0003,"tilted":0.0003,"caveFloor":0.0374,"floorDark":0.0055,"gray":0.7438,"caveWall":0.0942,"wall":0.003,"sky":0.0141,"other":0.1014}
+METRIC browser.s12345e0.inside_in.bottom {"tilted":0.0007,"caveFloor":0.929,"gray":0.0159,"caveWall":0.0506,"wall":0.0017,"sky":0.0017,"other":0.0005}
+METRIC browser.s12345e0.inside_in.luma 38.93
+METRIC browser.s12345e0.inside_out.all {"ceiling":0.0893,"surface":0.0001,"tilted":0,"caveFloor":0.2557,"floorDark":0,"gray":0.202,"arch":0.4472,"sky":0.0023,"other":0.0034}
+METRIC browser.s12345e0.inside_out.top {"ceiling":0.1785,"surface":0.0002,"tilted":0.0001,"caveFloor":0.0009,"floorDark":0,"gray":0.3617,"arch":0.4472,"sky":0.0046,"other":0.0068}
+METRIC browser.s12345e0.inside_out.bottom {"caveFloor":0.5104,"gray":0.0424,"arch":0.4472}
+METRIC browser.s12345e0.inside_out.luma 48.05
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in","inside_out"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":2}
+METRIC browser.run_ms 846.1 ms
+HARNESS_RESULT FAIL 6
+
+===== BROWSER_PROBE 02 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 arch_in renderPassErrors+=0 | ok s12345e0 ramp_far_in renderPassErrors+=0 | ok s12345e0 ramp_near_in renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 arch_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 ramp_far_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 ramp_near_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 arch_in pixelsDiffering=0 | ok s12345e0 ramp_far_in pixelsDiffering=0 | ok s12345e0 ramp_near_in pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [BAD s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] top surface+cap=53.62% (surface 8.44% cap 45.18%; need < 5%; sky ahead is allowed)]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+PASS browser: standing in the archway the tunnel floor ahead is visible below the horizon   [ok s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] bottom caveFloor=94.53% (need >= 1%) floorDark(empty ground plane)=0.00% top cap=45.18%]
+PASS browser: from the open approach ramp the cave floor ahead is visible below the horizon   [ok s12345e0 ramp_far_in along=260 perp=0 world=(231,866) h=-0.28 ug=0 cell=[1@-0.28] bottom caveFloor=50.72% (need >= 1%) floorDark(empty ground plane)=13.63% | ok s12345e0 ramp_near_in along=232 perp=0 world=(258,858) h=-0.80 ug=0 cell=[1@-0.80] bottom caveFloor=54.79% (need >= 1%) floorDark(empty ground plane)=14.22%]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.arch_in.all {"cap":0.2259,"surface":0.0422,"tilted":0.0027,"caveFloor":0.6136,"floorDark":0.002,"gray":0.0006,"caveWall":0.0784,"wall":0.031,"sky":0.0022,"other":0.0014}
+METRIC browser.s12345e0.arch_in.top {"cap":0.4518,"surface":0.0844,"tilted":0.0054,"caveFloor":0.2818,"floorDark":0.0041,"gray":0.0012,"caveWall":0.1048,"wall":0.0593,"sky":0.0045,"other":0.0027}
+METRIC browser.s12345e0.arch_in.bottom {"caveFloor":0.9453,"caveWall":0.0521,"wall":0.0026}
+METRIC browser.s12345e0.arch_in.luma 74.69
+METRIC browser.s12345e0.ramp_far_in.all {"cap":0.4439,"surface":0.0534,"tilted":0.0492,"caveFloor":0.2536,"floorDark":0.0681,"gray":0.0001,"caveWall":0.033,"wall":0.0719,"arch":0.008,"sky":0.0173,"other":0.0016}
+METRIC browser.s12345e0.ramp_far_in.top {"cap":0.7778,"surface":0.0161,"tilted":0.0272,"caveWall":0.0041,"wall":0.1396,"sky":0.0346,"other":0.0006}
+METRIC browser.s12345e0.ramp_far_in.bottom {"cap":0.1099,"surface":0.0907,"tilted":0.0712,"caveFloor":0.5072,"floorDark":0.1363,"gray":0.0001,"caveWall":0.0618,"wall":0.0042,"arch":0.016,"other":0.0025}
+METRIC browser.s12345e0.ramp_far_in.luma 96.02
+METRIC browser.s12345e0.ramp_near_in.all {"cap":0.4592,"surface":0.0314,"tilted":0.0578,"caveFloor":0.2739,"floorDark":0.0711,"gray":0.0001,"caveWall":0.0379,"wall":0.0591,"arch":0.008,"sky":0.0002,"other":0.0013}
+METRIC browser.s12345e0.ramp_near_in.top {"cap":0.8237,"surface":0.0031,"tilted":0.0503,"caveWall":0.0086,"wall":0.1131,"sky":0.0005,"other":0.0006}
+METRIC browser.s12345e0.ramp_near_in.bottom {"cap":0.0946,"surface":0.0597,"tilted":0.0652,"caveFloor":0.5479,"floorDark":0.1422,"gray":0.0002,"caveWall":0.0672,"wall":0.0051,"arch":0.016,"other":0.002}
+METRIC browser.s12345e0.ramp_near_in.luma 94.81
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["arch_in","ramp_far_in","ramp_near_in"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 1179.5 ms
+HARNESS_RESULT FAIL 9
+
+===== BROWSER_PROBE 03 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 arch_in renderPassErrors+=0 | ok s12345e0 cap_along renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 arch_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 cap_along debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 arch_in pixelsDiffering=0 | ok s12345e0 cap_along pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [BAD s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] top surface+cap=9.21% (surface 9.21% cap 0.00%; need < 5%; sky ahead is allowed)]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+PASS browser: standing in the archway the tunnel floor ahead is visible below the horizon   [ok s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] bottom caveFloor=94.53% (need >= 1%) floorDark(empty ground plane)=0.00% top cap=0.00%]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [BAD s12345e0 cap_along along=-150 perp=0 world=(624,749) h=2.38 ug=0 cell=[1@-7.62 2@-1.22 4@2.38] caveFloor+ceiling+caveWall=20.35% of frame (caveFloor 20.35% ceiling 0.00% caveWall 0.00%; need < 1%)]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.arch_in.all {"surface":0.0461,"tilted":0.0028,"caveFloor":0.6136,"floorDark":0.002,"gray":0.0007,"caveWall":0.0786,"wall":0.0268,"sky":0.2289,"other":0.0004}
+METRIC browser.s12345e0.arch_in.top {"surface":0.0921,"tilted":0.0056,"caveFloor":0.282,"floorDark":0.0041,"gray":0.0015,"caveWall":0.1052,"wall":0.0509,"sky":0.4578,"other":0.0008}
+METRIC browser.s12345e0.arch_in.bottom {"caveFloor":0.9453,"caveWall":0.0521,"wall":0.0026}
+METRIC browser.s12345e0.arch_in.luma 60.56
+METRIC browser.s12345e0.cap_along.all {"surface":0.1209,"tilted":0.0016,"caveFloor":0.2035,"floorDark":0.1639,"wall":0.0442,"sky":0.4654,"other":0.0005}
+METRIC browser.s12345e0.cap_along.top {"floorDark":0.0144,"wall":0.0547,"sky":0.9309}
+METRIC browser.s12345e0.cap_along.bottom {"surface":0.2417,"tilted":0.0033,"caveFloor":0.4069,"floorDark":0.3133,"wall":0.0338,"other":0.001}
+METRIC browser.s12345e0.cap_along.luma 54.36
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["arch_in","cap_along"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":2}
+METRIC browser.run_ms 855.6 ms
+HARNESS_RESULT FAIL 10
+
+===== BROWSER_PROBE 04 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=48.20% surface=17.43% sky=21.90%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=87.53% (sky 21.90% surface 17.43% cap 48.20%; need < 5%)]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=0.44% (need >= 5%) floorDark=94.12%]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"cap":0.241,"surface":0.0876,"tilted":0.0005,"caveFloor":0.0023,"floorDark":0.4781,"gray":0.0027,"caveWall":0.0732,"wall":0.0016,"sky":0.1095,"other":0.0036}
+METRIC browser.s12345e0.inside_in.top {"cap":0.482,"surface":0.1743,"tilted":0.0005,"caveFloor":0.0003,"floorDark":0.015,"gray":0.0046,"caveWall":0.0943,"wall":0.003,"sky":0.219,"other":0.007}
+METRIC browser.s12345e0.inside_in.bottom {"surface":0.0009,"tilted":0.0004,"caveFloor":0.0044,"floorDark":0.9412,"gray":0.0007,"caveWall":0.0521,"wall":0.0002,"other":0.0002}
+METRIC browser.s12345e0.inside_in.luma 32.9
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 674.1 ms
+HARNESS_RESULT FAIL 11
+
+===== BROWSER_PROBE 05 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0 | ok s12345e0 far_surface renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 far_surface debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0 | ok s12345e0 far_surface pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=43.53% surface=7.35% sky=0.06%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=50.94% (sky 0.06% surface 7.35% cap 43.53%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=94.69% (need >= 5%) floorDark=0.00%]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+PASS browser: far from the cave the view is sky above and grass below, with no cave surfaces   [ok s12345e0 far_surface along=700 perp=0 world=(-191,991) h=3.29 ug=0 cell=[1@3.29] top sky=55.37% (need >= 25%) bottom surface+tilted=63.25% (need >= 25%) caveFloor+ceiling=0.00% (need < 0.5%) walls=38.39%]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 meanLuma inside_in=92.7 (ug=1 ambient=0.90) far_surface=84.8 (ambient=0.90)]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"cap":0.2177,"surface":0.0367,"tilted":0.0023,"caveFloor":0.6662,"floorDark":0.0001,"gray":0.0003,"caveWall":0.0723,"wall":0.0025,"sky":0.0003,"other":0.0016}
+METRIC browser.s12345e0.inside_in.top {"cap":0.4353,"surface":0.0735,"tilted":0.0039,"caveFloor":0.3854,"floorDark":0.0002,"gray":0.0005,"caveWall":0.0942,"wall":0.003,"sky":0.0006,"other":0.0033}
+METRIC browser.s12345e0.inside_in.bottom {"tilted":0.0008,"caveFloor":0.9469,"caveWall":0.0503,"wall":0.0019,"other":0}
+METRIC browser.s12345e0.inside_in.luma 92.68
+METRIC browser.s12345e0.far_surface.all {"surface":0.3161,"tilted":0.0002,"floorDark":0.0226,"gray":0,"caveWall":0.001,"wall":0.3828,"sky":0.2769,"other":0.0004}
+METRIC browser.s12345e0.far_surface.top {"floorDark":0.0067,"caveWall":0.0005,"wall":0.439,"sky":0.5537,"other":0.0002}
+METRIC browser.s12345e0.far_surface.bottom {"surface":0.6322,"tilted":0.0003,"floorDark":0.0386,"gray":0,"caveWall":0.0016,"wall":0.3267,"sky":0,"other":0.0005}
+METRIC browser.s12345e0.far_surface.luma 84.77
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in","far_surface"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":2}
+METRIC browser.run_ms 948.3 ms
+HARNESS_RESULT FAIL 9
+
+===== BROWSER_PROBE 06 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 far_surface renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 far_surface debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 far_surface pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [BAD s12345e0 far_surface along=700 perp=0 world=(-191,991) h=3.29 ug=0 cell=[1@3.29] top sky=55.37% (need >= 25%) bottom surface+tilted=0.04% (need >= 25%) caveFloor+ceiling=0.08% (need < 0.5%) walls=38.38%]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.far_surface.all {"surface":0.0001,"tilted":0.0001,"caveFloor":0.0008,"floorDark":0.3379,"gray":0.0003,"caveWall":0.001,"wall":0.3828,"sky":0.277,"other":0.0001}
+METRIC browser.s12345e0.far_surface.top {"floorDark":0.0067,"caveWall":0.0005,"wall":0.439,"sky":0.5537,"other":0.0002}
+METRIC browser.s12345e0.far_surface.bottom {"surface":0.0002,"tilted":0.0002,"caveFloor":0.0015,"floorDark":0.6691,"gray":0.0006,"caveWall":0.0016,"wall":0.3265,"sky":0.0002,"other":0}
+METRIC browser.s12345e0.far_surface.luma 46.21
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["far_surface"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 631 ms
+HARNESS_RESULT FAIL 11
+
+===== BROWSER_PROBE 07 =====
+FAIL browser: every view renders through the page's renderFrame() without render-pass exceptions   [BAD s12345e0 inside_in renderPassErrors+=9]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=43.52% surface=7.47% sky=0.07%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=51.06% (sky 0.07% surface 7.47% cap 43.52%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=94.78% (need >= 5%) floorDark=0.00%]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"cap":0.2176,"surface":0.0373,"tilted":0.0042,"caveFloor":0.6628,"floorDark":0.0007,"gray":0.0005,"caveWall":0.0725,"wall":0.0022,"sky":0.0004,"other":0.0018}
+METRIC browser.s12345e0.inside_in.top {"cap":0.4352,"surface":0.0747,"tilted":0.0084,"caveFloor":0.3778,"floorDark":0.0015,"gray":0.0009,"caveWall":0.0944,"wall":0.0028,"sky":0.0007,"other":0.0036}
+METRIC browser.s12345e0.inside_in.bottom {"caveFloor":0.9478,"caveWall":0.0506,"wall":0.0017}
+METRIC browser.s12345e0.inside_in.luma 40.3
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 698.1 ms
+HARNESS_RESULT FAIL 11
+
+===== BROWSER_PROBE 08 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+FAIL browser: redrawing the same view paints identical pixels   [BAD s12345e0 inside_in pixelsDiffering=32]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=43.52% surface=7.44% sky=0.07%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=51.03% (sky 0.07% surface 7.44% cap 43.52%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=94.65% (need >= 5%) floorDark=0.00%]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"cap":0.2176,"surface":0.0372,"tilted":0.0046,"caveFloor":0.6621,"floorDark":0.0007,"gray":0.0005,"caveWall":0.0722,"wall":0.0023,"arch":0.0002,"sky":0.0004,"other":0.0021}
+METRIC browser.s12345e0.inside_in.top {"cap":0.4352,"surface":0.0744,"tilted":0.0086,"caveFloor":0.3777,"floorDark":0.0015,"gray":0.0009,"caveWall":0.0938,"wall":0.003,"arch":0.0004,"sky":0.0007,"other":0.0038}
+METRIC browser.s12345e0.inside_in.bottom {"tilted":0.0007,"caveFloor":0.9465,"gray":0.0001,"caveWall":0.0506,"wall":0.0017,"other":0.0005}
+METRIC browser.s12345e0.inside_in.luma 40.54
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 688.9 ms
+HARNESS_RESULT FAIL 11
+
+===== BROWSER_PROBE 09 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0 | ok s12345e0 cap_along renderPassErrors+=0]
+FAIL browser: every view's frame is painted (the canvas is not blank)   [BAD s12345e0 inside_in debugTransparent=100.00% normalTransparent=100.00% (both need < 50%) | BAD s12345e0 cap_along debugTransparent=100.00% normalTransparent=100.00% (both need < 50%)]
+FAIL browser: redrawing the same view paints identical pixels   [BAD s12345e0 inside_in PRECONDITION FAILED: frame is blank | BAD s12345e0 cap_along PRECONDITION FAILED: frame is blank]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] PRECONDITION FAILED: frame is blank (no pixels were painted)]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] PRECONDITION FAILED: frame is blank (no pixels were painted)]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] PRECONDITION FAILED: frame is blank (no pixels were painted)]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [BAD s12345e0 cap_along along=-150 perp=0 world=(624,749) h=2.38 ug=0 cell=[1@-7.62 2@-1.22 4@2.38] PRECONDITION FAILED: frame is blank (no pixels were painted)]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_in","cap_along"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 618.3 ms
+HARNESS_RESULT FAIL 13
+
+===== BROWSER_PROBE 10 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_out renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_out pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [BAD s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top ceiling=0.00% (need >= 2%) sky=18.95% cap=1.16% surface=27.88%]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [BAD s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top surface+cap=29.04% (surface 27.88% cap 1.16%; need < 5%; sky ahead is allowed)]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [BAD s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] arch=0.00% of frame (need >= 1%)]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_out.all {"cap":0.0058,"surface":0.1394,"tilted":0.0338,"caveFloor":0.725,"gray":0.0003,"sky":0.0948,"other":0.0009}
+METRIC browser.s12345e0.inside_out.top {"cap":0.0116,"surface":0.2788,"tilted":0.0675,"caveFloor":0.4501,"gray":0.0007,"sky":0.1895,"other":0.0018}
+METRIC browser.s12345e0.inside_out.bottom {"caveFloor":1}
+METRIC browser.s12345e0.inside_out.luma 43.23
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_out"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 662.3 ms
+HARNESS_RESULT FAIL 11
+
+===== BROWSER_PROBE 11 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s424242e0 cap_along renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s424242e0 cap_along debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s424242e0 cap_along pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [no records -- nothing was rendered]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [no records -- nothing was rendered]
+FAIL browser: looking back out from inside the tunnel includes the cave entrance arch   [no records -- nothing was rendered]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+PASS browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [ok s424242e0 cap_along along=-150 perp=0 world=(535,760) h=-0.13 ug=0 cell=[1@-7.04 2@-1.62 4@-0.13] caveFloor+ceiling+caveWall=0.00% of frame (caveFloor 0.00% ceiling 0.00% caveWall 0.00%; need < 1%)]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s424242e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s424242.entrances 1
+METRIC browser.s424242e0.roof_start_along 385
+METRIC browser.s424242e0.cap_along.all {"cap":0.4905,"surface":0.0003,"floorDark":0.0283,"wall":0.0381,"sky":0.4425,"other":0.0003}
+METRIC browser.s424242e0.cap_along.top {"cap":0.0396,"floorDark":0.0072,"wall":0.0682,"sky":0.885,"other":0.0001}
+METRIC browser.s424242e0.cap_along.bottom {"cap":0.9414,"surface":0.0005,"floorDark":0.0495,"wall":0.008,"other":0.0006}
+METRIC browser.s424242e0.cap_along.luma 98.05
+NOTE browser.provenance {"protocol":2,"seeds":[424242],"views":["cap_along"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":1}
+METRIC browser.run_ms 747.7 ms
+HARNESS_RESULT FAIL 10
+
+===== BROWSER_PROBE 12 =====
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_out renderPassErrors+=0 | ok s12345e0 arch_in renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 arch_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_out pixelsDiffering=0 | ok s12345e0 arch_in pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [no records -- nothing was rendered]
+FAIL browser: inside the tunnel the lower half of the view shows the cave floor   [no records -- nothing was rendered]
+PASS browser: looking back out from inside the tunnel the ceiling is visible overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top ceiling=27.72% (need >= 2%) sky=26.58% cap=0.00% surface=0.00%]
+PASS browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top surface+cap=0.00% (surface 0.00% cap 0.00%; need < 5%; sky ahead is allowed) | ok s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.10] top surface+cap=0.00% (surface 0.00% cap 0.00%; need < 5%; sky ahead is allowed)]
+PASS browser: looking back out from inside the tunnel includes the cave entrance arch   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] arch=44.72% of frame (need >= 1%)]
+PASS browser: standing in the archway the tunnel floor ahead is visible below the horizon   [ok s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.10] bottom caveFloor=91.57% (need >= 1%) floorDark(empty ground plane)=2.86% top cap=0.00%]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [no records -- nothing was rendered]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [no records -- nothing was rendered]
+FAIL browser: far from the cave the view is sky above and grass below, with no cave surfaces   [no records -- nothing was rendered]
+FAIL browser: 150 u inside the tunnel the scene is darker than open ground at noon   [BAD s12345e0 PRECONDITION FAILED: inside_in or far_surface view missing]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_out.all {"ceiling":0.1386,"caveFloor":0.2551,"floorDark":0.0259,"arch":0.4472,"sky":0.1329,"other":0.0002}
+METRIC browser.s12345e0.inside_out.top {"ceiling":0.2772,"caveFloor":0.0005,"floorDark":0.0087,"arch":0.4472,"sky":0.2658,"other":0.0005}
+METRIC browser.s12345e0.inside_out.bottom {"caveFloor":0.5097,"floorDark":0.0431,"arch":0.4472}
+METRIC browser.s12345e0.inside_out.luma 48.1
+METRIC browser.s12345e0.arch_in.all {"ceiling":0.3121,"surface":0,"tilted":0.0003,"caveFloor":0.4721,"floorDark":0.0174,"gray":0.0004,"caveWall":0.0788,"wall":0.0034,"sky":0.1143,"other":0.0014}
+METRIC browser.s12345e0.arch_in.top {"ceiling":0.6242,"caveFloor":0.0285,"floorDark":0.0063,"gray":0.0008,"caveWall":0.1049,"wall":0.0047,"sky":0.2285,"other":0.0022}
+METRIC browser.s12345e0.arch_in.bottom {"surface":0,"tilted":0.0005,"caveFloor":0.9157,"floorDark":0.0286,"caveWall":0.0526,"wall":0.0021,"other":0.0005}
+METRIC browser.s12345e0.arch_in.luma 29.79
+NOTE browser.provenance {"protocol":2,"seeds":[12345],"views":["inside_out","arch_in"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":true,"mutationCount":3}
+METRIC browser.run_ms 731.6 ms
+HARNESS_RESULT FAIL 7

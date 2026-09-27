@@ -1,0 +1,534 @@
+{
+  "cave_milestone": {
+    "verdict": "HARNESS_RESULT PASS",
+    "seconds": 1.76,
+    "checks": [
+      {
+        "id": "cave_milestone: page evaluates",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: descending 12345 requested entrance exists",
+        "ok": true,
+        "detail": "descending"
+      },
+      {
+        "id": "cave_milestone: descending 12345 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-4.773656403213952 headroom=3.8169290542602536"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-4.773656368255614"
+      },
+      {
+        "id": "cave_milestone: descending 12345 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":-0.9567273259162903,\"underground\":true,\"clearanceH\":3.816929042339324,\"cellIdx\":33738}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: descending 12345 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: descending 12345 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: descending 12345 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.12209896679305166,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":664}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.12209896679305166,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":664}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=1.6005900621218185 expected=1.6352812051773071 underground=false"
+      },
+      {
+        "id": "cave_milestone: descending 12345 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=1.76259183883667 cave=-4.773656368255614"
+      },
+      {
+        "id": "cave_milestone: descending 12345 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 5668 requested entrance exists",
+        "ok": true,
+        "detail": "hillside"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-0.9979706487917875 headroom=3.8160316467285154"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-0.9979706406593319"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":2.818061113357544,\"underground\":true,\"clearanceH\":3.8160317540168758,\"cellIdx\":39895}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 5668 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013207292327834796,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":418}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013207292327834796,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":418}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=-0.6239778998940404 expected=-0.63518887758255 underground=false"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=5.464969158172607 cave=-0.9979706406593319"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 6290 requested entrance exists",
+        "ok": true,
+        "detail": "hillside"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-3.4538909897627352 headroom=4.056135368347168"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-3.453891038894652"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":0.6022443771362305,\"underground\":true,\"clearanceH\":4.056135416030882,\"cellIdx\":40457}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 6290 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.022203369922332516,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":446}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.022203369922332516,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":446}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=-3.0490339760828364 expected=-3.045841693878174 underground=false"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=4.047877788543701 cave=-3.453891038894652"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: camera preserves legitimate zero physics height",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "metrics": {
+      "cave_milestone.descending.12345.walk_ticks": 1393,
+      "cave_milestone.hillside.5668.walk_ticks": 809,
+      "cave_milestone.hillside.6290.walk_ticks": 802
+    },
+    "notes": []
+  },
+  "caves_geometry": {
+    "verdict": "HARNESS_RESULT FAIL 1",
+    "seconds": 5.28,
+    "checks": [
+      {
+        "id": "caves_geometry: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "caves_geometry: every world under test has a cave entrance inside its window",
+        "ok": true,
+        "detail": "ct12345: entrances in window 1; ct1: entrances in window 1; ct777: entrances in window 1; ct424242: entrances in window 1; n424242r-1,2: entrances in window 1; n999983r3,-4: entrances in window 2; n123r-4,-1: entrances in window 1"
+      },
+      {
+        "id": "caves_geometry: every cell's layer stack is sorted by ascending Z",
+        "ok": true,
+        "detail": "0/548800 unsorted; ct12345 unsorted=0; ct1 unsorted=0; ct777 unsorted=0; ct424242 unsorted=0; n424242r-1,2 unsorted=0; n999983r3,-4 unsorted=0; n123r-4,-1 unsorted=0"
+      },
+      {
+        "id": "caves_geometry: the lowest layer of every cell is walkable ground, never a ceiling",
+        "ok": true,
+        "detail": "[D6; floor lerped L5618, ceiling stamped whole L5621, cap insert re-sorts the stack L6724] 0/7046 ceilinged cells; ct12345 0/898 ceilinged cells have a ceiling lowest; ct1 0/889 ceilinged cells have a ceiling lowest; ct777 0/934 ceilinged cells have a ceiling lowest; ct424242 0/741 ceilinged cells have a ceiling lowest; n424242r-1,2 0/981 ceilinged cells have a ceiling lowest; n999983r3,-4 0/1663 ceilinged cells have a ceiling lowest; n123r-4,-1 0/940 ceilinged cells have a ceiling lowest"
+      },
+      {
+        "id": "caves_geometry: getFloorHeightAt never returns a ceiling's height",
+        "ok": true,
+        "detail": "[D6; getFloorHeightAt L7816 returns l0TopZ] 0/548800 cells; ct12345 ceilingZ=0 caveFloorUnderCap=898; ct1 ceilingZ=0 caveFloorUnderCap=889; ct777 ceilingZ=0 caveFloorUnderCap=934; ct424242 ceilingZ=0 caveFloorUnderCap=741; n424242r-1,2 ceilingZ=0 caveFloorUnderCap=981; n999983r3,-4 ceilingZ=0 caveFloorUnderCap=1663; n123r-4,-1 ceilingZ=0 caveFloorUnderCap=940"
+      },
+      {
+        "id": "caves_geometry: every open cell under a ceiling has eye-height (LAB.EYE_H 2.4 h) headroom above its cave floor",
+        "ok": true,
+        "detail": "[D2; floor lerped by fade L5618, ceiling stamped whole L5621] 0/4353 cells, min headroom 3.12 h; ct12345 0/545 below 2.4 min 3.12 at (714,690) 1@-4.08 2@-0.96 4@1.52 (no floor under ceiling: 0); ct1 0/532 below 2.4 min 3.78 at (678,750) 1@-7.03 2@-3.25 4@-0.98 (no floor under ceiling: 0); ct777 0/585 below 2.4 min 3.40 at (750,630) 1@-6.84 2@-3.45 4@-0.98 (no floor under ceiling: 0); ct424242 0/448 below 2.4 min 3.33 at (894,594) 1@-5.81 2@-2.48 4@1.58 (no floor under ceiling: 0); n424242r-1,2 0/604 below 2.4 min 3.78 at (-402,3654) 1@-5.92 2@-2.14 4@3.80 (no floor under ceiling: 0); n999983r3,-4 0/1048 below 2.4 min 3.76 at (3786,-6450) 1@-7.45 2@-3.70 4@-1.76 (no floor under ceiling: 0); n123r-4,-1 0/591 below 2.4 min 3.52 at (-5034,-798) 1@-7.14 2@-3.62 4@-1.19 (no floor under ceiling: 0)"
+      },
+      {
+        "id": "caves_geometry: every surface cap sits strictly above the ceiling it covers",
+        "ok": true,
+        "detail": "[clamp L6693] 0/7046; ct12345 caps=898 notAbove=0 minGap 1.31 at (798,1038) raisedAboveSurface=0 max +0.00; ct1 caps=889 notAbove=0 minGap 1.27 at (654,894) raisedAboveSurface=0 max +0.00; ct777 caps=934 notAbove=0 minGap 1.31 at (486,858) raisedAboveSurface=0 max +0.00; ct424242 caps=741 notAbove=0 minGap 1.24 at (510,786) raisedAboveSurface=0 max +0.00; n424242r-1,2 caps=981 notAbove=0 minGap 1.35 at (-846,3534) raisedAboveSurface=0 max +0.00; n999983r3,-4 caps=1663 notAbove=0 minGap 1.34 at (3510,-6678) raisedAboveSurface=0 max +0.00; n123r-4,-1 caps=940 notAbove=0 minGap 1.31 at (-4890,-834) raisedAboveSurface=0 max +0.00"
+      },
+      {
+        "id": "caves_geometry: a cap lifted above the natural surface never stands more than STEP_UP (1.0 h) above the open ground beside it",
+        "ok": true,
+        "detail": "[E4; clamp L6693 lifts caps over ceilings that the 21x21-max depth gate L5595-5604 lets rise above the local surface] cliffs made by the lift 0/1440 roof-edge pairs; ct12345 0/180 roof-edge pairs; ct1 0/190 roof-edge pairs; ct777 0/190 roof-edge pairs; ct424242 0/158 roof-edge pairs; n424242r-1,2 0/200 roof-edge pairs; n999983r3,-4 0/336 roof-edge pairs; n123r-4,-1 0/186 roof-edge pairs"
+      },
+      {
+        "id": "caves_geometry: the cave roof starts no more than 40 u outside the entrance arch",
+        "ok": true,
+        "detail": "[D2; ceiling wherever fade>0 L4756, feather hw+108 L4684/L4702] 0/8 entrances; ct12345 e0,0#0@(865,427) roof starts at along -6 (858,438) 1@-4.77 2@-0.96 4@0.84; ct1 e0,0#0@(472,385) roof starts at along -18 (486,402) 1@-7.21 2@-3.25 4@0.84; ct777 e0,0#0@(545,916) roof starts at along -6 (546,906) 1@-7.57 2@-3.45 4@-1.43; ct424242 e0,0#0@(1028,604) roof starts at along +2 (1026,606) 1@-6.45 2@-2.48 4@2.06; n424242r-1,2 e-1,2#0@(-396,3713) roof starts at along +8 (-390,3714) 1@-6.06 2@-2.14 4@3.79; n999983r3,-4 e2,-5#0@(3870,-6338) roof starts at along +2 (3870,-6342) 1@-7.59 2@-3.70 4@-1.25; n999983r3,-4 e3,-4#0@(5232,-4855) roof starts at along +8 (5238,-4854) 1@-5.73 2@-1.74 4@0.89; n123r-4,-1 e-4,-1#0@(-4770,-451) roof starts at along +8 (-4770,-450) 1@-7.63 2@-3.62 4@0.01"
+      },
+      {
+        "id": "caves_geometry: walking in along every entrance path, the floor the player stands on never changes by more than STEP_UP (1.0 h) between neighbouring cells",
+        "ok": true,
+        "detail": "[D1 approach depth e.depth||5 L4741 vs corridor depth 6.0-8.5 L4496; steep feather smoothstep L4684/L4702; approach under the cave roof D2 L4756; picker L7831] 0/8 entrances; ct12345 e0,0#0@(865,427) max step 0.29 h at along 140->128 (918,318) -3.43->-3.72 (walk) [1@-3.72]; ct1 e0,0#0@(472,385) max step 0.39 h at along 224->206 (354,222) -3.84->-4.22 (walk) [1@-4.22]; ct777 e0,0#0@(545,916) max step 0.35 h at along 182->170 (438,1038) -5.46->-5.82 (walk) [1@-5.82]; ct424242 e0,0#0@(1028,604) max step 0.30 h at along 194->182 (1194,546) -4.02->-4.32 (walk) [1@-4.32]; n424242r-1,2 e-1,2#0@(-396,3713) max step 0.47 h at along 248->236 (-174,3786) -1.15->-1.62 (walk) [1@-1.62]; n999983r3,-4 e2,-5#0@(3870,-6338) max step 0.35 h at along 248->236 (4074,-6234) -4.25->-4.60 (walk) [1@-4.60]; n999983r3,-4 e3,-4#0@(5232,-4855) max step 0.42 h at along 248->230 (5394,-4698) -2.17->-2.59 (walk) [1@-2.59]; n123r-4,-1 e-4,-1#0@(-4770,-451) max step 0.49 h at along 392->380 (-4506,-186) 0.71->0.22 (walk) [1@0.22]"
+      },
+      {
+        "id": "caves_geometry: getWalkableLayerTopAt carries a player from the surface down to the cave floor with no unsupported step",
+        "ok": true,
+        "detail": "[N14; STEP_DOWN relaxed to 10 only within 260 u of an entrance L7853, approach is 480 u L4661] 0/8 entrances; ct12345 e0,0#0@(865,427) in: unsupported=0 ends h -4.77 (cave floor -4.77); ct1 e0,0#0@(472,385) in: unsupported=0 ends h -7.21 (cave floor -7.21); ct777 e0,0#0@(545,916) in: unsupported=0 ends h -7.57 (cave floor -7.57); ct424242 e0,0#0@(1028,604) in: unsupported=0 ends h -6.45 (cave floor -6.45); n424242r-1,2 e-1,2#0@(-396,3713) in: unsupported=0 ends h -6.06 (cave floor -6.06); n999983r3,-4 e2,-5#0@(3870,-6338) in: unsupported=0 ends h -7.59 (cave floor -7.59); n999983r3,-4 e3,-4#0@(5232,-4855) in: unsupported=0 ends h -5.73 (cave floor -5.73); n123r-4,-1 e-4,-1#0@(-4770,-451) in: unsupported=0 ends h -7.63 (cave floor -7.63)"
+      },
+      {
+        "id": "caves_geometry: getWalkableLayerTopAt carries a player from the cave floor back out to the surface with no unsupported step",
+        "ok": true,
+        "detail": "[D1; STEP_UP 1.0 L7844, no layer at or below -> {idx:-1,type:0} L7901] 0/8 entrances; ct12345 e0,0#0@(865,427) out: unsupported=0 ends h 1.60 under open sky at along +470 [1@1.60]; ct1 e0,0#0@(472,385) out: unsupported=0 ends h -0.28 under open sky at along +470 [1@-0.28]; ct777 e0,0#0@(545,916) out: unsupported=0 ends h -1.39 under open sky at along +470 [1@-1.39]; ct424242 e0,0#0@(1028,604) out: unsupported=0 ends h -0.62 under open sky at along +470 [1@-0.62]; n424242r-1,2 e-1,2#0@(-396,3713) out: unsupported=0 ends h 3.56 under open sky at along +470 [1@3.56]; n999983r3,-4 e2,-5#0@(3870,-6338) out: unsupported=0 ends h -0.64 under open sky at along +470 [1@-0.64]; n999983r3,-4 e3,-4#0@(5232,-4855) out: unsupported=0 ends h 0.74 under open sky at along +470 [1@0.74]; n123r-4,-1 e-4,-1#0@(-4770,-451) out: unsupported=0 ends h 1.79 under open sky at along +470 [1@1.79]"
+      },
+      {
+        "id": "caves_geometry: ceiling and cap layers exactly match queryCaveGeometry's covered footprint",
+        "ok": true,
+        "detail": "[shared portal roof contract] 0/13710 influenced cells disagree; ct12345 influenced cells 1742 (898 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; ct1 influenced cells 1704 (889 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; ct777 influenced cells 1776 (934 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; ct424242 influenced cells 1570 (741 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; n424242r-1,2 influenced cells 1791 (981 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; n999983r3,-4 influenced cells 3336 (1663 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0; n123r-4,-1 influenced cells 1791 (940 covered): roof outside covered footprint=0, missing roof/cap inside covered footprint=0"
+      },
+      {
+        "id": "caves_geometry: the floor under a cave ceiling never steps more than STEP_UP (1.0 h) between neighbouring open cells",
+        "ok": true,
+        "detail": "[caves laterally open: feather hw+108 L4684/L4702, walls carved only where fade>0.3 L4773; D6 inverted stacks; N14 entrance trees of different depth L4496] 0/8047 pairs (on chunk borders 0/171); ct12345 0/1011 steps>1 worst 0.70 (714,690)->(726,690) -4.08->-4.77 inside a chunk | chunk-border pairs 0/24 bad, worst border 0.19 vs worst in-chunk 0.70; ct1 0/981 steps>1 worst 0.56 (666,774)->(678,774) -6.65->-7.21 inside a chunk | chunk-border pairs 0/17 bad, worst border 0.00 vs worst in-chunk 0.56; ct777 0/1084 steps>1 worst 0.72 (750,630)->(750,642) -6.84->-7.57 inside a chunk | chunk-border pairs 0/20 bad, worst border 0.39 vs worst in-chunk 0.72; ct424242 0/824 steps>1 worst 0.73 (558,726)->(558,738) -5.70->-6.44 inside a chunk | chunk-border pairs 0/9 bad, worst border 0.00 vs worst in-chunk 0.73; n424242r-1,2 0/1117 steps>1 worst 0.35 (-966,3342)->(-954,3342) -5.71->-6.06 ON a chunk border | chunk-border pairs 0/35 bad, worst border 0.35 vs worst in-chunk 0.35; n999983r3,-4 0/1933 steps>1 worst 0.64 (4854,-5310)->(4854,-5298) -5.09->-5.73 inside a chunk | chunk-border pairs 0/29 bad, worst border 0.28 vs worst in-chunk 0.64; n123r-4,-1 0/1097 steps>1 worst 0.67 (-5094,-942)->(-5082,-942) -6.96->-7.63 inside a chunk | chunk-border pairs 0/37 bad, worst border 0.00 vs worst in-chunk 0.67"
+      },
+      {
+        "id": "caves_geometry: chunk borders add no seam to the floor under cave ceilings",
+        "ok": true,
+        "detail": "[E2 suspected seams: per-chunk smoothing L5524-5562 / 21x21 surface max L5595 are clipped at the chunk edge] tolerance: border spike <= mid-chunk control spike + 0.25 h; 0/7 worlds; ct12345 max spike on chunk borders 0.00 at (798,474)->(798,486) -4.77,-4.77|-4.77,-4.77 vs mid-chunk control 0.00 (23 border / 66 control samples); ct1 max spike on chunk borders 0.00 at (474,414)->(486,414) -7.21,-7.21|-7.21,-7.21 vs mid-chunk control 0.00 (14 border / 69 control samples); ct777 max spike on chunk borders 0.00 at (954,486)->(966,486) -7.57,-7.57|-7.57,-7.57 vs mid-chunk control 0.00 (16 border / 72 control samples); ct424242 max spike on chunk borders 0.00 at (954,594)->(966,594) -6.45,-6.45|-6.45,-6.45 vs mid-chunk control 0.00 (9 border / 64 control samples); n424242r-1,2 max spike on chunk borders 0.00 at (-954,3354)->(-954,3366) -6.06,-6.06|-6.06,-6.06 vs mid-chunk control 0.00 (29 border / 65 control samples); n999983r3,-4 max spike on chunk borders 0.00 at (3834,-6402)->(3846,-6402) -7.59,-7.59|-7.59,-7.59 vs mid-chunk control 0.00 (21 border / 137 control samples); n123r-4,-1 max spike on chunk borders 0.00 at (-5058,-966)->(-5058,-954) -7.63,-7.63|-7.63,-7.63 vs mid-chunk control 0.00 (32 border / 67 control samples)"
+      },
+      {
+        "id": "caves_geometry: chunk borders add no seam to the ground surface within 300 u of a cave entrance",
+        "ok": true,
+        "detail": "[E2 in the surface: the entrance blur L5524-5562 skips neighbours outside the chunk] tolerance: border spike <= control spike + 0.05 h; 0/7 worlds; ct12345 border max 0.019 <= control max 0.014 + 0.05 at (690,474)->(690,486) 1.00,1.04|1.11,1.15 (97 border / 291 control samples); ct1 border max 0.021 <= control max 0.013 + 0.05 at (354,474)->(354,486) 1.12,1.10|1.06,1.05 (98 border / 302 control samples); ct777 border max 0.011 <= control max 0.013 + 0.05 at (618,954)->(618,966) -0.99,-1.00|-1.03,-1.03 (98 border / 289 control samples); ct424242 border max 0.014 <= control max 0.012 + 0.05 at (1230,474)->(1230,486) 0.26,0.35|0.46,0.54 (94 border / 301 control samples); n424242r-1,2 border max 0.017 <= control max 0.013 + 0.05 at (-558,3834)->(-558,3846) 1.71,1.69|1.65,1.64 (93 border / 305 control samples); n999983r3,-4 border max 0.013 <= control max 0.013 + 0.05 at (5274,-4746)->(5286,-4746) 1.16,1.16|1.18,1.18 (196 border / 585 control samples); n123r-4,-1 border max 0.011 <= control max 0.017 + 0.05 at (-4806,-522)->(-4794,-522) -0.35,-0.38|-0.43,-0.47 (98 border / 295 control samples)"
+      },
+      {
+        "id": "caves_geometry: every chunk stamps every cell that queryCaveGeometry over all nearby networks calls cave (no network truncation)",
+        "ok": true,
+        "detail": "[E3; generateChunk consults the 3x3 regions L5341-5350 and an AABB margin of 100 L5353] unstamped 0/55750 cave cells over 264 chunks (ceilZ given but no ceiling stamped: 0, METRIC only); ct12345 1 nets, 6 chunks: unstamped 0/1492 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1702 u, net 0,0); ct1 1 nets, 9 chunks: unstamped 0/1456 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1664 u, net 0,0); ct777 1 nets, 9 chunks: unstamped 0/1537 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1734 u, net 0,0); ct424242 1 nets, 9 chunks: unstamped 0/1323 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1688 u, net 0,0); n424242 13 nets, 93 chunks: unstamped 0/18870 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1624 u, net 0,-11); n999983 15 nets, 96 chunks: unstamped 0/21082 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1593 u, net -9,-1); n123 7 nets, 42 chunks: unstamped 0/9990 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1610 u, net -3,5)"
+      },
+      {
+        "id": "caves_geometry: no more than 0.25% of water cells carry a grid wall",
+        "ok": false,
+        "detail": "[D17; the water-zone wall test calls terrainNoise under the wall noise seed L4978-4987] wall-on-water 365/39758 (0.92%); n424242 1/1075 e.g. chunk -5,7 cell 2,3 floor -3.16; n999983 168/24178 e.g. chunk 5,-4 cell 23,1 floor -3.07; n123 196/14505 e.g. chunk 7,-7 cell 38,28 floor -3.07"
+      },
+      {
+        "id": "caves_geometry: normal Endless generates some cave networks with exactly one entrance",
+        "ok": true,
+        "detail": "[D16; L4478 asks for 1 or 2, but rng and rng2 share chunkRng(rx,ry,100) L4465/L4472] 35/35 networks have exactly 1 entrance; n123: 7 nets, 1-entrance 7, 2-entrance 0; n424242: 13 nets, 1-entrance 13, 2-entrance 0; n999983: 15 nets, 1-entrance 15, 2-entrance 0"
+      }
+    ],
+    "metrics": {
+      "caves_geometry.ct12345.caps_raised_above_surface": 0,
+      "caves_geometry.ct12345.caps_max_raise_h": 0,
+      "caves_geometry.ct12345.min_headroom_h": 3.1218,
+      "caves_geometry.ct12345.lowest_is_ceiling": 0,
+      "caves_geometry.ct12345.headroom_below_eye": 0,
+      "caves_geometry.ct12345.raised_cap_cliffs": 0,
+      "caves_geometry.ct12345.grid_walls_under_ceiling": 353,
+      "caves_geometry.ct12345.border_spike_h": 0,
+      "caves_geometry.ct12345.control_spike_h": 0,
+      "caves_geometry.ct12345.interior_step_max_h": 0.6951,
+      "caves_geometry.ct12345.interior_steps_over_step_up": 0,
+      "caves_geometry.ct12345.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct12345.surface_border_spike_h": 0.0193,
+      "caves_geometry.ct12345.surface_control_spike_h": 0.0139,
+      "caves_geometry.ct12345.e0,0#0.roof_start_u": -6,
+      "caves_geometry.ct12345.trunc_unstamped_cells": 0,
+      "caves_geometry.ct12345.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct1.caps_raised_above_surface": 0,
+      "caves_geometry.ct1.caps_max_raise_h": 0,
+      "caves_geometry.ct1.min_headroom_h": 3.7781,
+      "caves_geometry.ct1.lowest_is_ceiling": 0,
+      "caves_geometry.ct1.headroom_below_eye": 0,
+      "caves_geometry.ct1.raised_cap_cliffs": 0,
+      "caves_geometry.ct1.grid_walls_under_ceiling": 357,
+      "caves_geometry.ct1.border_spike_h": 0,
+      "caves_geometry.ct1.control_spike_h": 0,
+      "caves_geometry.ct1.interior_step_max_h": 0.5629,
+      "caves_geometry.ct1.interior_steps_over_step_up": 0,
+      "caves_geometry.ct1.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct1.surface_border_spike_h": 0.0209,
+      "caves_geometry.ct1.surface_control_spike_h": 0.0125,
+      "caves_geometry.ct1.e0,0#0.roof_start_u": -18,
+      "caves_geometry.ct1.trunc_unstamped_cells": 0,
+      "caves_geometry.ct1.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct777.caps_raised_above_surface": 0,
+      "caves_geometry.ct777.caps_max_raise_h": 0,
+      "caves_geometry.ct777.min_headroom_h": 3.3965,
+      "caves_geometry.ct777.lowest_is_ceiling": 0,
+      "caves_geometry.ct777.headroom_below_eye": 0,
+      "caves_geometry.ct777.raised_cap_cliffs": 0,
+      "caves_geometry.ct777.grid_walls_under_ceiling": 349,
+      "caves_geometry.ct777.border_spike_h": 0,
+      "caves_geometry.ct777.control_spike_h": 0,
+      "caves_geometry.ct777.interior_step_max_h": 0.7218,
+      "caves_geometry.ct777.interior_steps_over_step_up": 0,
+      "caves_geometry.ct777.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct777.surface_border_spike_h": 0.0112,
+      "caves_geometry.ct777.surface_control_spike_h": 0.0131,
+      "caves_geometry.ct777.e0,0#0.roof_start_u": -6,
+      "caves_geometry.ct777.trunc_unstamped_cells": 0,
+      "caves_geometry.ct777.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct424242.caps_raised_above_surface": 0,
+      "caves_geometry.ct424242.caps_max_raise_h": 0,
+      "caves_geometry.ct424242.min_headroom_h": 3.3295,
+      "caves_geometry.ct424242.lowest_is_ceiling": 0,
+      "caves_geometry.ct424242.headroom_below_eye": 0,
+      "caves_geometry.ct424242.raised_cap_cliffs": 0,
+      "caves_geometry.ct424242.grid_walls_under_ceiling": 293,
+      "caves_geometry.ct424242.border_spike_h": 0,
+      "caves_geometry.ct424242.control_spike_h": 0,
+      "caves_geometry.ct424242.interior_step_max_h": 0.7348,
+      "caves_geometry.ct424242.interior_steps_over_step_up": 0,
+      "caves_geometry.ct424242.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct424242.surface_border_spike_h": 0.0137,
+      "caves_geometry.ct424242.surface_control_spike_h": 0.0125,
+      "caves_geometry.ct424242.e0,0#0.roof_start_u": 2,
+      "caves_geometry.ct424242.trunc_unstamped_cells": 0,
+      "caves_geometry.ct424242.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n424242.regions_with_network_pct": 2.08,
+      "caves_geometry.n424242.nearest_entrance_u": 3530.3867,
+      "caves_geometry.n424242r-1,2.caps_raised_above_surface": 0,
+      "caves_geometry.n424242r-1,2.caps_max_raise_h": 0,
+      "caves_geometry.n424242r-1,2.min_headroom_h": 3.7768,
+      "caves_geometry.n424242r-1,2.lowest_is_ceiling": 0,
+      "caves_geometry.n424242r-1,2.headroom_below_eye": 0,
+      "caves_geometry.n424242r-1,2.raised_cap_cliffs": 0,
+      "caves_geometry.n424242r-1,2.grid_walls_under_ceiling": 377,
+      "caves_geometry.n424242r-1,2.border_spike_h": 0,
+      "caves_geometry.n424242r-1,2.control_spike_h": 0,
+      "caves_geometry.n424242r-1,2.interior_step_max_h": 0.3534,
+      "caves_geometry.n424242r-1,2.interior_steps_over_step_up": 0,
+      "caves_geometry.n424242r-1,2.interior_border_steps_over_step_up": 0,
+      "caves_geometry.n424242r-1,2.surface_border_spike_h": 0.0166,
+      "caves_geometry.n424242r-1,2.surface_control_spike_h": 0.0126,
+      "caves_geometry.n424242r-1,2.e-1,2#0.roof_start_u": 8,
+      "caves_geometry.n424242.trunc_unstamped_cells": 0,
+      "caves_geometry.n424242.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n999983.regions_with_network_pct": 2.4,
+      "caves_geometry.n999983.nearest_entrance_u": 7133.2945,
+      "caves_geometry.n999983r3,-4.caps_raised_above_surface": 0,
+      "caves_geometry.n999983r3,-4.caps_max_raise_h": 0,
+      "caves_geometry.n999983r3,-4.min_headroom_h": 3.7584,
+      "caves_geometry.n999983r3,-4.lowest_is_ceiling": 0,
+      "caves_geometry.n999983r3,-4.headroom_below_eye": 0,
+      "caves_geometry.n999983r3,-4.raised_cap_cliffs": 0,
+      "caves_geometry.n999983r3,-4.grid_walls_under_ceiling": 615,
+      "caves_geometry.n999983r3,-4.border_spike_h": 0,
+      "caves_geometry.n999983r3,-4.control_spike_h": 0,
+      "caves_geometry.n999983r3,-4.interior_step_max_h": 0.6361,
+      "caves_geometry.n999983r3,-4.interior_steps_over_step_up": 0,
+      "caves_geometry.n999983r3,-4.interior_border_steps_over_step_up": 0,
+      "caves_geometry.n999983r3,-4.surface_border_spike_h": 0.0125,
+      "caves_geometry.n999983r3,-4.surface_control_spike_h": 0.0134,
+      "caves_geometry.n999983r3,-4.e2,-5#0.roof_start_u": 2,
+      "caves_geometry.n999983r3,-4.e3,-4#0.roof_start_u": 8,
+      "caves_geometry.n999983.trunc_unstamped_cells": 0,
+      "caves_geometry.n999983.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n123.regions_with_network_pct": 1.12,
+      "caves_geometry.n123.nearest_entrance_u": 5057.3351,
+      "caves_geometry.n123r-4,-1.caps_raised_above_surface": 0,
+      "caves_geometry.n123r-4,-1.caps_max_raise_h": 0,
+      "caves_geometry.n123r-4,-1.min_headroom_h": 3.5184,
+      "caves_geometry.n123r-4,-1.lowest_is_ceiling": 0,
+      "caves_geometry.n123r-4,-1.headroom_below_eye": 0,
+      "caves_geometry.n123r-4,-1.raised_cap_cliffs": 0,
+      "caves_geometry.n123r-4,-1.grid_walls_under_ceiling": 349,
+      "caves_geometry.n123r-4,-1.border_spike_h": 0,
+      "caves_geometry.n123r-4,-1.control_spike_h": 0,
+      "caves_geometry.n123r-4,-1.interior_step_max_h": 0.6658,
+      "caves_geometry.n123r-4,-1.interior_steps_over_step_up": 0,
+      "caves_geometry.n123r-4,-1.interior_border_steps_over_step_up": 0,
+      "caves_geometry.n123r-4,-1.surface_border_spike_h": 0.0106,
+      "caves_geometry.n123r-4,-1.surface_control_spike_h": 0.0175,
+      "caves_geometry.n123r-4,-1.e-4,-1#0.roof_start_u": 8,
+      "caves_geometry.n123.trunc_unstamped_cells": 0,
+      "caves_geometry.n123.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n424242.walls_on_water": 1,
+      "caves_geometry.n999983.walls_on_water": 168,
+      "caves_geometry.n123.walls_on_water": 196,
+      "caves_geometry.caps_raised_above_surface_total": 0,
+      "caves_geometry.caps_max_raise_h": 0,
+      "caves_geometry.entrances_with_roofed_approach_start": 0,
+      "caves_geometry.entrances_tested": 8,
+      "caves_geometry.entrances_with_open_approach_start": 8,
+      "caves_geometry.grid_walls_under_ceiling_total": 2693,
+      "caves_geometry.network_feather_min_margin_to_region_reach_u": 1593.0831
+    },
+    "notes": []
+  }
+}

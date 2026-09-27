@@ -1,0 +1,1082 @@
+[
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#0",
+  "kind": "FIX",
+  "desc": "FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#1",
+  "kind": "FIX",
+  "desc": "FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped (the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#2",
+  "kind": "FIX",
+  "desc": "FIX G3: 24 u of hysteresis before re-centring the window",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#3",
+  "kind": "FIX",
+  "desc": "FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#4",
+  "kind": "FIX",
+  "desc": "FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#5",
+  "kind": "FIX",
+  "desc": "FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#6",
+  "kind": "FIX",
+  "desc": "FIX G4: fullscreen rAF scales by settings.resolution",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#7",
+  "kind": "FIX",
+  "desc": "FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#8",
+  "kind": "FIX",
+  "desc": "FIX N11: SELECT counts only from a connected pad",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#9",
+  "kind": "FIX",
+  "desc": "FIX E6: at most one gamepad request in flight",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#10",
+  "kind": "FIX",
+  "desc": "FIX G5: the overview's grid layer is drawn once into an offscreen canvas and blitted per frame",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#11",
+  "kind": "FIX",
+  "desc": "FIX G1: each floor colour string is parsed once and remembered",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#12",
+  "kind": "FIX",
+  "desc": "FIX G2: the walls pass caches each window cell's biome colour and biome until the window is rebuilt",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#13",
+  "kind": "FIX",
+  "desc": "FIX G3 log volume: assembleWindow (and the chunk generation it runs) stops writing diagnostics",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "perf#14",
+  "kind": "FIX",
+  "desc": "FIX G8: the Perf HUD derives fps from the interval between its own draws",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

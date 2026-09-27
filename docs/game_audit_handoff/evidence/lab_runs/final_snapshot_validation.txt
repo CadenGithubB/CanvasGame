@@ -1,0 +1,33 @@
+Frozen-tree all-suite snapshot validation (2026-09-20)
+
+Commands:
+HW1_GAME_JOBS=1 python3 docs/game_audit_handoff/evidence/audit_scripts/snap_verdicts.py docs/game_audit_handoff/evidence/lab_runs/final_snapshot_a.json
+HW1_GAME_JOBS=1 python3 docs/game_audit_handoff/evidence/audit_scripts/snap_verdicts.py docs/game_audit_handoff/evidence/lab_runs/final_snapshot_b.json
+
+Snapshot A: 11 suites in 142 s wall.
+Snapshot B: 11 suites in 141 s wall.
+
+Comparison ignored only the top-level per-suite `secs` field and timing metrics
+whose keys end in `_ms`, contain `.ms.`, or end in `.ms`. It required exact
+suite keys, top-level verdicts, complete ordered [id, ok, detail] check records,
+and every remaining metric.
+
+browser: 11 checks, 5 non-timing metrics, identical
+caves_geometry: 19 checks, 139 non-timing metrics, identical
+caves_transition: 33 checks, 153 non-timing metrics, identical
+enemies: 18 checks, 79 non-timing metrics, identical
+loot: 18 checks, 24 non-timing metrics, identical
+perf: 20 checks, 75 non-timing metrics, identical
+persistence: 31 checks, 14 non-timing metrics, identical
+physics: 16 checks, 13 non-timing metrics, identical
+render: 24 checks, 141 non-timing metrics, identical
+smoke: 13 checks, 2 non-timing metrics, identical
+tools: 25 checks, 13 non-timing metrics, identical
+
+Result: NON_TIMING_SNAPSHOTS_IDENTICAL
+
+The first comparison exposed ten `physics.ms.*` values in the older snapshot
+script's retained metric map. Those are per-check wall-clock timings, varied as
+expected, and were not treated as deterministic game data. The script's timing
+filter was corrected for future reruns; the saved JSON snapshots retain the
+original superset of metrics and therefore remain sufficient evidence.

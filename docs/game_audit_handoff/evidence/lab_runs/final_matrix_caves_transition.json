@@ -1,0 +1,769 @@
+[
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#0",
+  "kind": "FIX",
+  "desc": "FIX D10: run the underground test even with the day/night cycle disabled",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#1",
+  "kind": "FIX",
+  "desc": "FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "physics",
+  "flips": [
+   {
+    "check": "physics: walking down a gentle open-ground slope (every step within STEP_DOWN) never makes the player airborne",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "physics: walking off a drop larger than STEP_DOWN on open ground starts a fall within 3 physics steps",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#2",
+  "kind": "FIX",
+  "desc": "FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is reached on foot from the entrance and offered, with the player on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: standing in the archway the tunnel floor ahead is drawn",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#3",
+  "kind": "FIX",
+  "desc": "FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the frame comparison detects an underground-only checkbox that is wired (Ceiling wireframe, DEBUG_CEIL_WIRE)",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#4",
+  "kind": "FIX",
+  "desc": "FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#5",
+  "kind": "FIX",
+  "desc": "FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "persistence",
+  "flips": [
+   {
+    "check": "persistence: restarting Endless mid-jump starts the new world exactly as a start from rest (no carried-over jump)",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "physics",
+  "flips": [
+   {
+    "check": "physics: a new world starts with the player on the ground even if the previous world ended mid-jump",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#14",
+  "kind": "FIX",
+  "desc": "FIX N5: reset airborne state when a new Endless world starts",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#15",
+  "kind": "FIX",
+  "desc": "FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "perf",
+  "flips": [
+   {
+    "check": "perf: jittering 2 u across a chunk line 10 times rebuilds the window at most twice",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#16",
+  "kind": "FIX",
+  "desc": "FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_transition#17",
+  "kind": "FIX",
+  "desc": "FIX D3/E4: require a real ceiling and update the flag after player movement",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

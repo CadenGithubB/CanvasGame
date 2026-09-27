@@ -1,0 +1,77 @@
+PASS browser: every view renders through the page's renderFrame() without render-pass exceptions   [ok s12345e0 inside_in renderPassErrors+=0 | ok s12345e0 inside_out renderPassErrors+=0 | ok s12345e0 arch_in renderPassErrors+=0 | ok s12345e0 ramp_far_in renderPassErrors+=0 | ok s12345e0 ramp_near_in renderPassErrors+=0 | ok s12345e0 cap_along renderPassErrors+=0 | ok s12345e0 far_surface renderPassErrors+=0 | ok s424242e0 inside_in renderPassErrors+=0 | ok s424242e0 inside_out renderPassErrors+=0 | ok s424242e0 arch_in renderPassErrors+=0 | ok s424242e0 ramp_far_in renderPassErrors+=0 | ok s424242e0 ramp_near_in renderPassErrors+=0 | ok s424242e0 cap_along renderPassErrors+=0 | ok s424242e0 far_surface renderPassErrors+=0]
+PASS browser: every view's frame is painted (the canvas is not blank)   [ok s12345e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 arch_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 ramp_far_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 ramp_near_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 cap_along debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s12345e0 far_surface debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 inside_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 inside_out debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 arch_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 ramp_far_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 ramp_near_in debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 cap_along debugTransparent=0.00% normalTransparent=0.00% (both need < 50%) | ok s424242e0 far_surface debugTransparent=0.00% normalTransparent=0.00% (both need < 50%)]
+PASS browser: redrawing the same view paints identical pixels   [ok s12345e0 inside_in pixelsDiffering=0 | ok s12345e0 inside_out pixelsDiffering=0 | ok s12345e0 arch_in pixelsDiffering=0 | ok s12345e0 ramp_far_in pixelsDiffering=0 | ok s12345e0 ramp_near_in pixelsDiffering=0 | ok s12345e0 cap_along pixelsDiffering=0 | ok s12345e0 far_surface pixelsDiffering=0 | ok s424242e0 inside_in pixelsDiffering=0 | ok s424242e0 inside_out pixelsDiffering=0 | ok s424242e0 arch_in pixelsDiffering=0 | ok s424242e0 ramp_far_in pixelsDiffering=0 | ok s424242e0 ramp_near_in pixelsDiffering=0 | ok s424242e0 cap_along pixelsDiffering=0 | ok s424242e0 far_surface pixelsDiffering=0]
+FAIL browser: inside the tunnel the upper half of the view shows the tunnel ceiling   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top ceiling=0.00% (need >= 2%) cap=43.52% surface=7.44% sky=0.07% | BAD s424242e0 inside_in along=-150 perp=0 world=(535,760) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-0.13] top ceiling=0.00% (need >= 2%) cap=38.38% surface=9.36% sky=0.02%]
+FAIL browser: inside the tunnel no sky, grass or surface cap is visible overhead   [BAD s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] top sky+surface+cap=51.03% (sky 0.07% surface 7.44% cap 43.52%; need < 5%) | BAD s424242e0 inside_in along=-150 perp=0 world=(535,760) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-0.13] top sky+surface+cap=47.76% (sky 0.02% surface 9.36% cap 38.38%; need < 5%)]
+PASS browser: inside the tunnel the lower half of the view shows the cave floor   [ok s12345e0 inside_in along=-150 perp=0 world=(624,749) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@2.38] bottom caveFloor=94.65% (need >= 5%) floorDark=0.00% | ok s424242e0 inside_in along=-150 perp=0 world=(535,760) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-0.13] bottom caveFloor=96.57% (need >= 5%) floorDark=0.00%]
+FAIL browser: looking back out from inside the tunnel the ceiling is visible overhead   [BAD s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top ceiling=0.00% (need >= 2%) sky=18.41% cap=1.14% surface=14.24% | BAD s424242e0 inside_out along=-60 perp=0 world=(447,779) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-1.04] top ceiling=0.00% (need >= 2%) sky=1.74% cap=43.35% surface=2.41%]
+FAIL browser: looking out from inside and standing in the archway show no grass or surface cap overhead   [BAD s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] top surface+cap=15.39% (surface 14.24% cap 1.14%; need < 5%; sky ahead is allowed) | BAD s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] top surface+cap=60.70% (surface 14.25% cap 46.45%; need < 5%; sky ahead is allowed) | BAD s424242e0 inside_out along=-60 perp=0 world=(447,779) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-1.04] top surface+cap=45.76% (surface 2.41% cap 43.35%; need < 5%; sky ahead is allowed) | BAD s424242e0 arch_in along=0 perp=0 world=(389,792) h=-7.04 ug=0 cell=[1@-7.04 2@-1.62] top surface+cap=73.86% (surface 18.91% cap 54.95%; need < 5%; sky ahead is allowed)]
+PASS browser: looking back out from inside the tunnel includes the cave entrance arch   [ok s12345e0 inside_out along=-60 perp=0 world=(538,774) h=-7.62 ug=1 cell=[1@-7.62 2@-1.22 4@3.01] arch=44.72% of frame (need >= 1%) | ok s424242e0 inside_out along=-60 perp=0 world=(447,779) h=-7.04 ug=1 cell=[1@-7.04 2@-1.62 4@-1.04] arch=44.72% of frame (need >= 1%)]
+FAIL browser: standing in the archway the tunnel floor ahead is visible below the horizon   [BAD s12345e0 arch_in along=0 perp=0 world=(480,791) h=-7.62 ug=0 cell=[1@-7.62 2@-1.22] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=94.53% top cap=46.45% | BAD s424242e0 arch_in along=0 perp=0 world=(389,792) h=-7.04 ug=0 cell=[1@-7.04 2@-1.62] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=92.75% top cap=54.95%]
+FAIL browser: from the open approach ramp the cave floor ahead is visible below the horizon   [BAD s12345e0 ramp_far_in along=260 perp=0 world=(231,866) h=-0.28 ug=0 cell=[1@-0.28] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=62.92% | BAD s12345e0 ramp_near_in along=232 perp=0 world=(258,858) h=-0.80 ug=0 cell=[1@-0.80] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=67.24% | BAD s424242e0 ramp_far_in along=420 perp=0 world=(-22,882) h=0.60 ug=0 cell=[1@0.60] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=13.47% | BAD s424242e0 ramp_near_in along=392 perp=0 world=(6,876) h=0.24 ug=0 cell=[1@0.24] bottom caveFloor=0.00% (need >= 1%) floorDark(empty ground plane)=10.53%]
+FAIL browser: from the cap above the tunnel no cave floor, cave ceiling or cave wall shows through   [ok s12345e0 cap_along along=-150 perp=0 world=(624,749) h=2.38 ug=0 cell=[1@-7.62 2@-1.22 4@2.38] caveFloor+ceiling+caveWall=0.00% of frame (caveFloor 0.00% ceiling 0.00% caveWall 0.00%; need < 1%) | BAD s424242e0 cap_along along=-150 perp=0 world=(535,760) h=-0.13 ug=0 cell=[1@-7.04 2@-1.62 4@-0.13] caveFloor+ceiling+caveWall=1.70% of frame (caveFloor 0.00% ceiling 0.00% caveWall 1.70%; need < 1%)]
+PASS browser: far from the cave the view is sky above and grass below, with no cave surfaces   [ok s12345e0 far_surface along=700 perp=0 world=(-191,991) h=3.29 ug=0 cell=[1@3.29] top sky=55.37% (need >= 25%) bottom surface+tilted=63.25% (need >= 25%) caveFloor+ceiling=0.00% (need < 0.5%) walls=38.39% | ok s424242e0 far_surface along=700 perp=0 world=(-295,941) h=0.91 ug=0 cell=[1@0.91] top sky=92.31% (need >= 25%) bottom surface+tilted=77.88% (need >= 25%) caveFloor+ceiling=0.01% (need < 0.5%) walls=5.33%]
+PASS browser: 150 u inside the tunnel the scene is darker than open ground at noon   [ok s12345e0 meanLuma inside_in=40.6 (ug=1 ambient=0.45) far_surface=84.8 (ambient=0.90) | ok s424242e0 meanLuma inside_in=40.9 (ug=1 ambient=0.45) far_surface=50.6 (ambient=0.90)]
+METRIC browser.s12345.entrances 1
+METRIC browser.s12345e0.roof_start_along 225
+METRIC browser.s12345e0.inside_in.all {"cap":0.2176,"surface":0.0372,"tilted":0.0046,"caveFloor":0.6621,"floorDark":0.0007,"gray":0.0005,"caveWall":0.0724,"wall":0.0023,"sky":0.0004,"other":0.0021}
+METRIC browser.s12345e0.inside_in.top {"cap":0.4352,"surface":0.0744,"tilted":0.0086,"caveFloor":0.3777,"floorDark":0.0015,"gray":0.0009,"caveWall":0.0942,"wall":0.003,"sky":0.0007,"other":0.0038}
+METRIC browser.s12345e0.inside_in.bottom {"tilted":0.0007,"caveFloor":0.9465,"gray":0.0001,"caveWall":0.0506,"wall":0.0017,"other":0.0005}
+METRIC browser.s12345e0.inside_in.luma 40.55
+METRIC browser.s12345e0.inside_out.all {"cap":0.0057,"surface":0.0712,"tilted":0.0193,"caveFloor":0.3639,"gray":0.0002,"arch":0.4472,"sky":0.092,"other":0.0004}
+METRIC browser.s12345e0.inside_out.top {"cap":0.0114,"surface":0.1424,"tilted":0.0387,"caveFloor":0.1749,"gray":0.0004,"arch":0.4472,"sky":0.1841,"other":0.0009}
+METRIC browser.s12345e0.inside_out.bottom {"caveFloor":0.5528,"arch":0.4472}
+METRIC browser.s12345e0.inside_out.luma 54.14
+METRIC browser.s12345e0.arch_in.all {"cap":0.2322,"surface":0.0713,"floorDark":0.4797,"gray":0.0012,"caveWall":0.0797,"wall":0.0295,"sky":0.1045,"other":0.0019}
+METRIC browser.s12345e0.arch_in.top {"cap":0.4645,"surface":0.1425,"floorDark":0.0141,"gray":0.0024,"caveWall":0.1049,"wall":0.0589,"sky":0.209,"other":0.0037}
+METRIC browser.s12345e0.arch_in.bottom {"floorDark":0.9453,"caveWall":0.0545,"wall":0.0002}
+METRIC browser.s12345e0.arch_in.luma 52.6
+METRIC browser.s12345e0.ramp_far_in.all {"cap":0.444,"surface":0.0606,"tilted":0.0495,"floorDark":0.3146,"caveWall":0.033,"wall":0.0719,"arch":0.008,"sky":0.0173,"other":0.0012}
+METRIC browser.s12345e0.ramp_far_in.top {"cap":0.7778,"surface":0.0161,"tilted":0.0272,"caveWall":0.0041,"wall":0.1396,"sky":0.0346,"other":0.0006}
+METRIC browser.s12345e0.ramp_far_in.bottom {"cap":0.1101,"surface":0.105,"tilted":0.0719,"floorDark":0.6292,"caveWall":0.0618,"wall":0.0042,"arch":0.016,"other":0.0017}
+METRIC browser.s12345e0.ramp_far_in.luma 85.15
+METRIC browser.s12345e0.ramp_near_in.all {"cap":0.4593,"surface":0.0402,"tilted":0.0582,"floorDark":0.3362,"caveWall":0.0379,"wall":0.0591,"arch":0.008,"sky":0.0002,"other":0.001}
+METRIC browser.s12345e0.ramp_near_in.top {"cap":0.8237,"surface":0.0031,"tilted":0.0503,"caveWall":0.0086,"wall":0.1131,"sky":0.0005,"other":0.0006}
+METRIC browser.s12345e0.ramp_near_in.bottom {"cap":0.0948,"surface":0.0772,"tilted":0.066,"floorDark":0.6724,"caveWall":0.0672,"wall":0.0051,"arch":0.016,"other":0.0013}
+METRIC browser.s12345e0.ramp_near_in.luma 82.79
+METRIC browser.s12345e0.cap_along.all {"cap":0.3382,"surface":0.0445,"tilted":0,"caveFloor":0,"floorDark":0.1062,"wall":0.0442,"sky":0.4654,"other":0.0014}
+METRIC browser.s12345e0.cap_along.top {"floorDark":0.0144,"wall":0.0547,"sky":0.9309}
+METRIC browser.s12345e0.cap_along.bottom {"cap":0.6764,"surface":0.089,"tilted":0,"caveFloor":0,"floorDark":0.198,"wall":0.0338,"other":0.0028}
+METRIC browser.s12345e0.cap_along.luma 79.04
+METRIC browser.s12345e0.far_surface.all {"surface":0.3161,"tilted":0.0002,"floorDark":0.0226,"gray":0,"caveWall":0.001,"wall":0.3828,"sky":0.2769,"other":0.0004}
+METRIC browser.s12345e0.far_surface.top {"floorDark":0.0067,"caveWall":0.0005,"wall":0.439,"sky":0.5537,"other":0.0002}
+METRIC browser.s12345e0.far_surface.bottom {"surface":0.6322,"tilted":0.0003,"floorDark":0.0386,"gray":0,"caveWall":0.0016,"wall":0.3267,"sky":0,"other":0.0005}
+METRIC browser.s12345e0.far_surface.luma 84.77
+METRIC browser.s424242.entrances 1
+METRIC browser.s424242e0.roof_start_along 385
+METRIC browser.s424242e0.inside_in.all {"cap":0.1919,"surface":0.0468,"tilted":0.0046,"caveFloor":0.703,"gray":0.0003,"caveWall":0.0462,"wall":0.0055,"sky":0.0001,"other":0.0016}
+METRIC browser.s424242e0.inside_in.top {"cap":0.3838,"surface":0.0936,"tilted":0.0083,"caveFloor":0.4403,"gray":0.0006,"caveWall":0.0634,"wall":0.0074,"sky":0.0002,"other":0.0024}
+METRIC browser.s424242e0.inside_in.bottom {"tilted":0.0009,"caveFloor":0.9657,"caveWall":0.0291,"wall":0.0036,"other":0.0008}
+METRIC browser.s424242e0.inside_in.luma 40.91
+METRIC browser.s424242e0.inside_out.all {"cap":0.2453,"surface":0.0121,"tilted":0.0008,"caveFloor":0.278,"gray":0.0017,"caveWall":0.0044,"wall":0.0009,"arch":0.4472,"sky":0.0091,"other":0.0006}
+METRIC browser.s424242e0.inside_out.top {"cap":0.4335,"surface":0.0241,"tilted":0.0015,"caveFloor":0.0672,"gray":0.0014,"caveWall":0.0055,"wall":0.001,"arch":0.4472,"sky":0.0174,"other":0.0011}
+METRIC browser.s424242e0.inside_out.bottom {"cap":0.0572,"surface":0,"tilted":0.0001,"caveFloor":0.4887,"gray":0.002,"caveWall":0.0032,"wall":0.0007,"arch":0.4472,"sky":0.0007,"other":0.0002}
+METRIC browser.s424242e0.inside_out.luma 48.69
+METRIC browser.s424242e0.arch_in.all {"cap":0.3004,"surface":0.0945,"floorDark":0.4704,"gray":0.0008,"caveWall":0.0301,"wall":0.0359,"sky":0.067,"other":0.0009}
+METRIC browser.s424242e0.arch_in.top {"cap":0.5495,"surface":0.1891,"floorDark":0.0133,"gray":0.0015,"caveWall":0.0405,"wall":0.0703,"sky":0.134,"other":0.0018}
+METRIC browser.s424242e0.arch_in.bottom {"cap":0.0512,"floorDark":0.9275,"caveWall":0.0197,"wall":0.0015}
+METRIC browser.s424242e0.arch_in.luma 50.52
+METRIC browser.s424242e0.ramp_far_in.all {"cap":0.2983,"surface":0.0265,"floorDark":0.0757,"arch":0.1062,"sky":0.4917,"other":0.0016}
+METRIC browser.s424242e0.ramp_far_in.top {"floorDark":0.0167,"sky":0.9833}
+METRIC browser.s424242e0.ramp_far_in.bottom {"cap":0.5967,"surface":0.053,"floorDark":0.1347,"arch":0.2125,"other":0.0031}
+METRIC browser.s424242e0.ramp_far_in.luma 71.93
+METRIC browser.s424242e0.ramp_near_in.all {"cap":0.3115,"surface":0.0134,"floorDark":0.0594,"arch":0.1229,"sky":0.4914,"other":0.0013}
+METRIC browser.s424242e0.ramp_near_in.top {"cap":0.0037,"floorDark":0.0135,"sky":0.9828}
+METRIC browser.s424242e0.ramp_near_in.bottom {"cap":0.6194,"surface":0.0269,"floorDark":0.1053,"arch":0.2459,"other":0.0025}
+METRIC browser.s424242e0.ramp_near_in.luma 73.07
+METRIC browser.s424242e0.cap_along.all {"cap":0.4706,"surface":0.0003,"floorDark":0.0283,"caveWall":0.017,"wall":0.041,"sky":0.4425,"other":0.0003}
+METRIC browser.s424242e0.cap_along.top {"cap":0.0396,"floorDark":0.0072,"caveWall":0.0015,"wall":0.0667,"sky":0.885,"other":0.0001}
+METRIC browser.s424242e0.cap_along.bottom {"cap":0.9016,"surface":0.0005,"floorDark":0.0495,"caveWall":0.0326,"wall":0.0152,"other":0.0006}
+METRIC browser.s424242e0.cap_along.luma 96.7
+METRIC browser.s424242e0.far_surface.all {"surface":0.3894,"caveFloor":0.0001,"floorDark":0.0952,"wall":0.0533,"sky":0.4616,"other":0.0005}
+METRIC browser.s424242e0.far_surface.top {"caveFloor":0.0001,"floorDark":0.0137,"wall":0.0621,"sky":0.9231,"other":0.001}
+METRIC browser.s424242e0.far_surface.bottom {"surface":0.7788,"floorDark":0.1766,"wall":0.0445}
+METRIC browser.s424242e0.far_surface.luma 50.58
+NOTE browser.provenance {"protocol":2,"seeds":[12345,424242],"views":["inside_in","inside_out","arch_in","ramp_far_in","ramp_near_in","cap_along","far_surface"],"userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36","start":"page","mutated":false,"mutationCount":0}
+METRIC browser.run_ms 3255.9 ms
+HARNESS_RESULT FAIL 7

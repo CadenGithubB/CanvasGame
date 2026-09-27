@@ -1,0 +1,805 @@
+[
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: lateral: walking sideways inside the corridor never raises the player more than a step height (1.0 h) in one tick",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#1",
+  "kind": "FIX",
+  "desc": "FIX D11 in the picker: return the cell's lowest walkable layer instead of the h=0 sentinel (climbs any cliff, so the curb contract A3 stays FAIL)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: lateral: walking sideways inside the corridor never sinks the player below every floor",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: lateral: walking sideways inside the corridor never raises the player more than a step height (1.0 h) in one tick",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: mouth: walking sideways in the uncapped cave mouth never sinks the player below every floor",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: a real frame loop walking into the cave and back out raises no render errors",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "render: canvas save/restore stays balanced through the cave walk",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#2",
+  "kind": "FIX",
+  "desc": "FIX D11 in step(): a horizontal move into a cell whose picker result is the no-walkable sentinel is blocked like a wall (the picker contract A1 stays FAIL)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the player never goes airborne walking the entrance ramp",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: the player never sinks more than a step height below every floor of its cell",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: spawn: the Cave Test spawn is not airborne after one tick",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#3",
+  "kind": "FIX",
+  "desc": "UNSAFE FIX D12 (the edge-fall guard alone, the prescription caves_transition shares): no micro-falls, but the ground ease now slides the player down real drops -- B2 must catch it",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the player never sinks more than a step height below every floor of its cell",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: spawn: the Cave Test spawn is not airborne after one tick",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#4",
+  "kind": "FIX",
+  "desc": "FIX D12: edge fall only when unsupported, and an unsupported ground pick starts the fall instead of easing toward the floor below",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#6",
+  "kind": "FIX",
+  "desc": "FIX N4: land without lifting the feet onto a floor above them; the grounded ease climbs it",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#7",
+  "kind": "FIX",
+  "desc": "FIX D15: invalidate the floor-height cache before the wallFaceBase precompute",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "caves_geometry",
+  "flips": [
+   {
+    "check": "caves_geometry: getFloorHeightAt never returns a ceiling's height",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#8",
+  "kind": "FIX",
+  "desc": "FIX D15 plus a D6-style getFloorHeightAt (lowest walkable layer instead of l0): the cache checks follow the function's semantics, so they still PASS",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#11",
+  "kind": "FIX",
+  "desc": "FIX D21: no regen while dead, so the death check sees health 0",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#12",
+  "kind": "FIX",
+  "desc": "FIX enemy reach: push-apart radius inside the attack reach",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: restart: a world started while the previous one is mid-jump behaves like one started from a fresh page",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "persistence",
+  "flips": [
+   {
+    "check": "persistence: restarting Endless mid-jump starts the new world exactly as a start from rest (no carried-over jump)",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "physics#13",
+  "kind": "FIX",
+  "desc": "FIX N5: a new world clears the jump state",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

@@ -1,0 +1,18 @@
+Frozen tools/webui + WebPage_Games.h SHA-256:
+9ffbcf95a62ab0217fce616b2004725b38f5fe663602e669293549c1a8a11a6e
+
+caves_geometry: 117/117 cells; regressions=6 beneficial=19; structure OK
+caves_transition: 90/90 cells; regressions=3 beneficial=5; structure OK
+enemies: 108/108 cells; regressions=0 beneficial=1; structure OK
+loot: 81/81 cells; regressions=0 beneficial=0; structure OK
+perf: 135/135 cells; regressions=0 beneficial=0; structure OK
+persistence: 216/216 cells; regressions=1 beneficial=4; structure OK
+physics: 90/90 cells; regressions=3 beneficial=12; structure OK
+render: 144/144 cells; regressions=7 beneficial=12; structure OK
+tools: 153/153 cells; regressions=0 beneficial=0; structure OK
+TOTAL: 1134/1134 cells; regressions=20; beneficial=53; all 9 JSON files structurally complete
+
+For every source suite, the validator reconstructed the expected Cartesian
+product from the current FIX probe registry and the other nine non-smoke target
+suites. It found zero missing, unexpected, or duplicate cells; zero harness
+error rows; and zero non-empty missing_expected lists.

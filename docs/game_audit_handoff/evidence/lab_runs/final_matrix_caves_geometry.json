@@ -1,0 +1,1078 @@
+[
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#0",
+  "kind": "FIX",
+  "desc": "FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "browser",
+  "flips": [
+   {
+    "check": "browser: every driver view reaches its scene on the default Cave Test seeds",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "browser: LAB independently confirms every driver view's scene on the default Cave Test seeds",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#1",
+  "kind": "FIX",
+  "desc": "FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#2",
+  "kind": "FIX",
+  "desc": "FIX D16: draw the 30% cave gate from its own RNG stream",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: a camera on the cap above the cave draws no buried cave walls",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#3",
+  "kind": "FIX",
+  "desc": "FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: that check does not assume the ceiling policy)",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the control map paints a cell as cave floor only if the cell has a walkable floor below the surface",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#4",
+  "kind": "FIX",
+  "desc": "FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: the rock drawn above a cave wall follows the cave ceiling beside it",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#5",
+  "kind": "FIX",
+  "desc": "FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the control map paints a cell as cave floor only if the cell has a walkable floor below the surface",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: playerUnderground changes exactly once going in and once coming out",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is offered to a player standing beside it on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: the archway is drawn to a player on the open approach ramp",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#6",
+  "kind": "FIX",
+  "desc": "FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: lateral: walking sideways inside the corridor never puts the player inside rock between ceiling and cap",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: a camera on the ground above the tunnel draws no buried cave floor or cave ceiling",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "render: the archway is drawn to a player on the open approach ramp",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#7",
+  "kind": "FIX",
+  "desc": "FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the control map paints a cell as cave floor only if the cell has a walkable floor below the surface",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#8",
+  "kind": "FIX",
+  "desc": "FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: height never changes by more than 0.35 h in one tick walking in or out",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: playerUnderground changes exactly once going in and once coming out",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: wherever a cave ceiling is above the player's floor, the eye (h + 2.4) stays below it",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: the player is never inside rock between a cave ceiling and the surface cap above it",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: the player never sinks more than a step height below every floor of its cell",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is offered to a player standing beside it on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "render",
+  "flips": [
+   {
+    "check": "render: the archway is drawn to a player on the open approach ramp",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#9",
+  "kind": "FIX",
+  "desc": "FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances carry their tree's depth and both trees share it; inside its cone the approach ramp's fade governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#10",
+  "kind": "FIX",
+  "desc": "FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#11",
+  "kind": "FIX",
+  "desc": "FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "caves_geometry#12",
+  "kind": "FIX",
+  "desc": "FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

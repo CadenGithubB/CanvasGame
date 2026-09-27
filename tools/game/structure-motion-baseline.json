@@ -1,0 +1,1816 @@
+{
+  "recordedDate": "2026-09-27",
+  "kind": "native-structure-motion",
+  "fixtureVersion": 2,
+  "status": "QUALITY_FAILURE",
+  "complete": true,
+  "artwork": {
+    "dark": 0,
+    "light": 255,
+    "darkWidth": 0.0625
+  },
+  "thresholds": {
+    "maxTemporalRms": 0.05,
+    "maxSpatialMae": 0.08
+  },
+  "localThresholds": {
+    "maxFrameTemporalRms": 0.08,
+    "maxLocalTemporalRms": 0.12,
+    "tileSize": 8,
+    "stride": 4
+  },
+  "temporalFailures": [
+    "tower-tall-wall-64-triangles",
+    "tower-tall-wall-128-triangles",
+    "fortress-sloped-roof-128-triangles",
+    "tower-sloped-roof-128-triangles",
+    "fortress-floor-walk-64-triangles",
+    "fortress-floor-walk-128-triangles",
+    "fortress-floor-walk-128-planar",
+    "tower-roof-walk-64-triangles",
+    "tower-roof-walk-128-triangles"
+  ],
+  "spatialFailures": [],
+  "setupFailures": [],
+  "cases": [
+    {
+      "id": "fortress-floor-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.008625238130638197,
+        "spatialMae": 0.04612926385607292,
+        "maxFrame": 0.008782009332610712,
+        "maxLocal": 0.025764627096845502,
+        "worstLocal": {
+          "frame": 10,
+          "x": 48,
+          "y": 20,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.025764627096845502
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-floor-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.008598650095106334,
+        "spatialMae": 0.04581792755056139,
+        "maxFrame": 0.008746419001077402,
+        "maxLocal": 0.025547289852913123,
+        "worstLocal": {
+          "frame": 11,
+          "x": 48,
+          "y": 20,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.025547289852913123
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-floor-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.008598807917836349,
+        "spatialMae": 0.04519113336902212,
+        "maxFrame": 0.008725169697099137,
+        "maxLocal": 0.02134067872365578,
+        "worstLocal": {
+          "frame": 14,
+          "x": 56,
+          "y": 24,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.02134067872365578
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 117,
+        "maxStrips": 117,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-floor-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -250.8,
+        "y": -198,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -708,
+        "minY": -708,
+        "minZ": 0,
+        "maxX": 708,
+        "maxY": 708,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.004978351638953489,
+        "spatialMae": 0.0272769231893316,
+        "maxFrame": 0.0050173082400618825,
+        "maxLocal": 0.015843981218334954,
+        "worstLocal": {
+          "frame": 13,
+          "x": 44,
+          "y": 4,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.015843981218334954
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-floor-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -250.8,
+        "y": -198,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -708,
+        "minY": -708,
+        "minZ": 0,
+        "maxX": 708,
+        "maxY": 708,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.004978351638953489,
+        "spatialMae": 0.0272769231893316,
+        "maxFrame": 0.0050173082400618825,
+        "maxLocal": 0.015843981218334954,
+        "worstLocal": {
+          "frame": 13,
+          "x": 44,
+          "y": 4,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.015843981218334954
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-floor-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -250.8,
+        "y": -198,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -708,
+        "minY": -708,
+        "minZ": 0,
+        "maxX": 708,
+        "maxY": 708,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.004936501412582932,
+        "spatialMae": 0.025497473850085873,
+        "maxFrame": 0.005000573115414561,
+        "maxLocal": 0.014435313271869043,
+        "worstLocal": {
+          "frame": 14,
+          "x": 44,
+          "y": 4,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.014435313271869043
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 116,
+        "maxStrips": 116,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-grazing-wall-64-triangles",
+      "roi": {
+        "x": 144,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -976,
+        "y": -670,
+        "z": 116,
+        "ang": 1.3909428270024184,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.011616097351902511,
+        "spatialMae": 0.06627220817997309,
+        "maxFrame": 0.011891023273040695,
+        "maxLocal": 0.03231474398753056,
+        "worstLocal": {
+          "frame": 11,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.03231474398753056
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-grazing-wall-128-triangles",
+      "roi": {
+        "x": 144,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -976,
+        "y": -670,
+        "z": 116,
+        "ang": 1.3909428270024184,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.011584923838745279,
+        "spatialMae": 0.06611650869314714,
+        "maxFrame": 0.011884604721560884,
+        "maxLocal": 0.03199504477671854,
+        "worstLocal": {
+          "frame": 11,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.03199504477671854
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-grazing-wall-128-planar",
+      "roi": {
+        "x": 144,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -976,
+        "y": -670,
+        "z": 116,
+        "ang": 1.3909428270024184,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.01175021198338701,
+        "spatialMae": 0.06855525815380341,
+        "maxFrame": 0.01209138858714873,
+        "maxLocal": 0.032019176293043836,
+        "worstLocal": {
+          "frame": 8,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.032019176293043836
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 209,
+        "maxStrips": 210,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-front-wall-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -1116,
+        "y": -450,
+        "z": 116,
+        "ang": 0,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.007020158721228736,
+        "spatialMae": 0.005139346527479457,
+        "maxFrame": 0.01048365093057841,
+        "maxLocal": 0.020967301861156803,
+        "worstLocal": {
+          "frame": 10,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.020967301861156803
+        }
+      },
+      "targetWork": {
+        "minTriangles": 2,
+        "maxTriangles": 2,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-front-wall-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -1116,
+        "y": -450,
+        "z": 116,
+        "ang": 0,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.004081061523366443,
+        "spatialMae": 0.0035677742287010547,
+        "maxFrame": 0.0053628846574462485,
+        "maxLocal": 0.010725769314892499,
+        "worstLocal": {
+          "frame": 11,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.010725769314892499
+        }
+      },
+      "targetWork": {
+        "minTriangles": 2,
+        "maxTriangles": 2,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-front-wall-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -1116,
+        "y": -450,
+        "z": 116,
+        "ang": 0,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -936,
+        "minY": -876,
+        "minZ": 0,
+        "maxX": -936,
+        "maxY": -24,
+        "maxZ": 219.2400026321411
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.004081061523366443,
+        "spatialMae": 0.0035677742287010547,
+        "maxFrame": 0.0053628846574462485,
+        "maxLocal": 0.010725769314892499,
+        "worstLocal": {
+          "frame": 11,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.010725769314892499
+        }
+      },
+      "targetWork": {
+        "minTriangles": 2,
+        "maxTriangles": 2,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-inner-wall-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -476,
+        "y": 100,
+        "z": 116,
+        "ang": -2.356194490192345,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -576,
+        "minY": -96,
+        "minZ": 0,
+        "maxX": -576,
+        "maxY": 96,
+        "maxZ": 170.52000045776367
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.010612615993070939,
+        "spatialMae": 0.018608762014562654,
+        "maxFrame": 0.012558292238081107,
+        "maxLocal": 0.049921454797228905,
+        "worstLocal": {
+          "frame": 6,
+          "x": 56,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.049921454797228905
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-inner-wall-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -476,
+        "y": 100,
+        "z": 116,
+        "ang": -2.356194490192345,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -576,
+        "minY": -96,
+        "minZ": 0,
+        "maxX": -576,
+        "maxY": 96,
+        "maxZ": 170.52000045776367
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.01068094547412212,
+        "spatialMae": 0.01623213930664149,
+        "maxFrame": 0.013597755721455228,
+        "maxLocal": 0.05847085780499626,
+        "worstLocal": {
+          "frame": 6,
+          "x": 56,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.05847085780499626
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "arena-inner-wall-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -476,
+        "y": 100,
+        "z": 116,
+        "ang": -2.356194490192345,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -576,
+        "minY": -96,
+        "minZ": 0,
+        "maxX": -576,
+        "maxY": 96,
+        "maxZ": 170.52000045776367
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.009203612586091231,
+        "spatialMae": 0.011984108911304426,
+        "maxFrame": 0.010023434029718366,
+        "maxLocal": 0.027711243294889616,
+        "worstLocal": {
+          "frame": 2,
+          "x": 0,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.027711243294889616
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 259,
+        "maxStrips": 260,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-tall-wall-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -101,
+        "y": -48,
+        "z": 218.4,
+        "ang": 0.5736666681681608,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -36,
+        "minY": -36,
+        "minZ": 0,
+        "maxX": -36,
+        "maxY": 24,
+        "maxZ": 341.04000091552734
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.03831866854963034,
+        "spatialMae": 0.011677113653627018,
+        "maxFrame": 0.05649425895720224,
+        "maxLocal": 0.19547642934307663,
+        "worstLocal": {
+          "frame": 1,
+          "x": 44,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.19547642934307663
+        }
+      },
+      "targetWork": {
+        "minTriangles": 86,
+        "maxTriangles": 86,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-tall-wall-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -101,
+        "y": -48,
+        "z": 218.4,
+        "ang": 0.5736666681681608,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -36,
+        "minY": -36,
+        "minZ": 0,
+        "maxX": -36,
+        "maxY": 24,
+        "maxZ": 341.04000091552734
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.03687246513557025,
+        "spatialMae": 0.012177663275695666,
+        "maxFrame": 0.052118841951372605,
+        "maxLocal": 0.2078415163408456,
+        "worstLocal": {
+          "frame": 4,
+          "x": 44,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.2078415163408456
+        }
+      },
+      "targetWork": {
+        "minTriangles": 86,
+        "maxTriangles": 86,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-tall-wall-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 104,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -101,
+        "y": -48,
+        "z": 218.4,
+        "ang": 0.5736666681681608,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0.04
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0.04
+      ],
+      "faceBounds": {
+        "minX": -36,
+        "minY": -36,
+        "minZ": 0,
+        "maxX": -36,
+        "maxY": 24,
+        "maxZ": 341.04000091552734
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.012465958734214067,
+        "spatialMae": 0.009743677230332648,
+        "maxFrame": 0.013784765397672429,
+        "maxLocal": 0.040040420797885244,
+        "worstLocal": {
+          "frame": 1,
+          "x": 52,
+          "y": 12,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.040040420797885244
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 169,
+        "maxStrips": 171,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-sloped-roof-64-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -160.70526559310568,
+        "y": -35.936818526936754,
+        "z": 668.7040000000001,
+        "ang": 0.21999999999999986,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -131.68881759258628,
+        "minY": -93.4178748514061,
+        "minZ": 366.24,
+        "maxX": 0,
+        "maxY": 41.25597315621748,
+        "maxZ": 393.84000000000003
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.011863751722868219,
+        "spatialMae": 0.01877130029919243,
+        "maxFrame": 0.029938754772632022,
+        "maxLocal": 0.08181217506693157,
+        "worstLocal": {
+          "frame": 15,
+          "x": 8,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.08181217506693157
+        }
+      },
+      "targetWork": {
+        "minTriangles": 183,
+        "maxTriangles": 192,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-sloped-roof-128-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -160.70526559310568,
+        "y": -35.936818526936754,
+        "z": 668.7040000000001,
+        "ang": 0.21999999999999986,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -131.68881759258628,
+        "minY": -93.4178748514061,
+        "minZ": 366.24,
+        "maxX": 0,
+        "maxY": 41.25597315621748,
+        "maxZ": 393.84000000000003
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.015693013131133013,
+        "spatialMae": 0.01879304361737605,
+        "maxFrame": 0.04629687264159345,
+        "maxLocal": 0.12921630422082334,
+        "worstLocal": {
+          "frame": 15,
+          "x": 8,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.12921630422082334
+        }
+      },
+      "targetWork": {
+        "minTriangles": 183,
+        "maxTriangles": 192,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-sloped-roof-128-planar",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -160.70526559310568,
+        "y": -35.936818526936754,
+        "z": 668.7040000000001,
+        "ang": 0.21999999999999986,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -131.68881759258628,
+        "minY": -93.4178748514061,
+        "minZ": 366.24,
+        "maxX": 0,
+        "maxY": 41.25597315621748,
+        "maxZ": 393.84000000000003
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.006221651319865237,
+        "spatialMae": 0.01024514544786925,
+        "maxFrame": 0.008641875180621919,
+        "maxLocal": 0.017887324571953876,
+        "worstLocal": {
+          "frame": 1,
+          "x": 8,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.017887324571953876
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 239,
+        "maxStrips": 239,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-sloped-roof-64-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.0255850348578096,
+        "spatialMae": 0.01119679690646574,
+        "maxFrame": 0.06935643873002426,
+        "maxLocal": 0.1194951348387789,
+        "worstLocal": {
+          "frame": 1,
+          "x": 8,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.1194951348387789
+        }
+      },
+      "targetWork": {
+        "minTriangles": 75,
+        "maxTriangles": 75,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-sloped-roof-128-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.022152635217720304,
+        "spatialMae": 0.011336252486269604,
+        "maxFrame": 0.057996328612060756,
+        "maxLocal": 0.12079386415707384,
+        "worstLocal": {
+          "frame": 1,
+          "x": 8,
+          "y": 0,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.12079386415707384
+        }
+      },
+      "targetWork": {
+        "minTriangles": 75,
+        "maxTriangles": 75,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-sloped-roof-128-planar",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.08,
+        "stepY": 0.035,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.08,
+        0.035,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.014443509684670768,
+        "spatialMae": 0.00534694546623118,
+        "maxFrame": 0.02335749928655804,
+        "maxLocal": 0.04996563526175314,
+        "worstLocal": {
+          "frame": 14,
+          "x": 12,
+          "y": 4,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.04996563526175314
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 183,
+        "maxStrips": 187,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-floor-walk-64-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.07533274019009606,
+        "spatialMae": 0.050684402064262876,
+        "maxFrame": 0.07922344075013098,
+        "maxLocal": 0.2267807036612107,
+        "worstLocal": {
+          "frame": 15,
+          "x": 40,
+          "y": 24,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.2267807036612107
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-floor-walk-128-triangles",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.0751255725809202,
+        "spatialMae": 0.05028109700281325,
+        "maxFrame": 0.07896919329250007,
+        "maxLocal": 0.23215837510285678,
+        "worstLocal": {
+          "frame": 15,
+          "x": 40,
+          "y": 24,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.23215837510285678
+        }
+      },
+      "targetWork": {
+        "minTriangles": 256,
+        "maxTriangles": 256,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 16,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "fortress-floor-walk-128-planar",
+      "roi": {
+        "x": 148,
+        "y": 148,
+        "width": 64,
+        "height": 32
+      },
+      "camera": {
+        "x": -360.24,
+        "y": -284.4,
+        "z": -7.200000000000003,
+        "ang": 0.26,
+        "pitch": 0,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -996,
+        "minY": -996,
+        "minZ": 0,
+        "maxX": 996,
+        "maxY": 996,
+        "maxZ": 0
+      },
+      "axis": "v",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.07375725261561046,
+        "spatialMae": 0.048325024919953344,
+        "maxFrame": 0.0773852636503974,
+        "maxLocal": 0.1787549403271152,
+        "worstLocal": {
+          "frame": 12,
+          "x": 44,
+          "y": 24,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.1787549403271152
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 117,
+        "maxStrips": 117,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-roof-walk-64-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.07105115341983324,
+        "spatialMae": 0.011509577513124094,
+        "maxFrame": 0.09427852082545679,
+        "maxLocal": 0.22182937613071174,
+        "worstLocal": {
+          "frame": 10,
+          "x": 20,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.22182937613071174
+        }
+      },
+      "targetWork": {
+        "minTriangles": 65,
+        "maxTriangles": 89,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 5,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-roof-walk-128-triangles",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "QUALITY_FAILURE",
+        "rms": 0.06794395990967099,
+        "spatialMae": 0.011888486542323164,
+        "maxFrame": 0.10442151982282015,
+        "maxLocal": 0.25589543277626886,
+        "worstLocal": {
+          "frame": 10,
+          "x": 20,
+          "y": 8,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.25589543277626886
+        }
+      },
+      "targetWork": {
+        "minTriangles": 65,
+        "maxTriangles": 89,
+        "minStrips": 0,
+        "maxStrips": 0,
+        "cappedFrames": 5,
+        "fallbackFrames": 0
+      }
+    },
+    {
+      "id": "tower-roof-walk-128-planar",
+      "roi": {
+        "x": 164,
+        "y": 112,
+        "width": 32,
+        "height": 16
+      },
+      "camera": {
+        "x": -61.50862225512384,
+        "y": -96.94104524027213,
+        "z": 637.664,
+        "ang": 1.0053981633974483,
+        "pitch": 0.7647058823529411,
+        "fov": 1.2566370614359172,
+        "stepX": 0.65,
+        "stepY": 0.3,
+        "stepZ": 0
+      },
+      "cameraStep": [
+        0.65,
+        0.3,
+        0
+      ],
+      "faceBounds": {
+        "minX": -61.70825668119072,
+        "minY": -61.70825668119072,
+        "minZ": 344.04,
+        "maxX": 13.799164661974341,
+        "maxY": 0,
+        "maxZ": 380.04
+      },
+      "axis": "u",
+      "analysis": {
+        "status": "PASS",
+        "rms": 0.03031808892848963,
+        "spatialMae": 0.004773910397225713,
+        "maxFrame": 0.049280723104973945,
+        "maxLocal": 0.09960909200272405,
+        "worstLocal": {
+          "frame": 7,
+          "x": 16,
+          "y": 4,
+          "width": 8,
+          "height": 8,
+          "residualRms": 0.09960909200272405
+        }
+      },
+      "targetWork": {
+        "minTriangles": 0,
+        "maxTriangles": 0,
+        "minStrips": 183,
+        "maxStrips": 214,
+        "cappedFrames": 0,
+        "fallbackFrames": 0
+      }
+    }
+  ],
+  "controls": [
+    {
+      "id": "stationary-scene",
+      "pass": true,
+      "temporalRms": 0,
+      "maxLocal": 0
+    },
+    {
+      "id": "uniform-moving-surface",
+      "pass": true,
+      "temporalRms": 0,
+      "maxLocal": 0
+    },
+    {
+      "id": "localized-eight-pixel-pulse",
+      "pass": true,
+      "temporalRms": 0.05303300858899104,
+      "maxLocal": 0.2999999999999999
+    },
+    {
+      "id": "raw-sampling-comparison",
+      "descriptiveComparison": true,
+      "temporalRms": 0.016913153630910515,
+      "maxLocal": 0.05122424131667359
+    },
+    {
+      "id": "nearer-occluder-rejects-hidden-subject",
+      "pass": true,
+      "openDepth": 100.21297578262028,
+      "blockedDepth": 50.10648789131014
+    }
+  ],
+  "diagnostics": [
+    {
+      "id": "fortress-floor-walk-real-stone-128",
+      "normalization": "red channel /255, not diagnostic stripe contrast",
+      "classification": "DESCRIPTIVE_NUMERICAL_REFERENCE",
+      "actualResidualRms": 0.04931120508895095,
+      "actualMaxLocal": 0.08034728392813441,
+      "referenceDisagreementRms": 0.005489419018181547,
+      "referenceMaxLocal": 0.010822165626044903,
+      "limitations": "Original stone texels sampled through independent ray/plane UVs. Finite8x8/16x16 quadrature, not exact pixel integration; convergence is empirical, not a proven error bound. Not included in analytic pass/fail totals."
+    },
+    {
+      "id": "tower-roof-walk-real-stone-128",
+      "normalization": "red channel /255, not diagnostic stripe contrast",
+      "classification": "DESCRIPTIVE_NUMERICAL_REFERENCE",
+      "actualResidualRms": 0.016767017746362873,
+      "actualMaxLocal": 0.06206373344008527,
+      "referenceDisagreementRms": 0.0038543344776649853,
+      "referenceMaxLocal": 0.007913754947293659,
+      "limitations": "Original stone texels sampled through independent ray/plane UVs. Finite8x8/16x16 quadrature, not exact pixel integration; convergence is empirical, not a proven error bound. Not included in analytic pass/fail totals."
+    }
+  ],
+  "evidence": {
+    "id": "tower-roof-walk-128-triangles",
+    "frame": 10,
+    "layout": "Actual previous / actual current / exact expected previous / exact expected current",
+    "worstLocal": {
+      "frame": 10,
+      "x": 20,
+      "y": 8,
+      "width": 8,
+      "height": 8,
+      "residualRms": 0.25589543277626886
+    }
+  },
+  "limitations": "Diagnostic 1/16-tile mortar bands on real full-structure geometry, unlit to isolate mapping. Independent exact pixel-area oracle; not a whole-game FPS benchmark or all-material certification."
+}
+

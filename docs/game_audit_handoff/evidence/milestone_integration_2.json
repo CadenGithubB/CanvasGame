@@ -1,0 +1,294 @@
+{
+  "cave_milestone": {
+    "verdict": "HARNESS_RESULT PASS",
+    "seconds": 1.41,
+    "checks": [
+      {
+        "id": "cave_milestone: page evaluates",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: descending 12345 requested entrance exists",
+        "ok": true,
+        "detail": "descending"
+      },
+      {
+        "id": "cave_milestone: descending 12345 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-4.773656403213952 headroom=3.8169290542602536"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.09951308737588449,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":729}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-4.773656368255614"
+      },
+      {
+        "id": "cave_milestone: descending 12345 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":-0.9567273259162903,\"underground\":true,\"clearanceH\":3.816929042339324,\"cellIdx\":33738}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: descending 12345 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: descending 12345 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: descending 12345 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.12209896679305166,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":664}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.12209896679305166,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":664}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=1.6005900621218185 expected=1.6352812051773071 underground=false"
+      },
+      {
+        "id": "cave_milestone: descending 12345 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=1.76259183883667 cave=-4.773656368255614"
+      },
+      {
+        "id": "cave_milestone: descending 12345 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: descending 12345 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 5668 requested entrance exists",
+        "ok": true,
+        "detail": "hillside"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-0.9979706487917875 headroom=3.8160316467285154"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013553035454000217,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":391}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-0.9979706406593319"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":2.818061113357544,\"underground\":true,\"clearanceH\":3.8160317540168758,\"cellIdx\":39895}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 5668 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013207292327834796,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":418}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.013207292327834796,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":418}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=-0.6239778998940404 expected=-0.63518887758255 underground=false"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=5.464969158172607 cave=-0.9979706406593319"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 5668 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 6290 requested entrance exists",
+        "ok": true,
+        "detail": "hillside"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 portal has finite floor and clearance",
+        "ok": true,
+        "detail": "floor=-3.4538909897627352 headroom=4.056135368347168"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk reaches chamber",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk has continuous support",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk preserves eye clearance",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walking does not trigger falls",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.021949504535603293,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":356}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 chamber classifies underground",
+        "ok": true,
+        "detail": "h=-3.453891038894652"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 chamber ceiling is above camera",
+        "ok": true,
+        "detail": "{\"ceilingH\":0.6022443771362305,\"underground\":true,\"clearanceH\":4.056135416030882,\"cellIdx\":40457}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 readable ambient at 0.5",
+        "ok": true,
+        "detail": "ambient=0.45"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 readable ambient at 0.95",
+        "ok": true,
+        "detail": "ambient=0.4"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 underground detection with day/night off",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: hillside 6290 turning inside renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 walk returns to approach",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.022203369922332516,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":446}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 return preserves support and headroom",
+        "ok": true,
+        "detail": "{\"reached\":true,\"maxDH\":0.022203369922332516,\"unsupported\":0,\"cramped\":0,\"airborne\":0,\"ticks\":446}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 return is outdoors at original height",
+        "ok": true,
+        "detail": "h=-3.0490339760828364 expected=-3.045841693878174 underground=false"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 surface above chamber stays outdoors",
+        "ok": true,
+        "detail": "surface=4.047877788543701 cave=-3.453891038894652"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 surface viewpoint renders without errors",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "cave_milestone: hillside 6290 network regenerates deterministically",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "cave_milestone: camera preserves legitimate zero physics height",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "metrics": {
+      "cave_milestone.descending.12345.walk_ticks": 1393,
+      "cave_milestone.hillside.5668.walk_ticks": 809,
+      "cave_milestone.hillside.6290.walk_ticks": 802
+    },
+    "notes": []
+  }
+}

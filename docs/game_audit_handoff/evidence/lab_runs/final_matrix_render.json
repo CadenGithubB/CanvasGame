@@ -1,0 +1,1261 @@
+[
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#1",
+  "kind": "FIX",
+  "desc": "FIX D5 ceiling: drop the hasCapAbove skip in drawLayersCeiling3D (13050)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#2",
+  "kind": "FIX",
+  "desc": "FIX D5 overhead: an underground camera skips walkable layers above its eye (12681)",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the floor-rejection histogram's buckets never add up to more than its total",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#3",
+  "kind": "FIX",
+  "desc": "FIX D5 both: ceilings drawn AND no walkable layer above an underground eye -- the looking-out view passes",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the floor-rejection histogram's buckets never add up to more than its total",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#8",
+  "kind": "FIX",
+  "desc": "FIX D4 height-aware: skip a capped cave floor only when the camera is not below its ceiling (12692)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: playerUnderground changes exactly once going in and once coming out",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: walk-in: ambient light dims monotonically going in and brightens monotonically coming out",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: cap walk: walking on the surface across a roofed corridor never drops the player more than a step below the top walkable layer",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is reached on foot from the entrance and offered, with the player on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#9",
+  "kind": "FIX",
+  "desc": "FIX D3 (caves_transition's probe): no cap exclusion at the arch (CAP_EXCL_SQ=0, 6647), so the archway counts as underground",
+  "suite": "tools",
+  "flips": [
+   {
+    "check": "tools: the frame comparison detects an underground-only checkbox that is wired (Ceiling wireframe, DEBUG_CEIL_WIRE)",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "caves_geometry",
+  "flips": [
+   {
+    "check": "caves_geometry: the cave roof starts no more than 40 u outside the entrance arch",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_geometry: getWalkableLayerTopAt carries a player from the surface down to the cave floor with no unsupported step",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is offered to a player standing beside it on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#10",
+  "kind": "FIX",
+  "desc": "FIX D2 (caves_geometry's finding): no roof on the approach axis outside the arch (4756-4771)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "caves_geometry",
+  "flips": [
+   {
+    "check": "caves_geometry: the cave roof starts no more than 40 u outside the entrance arch",
+    "to": "PASS",
+    "expected": false
+   },
+   {
+    "check": "caves_geometry: getWalkableLayerTopAt carries a player from the surface down to the cave floor with no unsupported step",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "caves_transition",
+  "flips": [
+   {
+    "check": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+    "to": "FAIL",
+    "expected": false
+   },
+   {
+    "check": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "loot",
+  "flips": [
+   {
+    "check": "loot: a cave chest is offered to a player standing beside it on the cave floor",
+    "to": "FAIL",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#11",
+  "kind": "FIX",
+  "desc": "FIX D2 + D4: roof starts at the arch AND height-aware cap cull -- the ramp view passes without bleed-through",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#12",
+  "kind": "FIX",
+  "desc": "FIX N13: a surface camera culls every capped wall, as the floor pass does for capped floor (12052)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#18",
+  "kind": "FIX",
+  "desc": "FIX D7: hide an entity from a surface camera only if a cap lies above it (replaces 511)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#19",
+  "kind": "FIX",
+  "desc": "FIX N7 at 508: treat wz 0 as 'unknown' in the below-floor cull",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#20",
+  "kind": "FIX",
+  "desc": "FIX N7 at the call site: drawEnemies3D passes the floor Z instead of 0 (14006)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "enemies",
+  "flips": [
+   {
+    "check": "enemies: after a window re-centre a cave enemy chasing through its cave still stands on the cave floor",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#21",
+  "kind": "FIX",
+  "desc": "FIX N7 by tracking: every enemy, not only underground ones, tracks floor height (11458)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#22",
+  "kind": "FIX",
+  "desc": "FIX chests: the D7 cap-aware cull AND a real Z at the chest call site (9174)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#23",
+  "kind": "FIX",
+  "desc": "FIX D7/N7 shared: cap-aware surface culling and literal wz=0 means unknown for every entity renderer",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#24",
+  "kind": "FIX",
+  "desc": "FIX F5: the walk cycle runs while the enemy itself has moved in the last 250 ms (14070)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "render#25",
+  "kind": "FIX",
+  "desc": "FIX fixed levels: tolerate a floorMesh without l0Color (12788)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

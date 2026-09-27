@@ -1,0 +1,229 @@
+{
+  "perf": {
+    "verdict": "HARNESS_RESULT FAIL 16",
+    "seconds": 46.0,
+    "checks": [
+      {
+        "id": "perf: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "perf: Endless floor render buffer never overflows at any quality preset, pitch, dash FOV or heading",
+        "ok": true,
+        "detail": "cells each floor pass wrote into _drawFloorCellBuf (NaN-sentinel count; demand re-measured with a 4x scratch buffer when it filled) vs its capacity (L786, unguarded write L12643-12646), pitch 0/1.4, FOV base/+dash, 16 headings: s424242 low vd500 W5 demand max 5452/40000 @pitch 1.40 heading 0deg; s424242 medium vd900 W5 demand max 10030/40000 @pitch 1.40 +dash heading 23deg; s424242 high vd1300 W7 demand max 17179/40000 @pitch 1.40 +dash heading 23deg; s424242 ultra vd1800 W9 demand max 29788/40000 @pitch 1.40 +dash heading 0deg"
+      },
+      {
+        "id": "perf: applying a quality preset rebuilds the window once when the chunk window changes and never otherwise",
+        "ok": true,
+        "detail": "assembleWindow calls from the Apply click through the rAF and 2 more frames (applySettings L17752-17768): s424242 low W7->5 rebuilds=1 (want 1; 1 by the rAF, 0 in the next 2 frames); s424242 medium W5->5 rebuilds=0 (want 0; 0 by the rAF, 0 in the next 2 frames); s424242 high W5->7 rebuilds=1 (want 1; 1 by the rAF, 0 in the next 2 frames); s424242 ultra W7->9 rebuilds=1 (want 1; 1 by the rAF, 0 in the next 2 frames)"
+      },
+      {
+        "id": "perf: fixed Level 4 floor render buffer never overflows at any camera position, pitch, dash FOV or heading",
+        "ok": false,
+        "detail": "demand 46596 > capacity 40000 (over by 6596) at (2160,480) pitch 1.40 +dash heading 90deg; worst per pitch: p0.0 43290, p1.4 46596; viewDist 2304 (L7677), mesh 360x240 gs 12; 288 passes over a 3x3 grid x pitch 0/1.4 x FOV base/+dash x 8 headings; 288 passes threw after buffering (D24, render suite); buffer L786, unguarded write L12643"
+      },
+      {
+        "id": "perf: jittering 2 u across a chunk line 10 times rebuilds the window at most twice",
+        "ok": false,
+        "detail": "s424242 line x=480 y=180: 10/10 crossings, 10 rebuilds, 197 log lines; one real loop() frame per crossing; updateChunks L7474-7501 re-centres whenever the player's chunk differs from the window centre (no hysteresis)"
+      },
+      {
+        "id": "perf: steady-state play writes nothing to the console",
+        "ok": false,
+        "detail": "s424242 near chunk (0,0) x 100..380 y 192 (~216 u from origin): 0 lines + 0 console.errors in 400/400 frames in-chunk; s424242 far1 chunk (5,0) x 2500..2780 y 288 (~2517 u from origin): 4 lines + 0 console.errors in 900/900 frames in-chunk, e.g. '[STATE @#m] pos=(#,#) origin=(#,-#) grid=#x# wal'; s424242 far2 chunk (-1,-5) x -380..-100 y -2232 (~2264 u from origin): 8 lines + 0 console.errors in 900/900 frames in-chunk, e.g. '[STATE @#m] pos=(#,#) origin=(-#,-#) grid=#x# wa'; console.log/info/warn AND console.error; loop() L21953-21966 console.warns a [STATE] line on 0.5% of frames beyond 1500 u from the origin or after any render error"
+      },
+      {
+        "id": "perf: walking inside one chunk triggers no window rebuild",
+        "ok": true,
+        "detail": "s424242 near chunk (0,0) x 100..380 y 192: 0 rebuilds in 400/400 frames in-chunk, walked 557 u; s424242 far1 chunk (5,0) x 2500..2780 y 288: 0 rebuilds in 900/900 frames in-chunk, walked 1228 u; s424242 far2 chunk (-1,-5) x -380..-100 y -2232: 0 rebuilds in 900/900 frames in-chunk, walked 1167 u"
+      },
+      {
+        "id": "perf: colour-string cache stays bounded (at most 8,192 entries) during play",
+        "ok": false,
+        "detail": "Object.keys(_rgbCache).length, fresh cache, 60+400 frames near spawn and 60+900 at each of two far sites: s424242 after near: 3131; s424242 after far1: 29786; s424242 after far2: 30294; s424242 final 30294 > bound 8192; rgbQ L1929-1941 memoises every exact lit/fogged RGB triple and never evicts (comment L1927 expects ~1000-3000)"
+      },
+      {
+        "id": "perf: arrow-key turn rate is the same at 30 fps and 60 fps (within 5%)",
+        "ok": false,
+        "detail": "s424242 from (100,192): 60 fps 2.000 rad, 30 fps 1.000 rad (ratio 0.500); 1 s of game time; loop() calls handleInput(FIXED_DT) once per render frame (L21910) while gameUpdate runs per physics step (L21916-21920); arrow yaw += 2.0*dt per handleInput (L19080)"
+      },
+      {
+        "id": "perf: walking speed is the same at 30 fps and 60 fps (within 5%)",
+        "ok": false,
+        "detail": "s424242 from (100,192): 60 fps 61.5 u, 30 fps 31.1 u (ratio 0.506); 1 s of game time; loop() calls handleInput(FIXED_DT) once per render frame (L21910) while gameUpdate runs per physics step (L21916-21920); applyGamepad adds a velocity impulse per handleInput call (L9822-9841), damping runs per physics step (L10195)"
+      },
+      {
+        "id": "perf: gamepad stick turn rate is the same at 30 fps and 60 fps (within 5%)",
+        "ok": false,
+        "detail": "s424242 from (100,192): 60 fps 1.800 rad, 30 fps 0.900 rad (ratio 0.500); 1 s of game time; loop() calls handleInput(FIXED_DT) once per render frame (L21910) while gameUpdate runs per physics step (L21916-21920); Stick Aim yaw += x*STICK_CAM_YAW_SPEED*dt per handleInput (L19173)"
+      },
+      {
+        "id": "perf: gamepad X-button walking speed is the same at 30 fps and 60 fps (within 5%)",
+        "ok": false,
+        "detail": "s424242 from (100,192): 60 fps 41.0 u, 30 fps 20.7 u (ratio 0.506); 1 s of game time; loop() calls handleInput(FIXED_DT) once per render frame (L21910) while gameUpdate runs per physics step (L21916-21920); Stick Aim X adds a velocity impulse per handleInput call (L19180-19185)"
+      },
+      {
+        "id": "perf: entering fullscreen sizes the canvas by the resolution setting",
+        "ok": false,
+        "detail": "window 1280x720; resolution 0.5: canvas 1280x720, want 640x360; resolution 0.75: canvas 1280x720, want 960x540; onFullscreenChange rAF sets innerWidth x innerHeight (L690-693), only applySettings scales by settings.resolution (L17773-17777)"
+      },
+      {
+        "id": "perf: the first frame on a freshly loaded page does not toggle the control mode",
+        "ok": false,
+        "detail": "CONTROL_MODE 2 -> 1 on the first frame (page-load pad state gpLast {\"buttons\":0,\"valid\":false} lastSelectDown false), 1 [CTRL] lines '[CTRL] toggled CONTROL_MODE= #'; control: SELECT on a connected pad toggles yes; handleInput reads SELECT from gpLast.buttons without checking gpLast.valid (L18997-19010)"
+      },
+      {
+        "id": "perf: gamepad polling keeps at most one request in flight",
+        "ok": false,
+        "detail": "10 requests in flight after 160 ms with the first still unanswered; startGamepadPolling ticks every 16 ms (L9799) and issues hw.fetchJSON with no in-flight guard (L9778-9797); the ESP32 serves them on one httpd task"
+      },
+      {
+        "id": "perf: a frame with the overview map open costs no more fills than a normal 3D frame",
+        "ok": false,
+        "detail": "overview frame 78484 fills vs normal 3D frame 6032 at the same spot; a new world did not open it by itself; drawDebugOverview (L18285) redraws one fillRect per grid cell every frame (L18305-18333) and loop() pauses the game while it is open (L19403)"
+      },
+      {
+        "id": "perf: a repeated floor pass parses no colour strings per quad",
+        "ok": false,
+        "detail": "parseInt calls 5005 for 5005 floor fills on an identical repeat pass (Endless s424242, default preset, heading 0, pitch 0); drawLayersFloor3D parses mesh.lNColor '#rrggbb' per quad (L12856) and builds a new 'rgb()' string per quad (L12872)"
+      },
+      {
+        "id": "perf: a repeated walls pass samples no biome noise",
+        "ok": false,
+        "detail": "getBiomeAt 1067, getWallBiomeRGB 1067, smoothNoise 2134 calls for 1024 wall fills on an identical repeat pass (Endless s424242, heading 270deg); drawWalls3D computes each wall cell's biome colour (L12083) and biome (L12100) from noise every frame; wallColorR/G/B (L6460) only hold structure overrides"
+      },
+      {
+        "id": "perf: a window re-centre writes at most 2 console lines",
+        "ok": false,
+        "detail": "max 26 lines per re-centre, 116 over 5 re-centres (26/26/19/19/26), e.g. '[CHUNK #,-#] biome=plains geo=# wallThresh=# wal'; updateChunks logs the shift and its result (L7484, L7493), assembleWindow adds ~18 diagnostic lines (L6793-L7385)"
+      },
+      {
+        "id": "perf: the Perf HUD fps readout matches the rate the loop runs at",
+        "ok": false,
+        "detail": "HUD reads 100 fps, settings FPS counter reads 30 FPS, frames every 33.3 ms with 10 ms of JS each; drawPerfHud computes fps = 1000 / average JS time per frame (L20774-20777), not the frame interval"
+      }
+    ],
+    "metrics": {
+      "perf.time.endless_quality_presets_ms": 1971.3,
+      "perf.level4.max_floor_demand_cells": 46596,
+      "perf.level4.view_dist": 2304,
+      "perf.time.fixed_level_4_ms": 2417.72,
+      "perf.chunkjitter.rebuilds": 10,
+      "perf.chunkjitter.log_lines_per_rebuild": 19.7,
+      "perf.time.chunk_line_jitter_ms": 762.9,
+      "perf.play.near.console_lines": 0,
+      "perf.play.far1.console_lines": 4,
+      "perf.play.far2.console_lines": 8,
+      "perf.play.rgb_cache_entries": 30294,
+      "perf.time.steady_state_play_ms": 31715.96,
+      "perf.fps.turn_ratio_30_over_60": 0.5,
+      "perf.fps.walk_ratio_30_over_60": 0.5061,
+      "perf.fps.gpturn_ratio_30_over_60": 0.5,
+      "perf.fps.gpwalk_ratio_30_over_60": 0.5061,
+      "perf.time.frame_rate_independence_ms": 6492.6,
+      "perf.time.fullscreen_resolution_ms": 0.54,
+      "perf.time.first_frame_on_a_fresh_page_ms": 142.02,
+      "perf.time.gamepad_polling_ms": 109.9,
+      "perf.overview.frame_fills": 78484,
+      "perf.overview.normal_frame_fills": 6032,
+      "perf.overview.auto_opened_on_start": 0,
+      "perf.time.overview_map_cost_ms": 193.6,
+      "perf.floorcolour.fills": 5005,
+      "perf.floorcolour.parseInt_calls": 5005,
+      "perf.time.per_quad_colour_work_ms": 142,
+      "perf.walls.gradients_first_pass": 374,
+      "perf.walls.gradients_repeat_pass": 374,
+      "perf.walls.fills": 1024,
+      "perf.time.walls_pass_noise_ms": 235.5,
+      "perf.recentre.lines_per_rebuild": 23.2,
+      "perf.time.re_centre_console_output_ms": 405.38,
+      "perf.time.perf_HUD_fps_ms": 849.66,
+      "perf.window.w5.assemble_ms": 19.02,
+      "perf.window.w5.typed_bytes": 3240000,
+      "perf.window.w5.array_slots": 320000,
+      "perf.pass.low.skybox3D.pass_ms": 0.1,
+      "perf.pass.low.skybox3D.fills": 4,
+      "perf.pass.low.ceiling3D.pass_ms": 0.04,
+      "perf.pass.low.ceiling3D.fills": 0,
+      "perf.pass.low.platforms3D.pass_ms": 1.06,
+      "perf.pass.low.platforms3D.fills": 1558,
+      "perf.pass.low.walls3D.pass_ms": 0.48,
+      "perf.pass.low.walls3D.fills": 296,
+      "perf.pass.low.sceneEntities.pass_ms": 0.2,
+      "perf.pass.low.sceneEntities.fills": 50,
+      "perf.frame.low.frame_ms": 3.96,
+      "perf.frame.low.fills": 1913,
+      "perf.floor.low.pitch0.buffered_cells": 1952,
+      "perf.floor.low.pitch0.quad_fills": 1558,
+      "perf.floor.low.pitch0.unfilled_ratio": 0.2018,
+      "perf.floor.low.pitchmax.buffered_cells": 5452,
+      "perf.floor.low.pitchmax.quad_fills": 1558,
+      "perf.floor.low.pitchmax.unfilled_ratio": 0.7142,
+      "perf.pass.medium.skybox3D.pass_ms": 0.1,
+      "perf.pass.medium.skybox3D.fills": 4,
+      "perf.pass.medium.ceiling3D.pass_ms": 0.1,
+      "perf.pass.medium.ceiling3D.fills": 0,
+      "perf.pass.medium.platforms3D.pass_ms": 4.92,
+      "perf.pass.medium.platforms3D.fills": 5005,
+      "perf.pass.medium.walls3D.pass_ms": 1.1,
+      "perf.pass.medium.walls3D.fills": 814,
+      "perf.pass.medium.sceneEntities.pass_ms": 0.22,
+      "perf.pass.medium.sceneEntities.fills": 161,
+      "perf.frame.medium.frame_ms": 5.92,
+      "perf.frame.medium.fills": 5990,
+      "perf.floor.medium.pitch0.buffered_cells": 6140,
+      "perf.floor.medium.pitch0.quad_fills": 5005,
+      "perf.floor.medium.pitch0.unfilled_ratio": 0.1849,
+      "perf.floor.medium.pitchmax.buffered_cells": 9640,
+      "perf.floor.medium.pitchmax.quad_fills": 5005,
+      "perf.floor.medium.pitchmax.unfilled_ratio": 0.4808,
+      "perf.window.w7.assemble_ms": 31.86,
+      "perf.window.w7.typed_bytes": 6350400,
+      "perf.window.w7.array_slots": 627200,
+      "perf.pass.high.skybox3D.pass_ms": 0.12,
+      "perf.pass.high.skybox3D.fills": 4,
+      "perf.pass.high.ceiling3D.pass_ms": 0.18,
+      "perf.pass.high.ceiling3D.fills": 0,
+      "perf.pass.high.platforms3D.pass_ms": 9.62,
+      "perf.pass.high.platforms3D.fills": 10566,
+      "perf.pass.high.walls3D.pass_ms": 1.84,
+      "perf.pass.high.walls3D.fills": 1419,
+      "perf.pass.high.sceneEntities.pass_ms": 0.44,
+      "perf.pass.high.sceneEntities.fills": 238,
+      "perf.frame.high.frame_ms": 14.58,
+      "perf.frame.high.fills": 12233,
+      "perf.floor.high.pitch0.buffered_cells": 12698,
+      "perf.floor.high.pitch0.quad_fills": 10566,
+      "perf.floor.high.pitch0.unfilled_ratio": 0.1679,
+      "perf.floor.high.pitchmax.buffered_cells": 16198,
+      "perf.floor.high.pitchmax.quad_fills": 10566,
+      "perf.floor.high.pitchmax.unfilled_ratio": 0.3477,
+      "perf.window.w9.assemble_ms": 91.88,
+      "perf.window.w9.typed_bytes": 10497600,
+      "perf.window.w9.array_slots": 1036800,
+      "perf.pass.ultra.skybox3D.pass_ms": 0.1,
+      "perf.pass.ultra.skybox3D.fills": 4,
+      "perf.pass.ultra.ceiling3D.pass_ms": 0.3,
+      "perf.pass.ultra.ceiling3D.fills": 0,
+      "perf.pass.ultra.platforms3D.pass_ms": 12.32,
+      "perf.pass.ultra.platforms3D.fills": 20530,
+      "perf.pass.ultra.walls3D.pass_ms": 2.72,
+      "perf.pass.ultra.walls3D.fills": 2039,
+      "perf.pass.ultra.sceneEntities.pass_ms": 0.66,
+      "perf.pass.ultra.sceneEntities.fills": 349,
+      "perf.frame.ultra.frame_ms": 22.52,
+      "perf.frame.ultra.fills": 22939,
+      "perf.floor.ultra.pitch0.buffered_cells": 24266,
+      "perf.floor.ultra.pitch0.quad_fills": 20530,
+      "perf.floor.ultra.pitch0.unfilled_ratio": 0.154,
+      "perf.floor.ultra.pitchmax.buffered_cells": 27766,
+      "perf.floor.ultra.pitchmax.quad_fills": 20530,
+      "perf.floor.ultra.pitchmax.unfilled_ratio": 0.2606,
+      "perf.time.metrics_ms": 511.24
+    },
+    "notes": [
+      "settings overlay: Apply's centre is inside the 'dayNight' hit area listed before it (N10)"
+    ]
+  }
+}

@@ -1,0 +1,953 @@
+{
+  "smoke": {
+    "verdict": "HARNESS_RESULT PASS",
+    "seconds": 0.62,
+    "checks": [
+      {
+        "id": "smoke: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "smoke: extracted text is padded to header line numbers",
+        "ok": true,
+        "detail": "floor query line=7735 reset line=7373"
+      },
+      {
+        "id": "smoke: cave test honours the seed override",
+        "ok": true,
+        "detail": "WORLD_SEED=12345"
+      },
+      {
+        "id": "smoke: cave test world has a floor mesh",
+        "ok": true,
+        "detail": "280x280"
+      },
+      {
+        "id": "smoke: cave test generates at least one entrance",
+        "ok": true,
+        "detail": "entrances=1"
+      },
+      {
+        "id": "smoke: auto-overview timer was cancelled",
+        "ok": true,
+        "detail": "timers=0"
+      },
+      {
+        "id": "smoke: keyboard input moves the player through the real input path",
+        "ok": true,
+        "detail": "moved 153u in 107 ticks"
+      },
+      {
+        "id": "smoke: virtual clock advances 1000 ms per 60 ticks",
+        "ok": true,
+        "detail": "advanced 1000.0048828125"
+      },
+      {
+        "id": "smoke: recorder captures floor-pass fills",
+        "ok": true,
+        "detail": "{\"surface\":2429,\"black\":32,\"cap\":551,\"other\":15,\"caveFloor\":773,\"tilted\":46}"
+      },
+      {
+        "id": "smoke: DEBUG_POLY_TYPES palette is classifiable",
+        "ok": true,
+        "detail": "{\"surface\":2429,\"black\":32,\"cap\":551,\"other\":15,\"caveFloor\":773,\"tilted\":46}"
+      },
+      {
+        "id": "smoke: one real loop() frame runs with no loop crash",
+        "ok": true,
+        "detail": "loopErrs=0"
+      },
+      {
+        "id": "smoke: no render-pass exceptions in that frame",
+        "ok": true,
+        "detail": "{}"
+      },
+      {
+        "id": "smoke: startEndless lands on the requested seed",
+        "ok": true,
+        "detail": "WORLD_SEED=424242"
+      }
+    ],
+    "metrics": {
+      "smoke.cavetest.build_ms": 218.32,
+      "smoke.walk.ticks": 107,
+      "smoke.floor.fills": 3846
+    },
+    "notes": []
+  },
+  "caves_geometry": {
+    "verdict": "HARNESS_RESULT FAIL 4",
+    "seconds": 3.95,
+    "checks": [
+      {
+        "id": "caves_geometry: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "caves_geometry: every world under test has a cave entrance inside its window",
+        "ok": true,
+        "detail": "ct12345: entrances in window 1; ct1: entrances in window 1; ct777: entrances in window 1; ct424242: entrances in window 1; n424242r-1,2: entrances in window 1; n999983r3,-4: entrances in window 2; n123r-4,-1: entrances in window 1"
+      },
+      {
+        "id": "caves_geometry: every cell's layer stack is sorted by ascending Z",
+        "ok": true,
+        "detail": "0/548800 unsorted; ct12345 unsorted=0; ct1 unsorted=0; ct777 unsorted=0; ct424242 unsorted=0; n424242r-1,2 unsorted=0; n999983r3,-4 unsorted=0; n123r-4,-1 unsorted=0"
+      },
+      {
+        "id": "caves_geometry: the lowest layer of every cell is walkable ground, never a ceiling",
+        "ok": true,
+        "detail": "[D6; floor lerped L5618, ceiling stamped whole L5621, cap insert re-sorts the stack L6724] 0/7046 ceilinged cells; ct12345 0/898 ceilinged cells have a ceiling lowest; ct1 0/889 ceilinged cells have a ceiling lowest; ct777 0/934 ceilinged cells have a ceiling lowest; ct424242 0/741 ceilinged cells have a ceiling lowest; n424242r-1,2 0/981 ceilinged cells have a ceiling lowest; n999983r3,-4 0/1663 ceilinged cells have a ceiling lowest; n123r-4,-1 0/940 ceilinged cells have a ceiling lowest"
+      },
+      {
+        "id": "caves_geometry: getFloorHeightAt never returns a ceiling's height",
+        "ok": true,
+        "detail": "[D6; getFloorHeightAt L7816 returns l0TopZ] 0/548800 cells; ct12345 ceilingZ=0 caveFloorUnderCap=898; ct1 ceilingZ=0 caveFloorUnderCap=889; ct777 ceilingZ=0 caveFloorUnderCap=934; ct424242 ceilingZ=0 caveFloorUnderCap=741; n424242r-1,2 ceilingZ=0 caveFloorUnderCap=981; n999983r3,-4 ceilingZ=0 caveFloorUnderCap=1663; n123r-4,-1 ceilingZ=0 caveFloorUnderCap=940"
+      },
+      {
+        "id": "caves_geometry: every open cell under a ceiling has eye-height (LAB.EYE_H 2.4 h) headroom above its cave floor",
+        "ok": false,
+        "detail": "[D2; floor lerped by fade L5618, ceiling stamped whole L5621] 1502/6907 cells, min headroom 0.00 h; ct12345 217/895 below 2.4 min 0.00 at (690,666) 1@-0.96 2@-0.96 4@1.35 (no floor under ceiling: 0); ct1 200/880 below 2.4 min 0.00 at (642,882) 1@-2.65 2@-2.65 4@-1.37 (no floor under ceiling: 0); ct777 184/913 below 2.4 min 0.00 at (894,450) 1@-2.85 2@-2.85 4@-0.45 (no floor under ceiling: 0); ct424242 178/736 below 2.4 min 0.00 at (546,882) 1@-1.88 2@-1.88 4@0.16 (no floor under ceiling: 0); n424242r-1,2 197/939 below 2.4 min 0.00 at (-570,3750) 1@-2.14 2@-2.14 4@1.56 (no floor under ceiling: 0); n999983r3,-4 363/1649 below 2.4 min 0.00 at (5142,-5082) 1@-1.74 2@-1.74 4@3.20 (no floor under ceiling: 0); n123r-4,-1 163/895 below 2.4 min 0.00 at (-4938,-486) 1@-3.62 2@-3.62 4@-0.54 (no floor under ceiling: 0)"
+      },
+      {
+        "id": "caves_geometry: every surface cap sits strictly above the ceiling it covers",
+        "ok": true,
+        "detail": "[clamp L6693] 0/7046; ct12345 caps=898 notAbove=0 minGap 1.31 at (798,1038) raisedAboveSurface=0 max +0.00; ct1 caps=889 notAbove=0 minGap 1.27 at (654,894) raisedAboveSurface=0 max +0.00; ct777 caps=934 notAbove=0 minGap 1.31 at (486,858) raisedAboveSurface=0 max +0.00; ct424242 caps=741 notAbove=0 minGap 1.24 at (510,786) raisedAboveSurface=0 max +0.00; n424242r-1,2 caps=981 notAbove=0 minGap 1.35 at (-846,3534) raisedAboveSurface=0 max +0.00; n999983r3,-4 caps=1663 notAbove=0 minGap 1.34 at (3510,-6678) raisedAboveSurface=0 max +0.00; n123r-4,-1 caps=940 notAbove=0 minGap 1.31 at (-4890,-834) raisedAboveSurface=0 max +0.00"
+      },
+      {
+        "id": "caves_geometry: a cap lifted above the natural surface never stands more than STEP_UP (1.0 h) above the open ground beside it",
+        "ok": true,
+        "detail": "[E4; clamp L6693 lifts caps over ceilings that the 21x21-max depth gate L5595-5604 lets rise above the local surface] cliffs made by the lift 0/1440 roof-edge pairs; ct12345 0/180 roof-edge pairs; ct1 0/190 roof-edge pairs; ct777 0/190 roof-edge pairs; ct424242 0/158 roof-edge pairs; n424242r-1,2 0/200 roof-edge pairs; n999983r3,-4 0/336 roof-edge pairs; n123r-4,-1 0/186 roof-edge pairs"
+      },
+      {
+        "id": "caves_geometry: the cave roof starts no more than 40 u outside the entrance arch",
+        "ok": true,
+        "detail": "[D2; ceiling wherever fade>0 L4756, feather hw+108 L4684/L4702] 0/8 entrances; ct12345 e0,0#0@(865,427) roof starts at along -6 (858,438) 1@-4.77 2@-0.96 4@0.84; ct1 e0,0#0@(472,385) roof starts at along -18 (486,402) 1@-7.21 2@-3.25 4@0.84; ct777 e0,0#0@(545,916) roof starts at along -6 (546,906) 1@-7.57 2@-3.45 4@-1.43; ct424242 e0,0#0@(1028,604) roof starts at along +2 (1026,606) 1@-6.45 2@-2.48 4@2.06; n424242r-1,2 e-1,2#0@(-396,3713) roof starts at along +8 (-390,3714) 1@-6.06 2@-2.14 4@3.79; n999983r3,-4 e2,-5#0@(3870,-6338) roof starts at along +2 (3870,-6342) 1@-7.59 2@-3.70 4@-1.25; n999983r3,-4 e3,-4#0@(5232,-4855) roof starts at along +8 (5238,-4854) 1@-5.73 2@-1.74 4@0.89; n123r-4,-1 e-4,-1#0@(-4770,-451) roof starts at along +8 (-4770,-450) 1@-7.63 2@-3.62 4@0.01"
+      },
+      {
+        "id": "caves_geometry: walking in along every entrance path, the floor the player stands on never changes by more than STEP_UP (1.0 h) between neighbouring cells",
+        "ok": true,
+        "detail": "[D1 approach depth e.depth||5 L4741 vs corridor depth 6.0-8.5 L4496; steep feather smoothstep L4684/L4702; approach under the cave roof D2 L4756; picker L7831] 0/8 entrances; ct12345 e0,0#0@(865,427) max step 0.29 h at along 140->128 (918,318) -3.43->-3.72 (walk) [1@-3.72]; ct1 e0,0#0@(472,385) max step 0.39 h at along 224->206 (354,222) -3.84->-4.22 (walk) [1@-4.22]; ct777 e0,0#0@(545,916) max step 0.35 h at along 182->170 (438,1038) -5.46->-5.82 (walk) [1@-5.82]; ct424242 e0,0#0@(1028,604) max step 0.30 h at along 194->182 (1194,546) -4.02->-4.32 (walk) [1@-4.32]; n424242r-1,2 e-1,2#0@(-396,3713) max step 0.47 h at along 248->236 (-174,3786) -1.15->-1.62 (walk) [1@-1.62]; n999983r3,-4 e2,-5#0@(3870,-6338) max step 0.35 h at along 248->236 (4074,-6234) -4.25->-4.60 (walk) [1@-4.60]; n999983r3,-4 e3,-4#0@(5232,-4855) max step 0.42 h at along 248->230 (5394,-4698) -2.17->-2.59 (walk) [1@-2.59]; n123r-4,-1 e-4,-1#0@(-4770,-451) max step 0.49 h at along 392->380 (-4506,-186) 0.71->0.22 (walk) [1@0.22]"
+      },
+      {
+        "id": "caves_geometry: getWalkableLayerTopAt carries a player from the surface down to the cave floor with no unsupported step",
+        "ok": true,
+        "detail": "[N14; STEP_DOWN relaxed to 10 only within 260 u of an entrance L7853, approach is 480 u L4661] 0/8 entrances; ct12345 e0,0#0@(865,427) in: unsupported=0 ends h -4.77 (cave floor -4.77); ct1 e0,0#0@(472,385) in: unsupported=0 ends h -7.21 (cave floor -7.21); ct777 e0,0#0@(545,916) in: unsupported=0 ends h -7.57 (cave floor -7.57); ct424242 e0,0#0@(1028,604) in: unsupported=0 ends h -6.45 (cave floor -6.45); n424242r-1,2 e-1,2#0@(-396,3713) in: unsupported=0 ends h -6.06 (cave floor -6.06); n999983r3,-4 e2,-5#0@(3870,-6338) in: unsupported=0 ends h -7.59 (cave floor -7.59); n999983r3,-4 e3,-4#0@(5232,-4855) in: unsupported=0 ends h -5.73 (cave floor -5.73); n123r-4,-1 e-4,-1#0@(-4770,-451) in: unsupported=0 ends h -7.63 (cave floor -7.63)"
+      },
+      {
+        "id": "caves_geometry: getWalkableLayerTopAt carries a player from the cave floor back out to the surface with no unsupported step",
+        "ok": true,
+        "detail": "[D1; STEP_UP 1.0 L7844, no layer at or below -> {idx:-1,type:0} L7901] 0/8 entrances; ct12345 e0,0#0@(865,427) out: unsupported=0 ends h 1.60 under open sky at along +470 [1@1.60]; ct1 e0,0#0@(472,385) out: unsupported=0 ends h -0.28 under open sky at along +470 [1@-0.28]; ct777 e0,0#0@(545,916) out: unsupported=0 ends h -1.39 under open sky at along +470 [1@-1.39]; ct424242 e0,0#0@(1028,604) out: unsupported=0 ends h -0.62 under open sky at along +470 [1@-0.62]; n424242r-1,2 e-1,2#0@(-396,3713) out: unsupported=0 ends h 3.56 under open sky at along +470 [1@3.56]; n999983r3,-4 e2,-5#0@(3870,-6338) out: unsupported=0 ends h -0.64 under open sky at along +470 [1@-0.64]; n999983r3,-4 e3,-4#0@(5232,-4855) out: unsupported=0 ends h 0.74 under open sky at along +470 [1@0.74]; n123r-4,-1 e-4,-1#0@(-4770,-451) out: unsupported=0 ends h 1.79 under open sky at along +470 [1@1.79]"
+      },
+      {
+        "id": "caves_geometry: the cells left uncapped at a cave mouth are exactly the cells queryCaveGeometry flags isEntrance",
+        "ok": false,
+        "detail": "[MOUTH_RADIUS 60 L4660 vs CAP_EXCL 30 L6647] 217/7046 ceilinged cells disagree; ct12345 ceilinged cells 898 (30 flagged isEntrance): capped though isEntrance=25 e.g. (786,402), uncapped though !isEntrance=0; ct1 ceilinged cells 889 (30 flagged isEntrance): capped though isEntrance=18 e.g. (546,342), uncapped though !isEntrance=0; ct777 ceilinged cells 934 (33 flagged isEntrance): capped though isEntrance=30 e.g. (498,846), uncapped though !isEntrance=0; ct424242 ceilinged cells 741 (35 flagged isEntrance): capped though isEntrance=30 e.g. (990,534), uncapped though !isEntrance=0; n424242r-1,2 ceilinged cells 981 (39 flagged isEntrance): capped though isEntrance=28 e.g. (-378,3630), uncapped though !isEntrance=0; n999983r3,-4 ceilinged cells 1663 (87 flagged isEntrance): capped though isEntrance=64 e.g. (3894,-6414), uncapped though !isEntrance=0; n123r-4,-1 ceilinged cells 940 (33 flagged isEntrance): capped though isEntrance=22 e.g. (-4710,-522), uncapped though !isEntrance=0"
+      },
+      {
+        "id": "caves_geometry: the floor under a cave ceiling never steps more than STEP_UP (1.0 h) between neighbouring open cells",
+        "ok": false,
+        "detail": "[caves laterally open: feather hw+108 L4684/L4702, walls carved only where fade>0.3 L4773; D6 inverted stacks; N14 entrance trees of different depth L4496] 2168/13049 pairs (on chunk borders 40/280); ct12345 253/1699 steps>1 worst 2.11 (798,978)->(810,978) -3.85->-1.74 inside a chunk | chunk-border pairs 0/37 bad, worst border 0.83 vs worst in-chunk 2.11; ct1 292/1655 steps>1 worst 2.17 (750,930)->(750,942) -6.28->-4.11 inside a chunk | chunk-border pairs 6/30 bad, worst border 1.54 vs worst in-chunk 2.17; ct777 320/1721 steps>1 worst 2.17 (1050,618)->(1062,618) -6.47->-4.30 inside a chunk | chunk-border pairs 10/41 bad, worst border 1.92 vs worst in-chunk 2.17; ct424242 222/1387 steps>1 worst 2.14 (642,882)->(642,894) -5.47->-3.33 inside a chunk | chunk-border pairs 0/16 bad, worst border 0.69 vs worst in-chunk 2.14; n424242r-1,2 292/1776 steps>1 worst 2.15 (-1002,3390)->(-990,3390) -2.90->-5.06 inside a chunk | chunk-border pairs 5/52 bad, worst border 1.51 vs worst in-chunk 2.15; n999983r3,-4 547/3116 steps>1 worst 2.15 (4974,-5238)->(4986,-5238) -4.75->-2.60 inside a chunk | chunk-border pairs 13/52 bad, worst border 1.60 vs worst in-chunk 2.15; n123r-4,-1 242/1695 steps>1 worst 2.29 (-4914,-810)->(-4902,-810) -6.68->-4.40 inside a chunk | chunk-border pairs 6/52 bad, worst border 1.35 vs worst in-chunk 2.29"
+      },
+      {
+        "id": "caves_geometry: chunk borders add no seam to the floor under cave ceilings",
+        "ok": true,
+        "detail": "[E2 suspected seams: per-chunk smoothing L5524-5562 / 21x21 surface max L5595 are clipped at the chunk edge] tolerance: border spike <= mid-chunk control spike + 0.25 h; 0/7 worlds; ct12345 max spike on chunk borders 0.03 at (930,474)->(930,486) -4.26,-3.55|-2.71,-1.91 vs mid-chunk control 0.78 (34 border / 118 control samples); ct1 max spike on chunk borders 0.28 at (474,510)->(486,510) -3.49,-4.74|-6.28,-7.19 vs mid-chunk control 0.55 (25 border / 119 control samples); ct777 max spike on chunk borders 0.39 at (870,474)->(870,486) -2.86,-3.91|-5.78,-7.26 vs mid-chunk control 0.42 (36 border / 120 control samples); ct424242 max spike on chunk borders 0.01 at (954,558)->(966,558) -3.24,-3.86|-4.55,-5.23 vs mid-chunk control 0.49 (15 border / 113 control samples); n424242r-1,2 max spike on chunk borders 0.23 at (-966,3318)->(-954,3318) -1.82,-3.10|-4.61,-5.71 vs mid-chunk control 0.45 (48 border / 117 control samples); n999983r3,-4 max spike on chunk borders 0.16 at (4962,-5286)->(4962,-5274) -1.49,-2.70|-4.08,-5.12 vs mid-chunk control 0.44 (41 border / 229 control samples); n123r-4,-1 max spike on chunk borders 0.12 at (-4878,-966)->(-4878,-954) -3.22,-4.03|-5.03,-5.91 vs mid-chunk control 0.80 (47 border / 111 control samples)"
+      },
+      {
+        "id": "caves_geometry: chunk borders add no seam to the ground surface within 300 u of a cave entrance",
+        "ok": true,
+        "detail": "[E2 in the surface: the entrance blur L5524-5562 skips neighbours outside the chunk] tolerance: border spike <= control spike + 0.05 h; 0/7 worlds; ct12345 border max 0.019 <= control max 0.014 + 0.05 at (690,474)->(690,486) 1.00,1.04|1.11,1.15 (97 border / 291 control samples); ct1 border max 0.021 <= control max 0.013 + 0.05 at (354,474)->(354,486) 1.12,1.10|1.06,1.05 (98 border / 302 control samples); ct777 border max 0.011 <= control max 0.013 + 0.05 at (618,954)->(618,966) -0.99,-1.00|-1.03,-1.03 (98 border / 289 control samples); ct424242 border max 0.014 <= control max 0.012 + 0.05 at (1230,474)->(1230,486) 0.26,0.35|0.46,0.54 (94 border / 301 control samples); n424242r-1,2 border max 0.017 <= control max 0.013 + 0.05 at (-558,3834)->(-558,3846) 1.71,1.69|1.65,1.64 (93 border / 305 control samples); n999983r3,-4 border max 0.013 <= control max 0.013 + 0.05 at (5274,-4746)->(5286,-4746) 1.16,1.16|1.18,1.18 (196 border / 585 control samples); n123r-4,-1 border max 0.011 <= control max 0.017 + 0.05 at (-4806,-522)->(-4794,-522) -0.35,-0.38|-0.43,-0.47 (98 border / 295 control samples)"
+      },
+      {
+        "id": "caves_geometry: every chunk stamps every cell that queryCaveGeometry over all nearby networks calls cave (no network truncation)",
+        "ok": true,
+        "detail": "[E3; generateChunk consults the 3x3 regions L5341-5350 and an AABB margin of 100 L5353] unstamped 0/55750 cave cells over 264 chunks (ceilZ given but no ceiling stamped: 0, METRIC only); ct12345 1 nets, 6 chunks: unstamped 0/1492 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1702 u, net 0,0); ct1 1 nets, 9 chunks: unstamped 0/1456 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1664 u, net 0,0); ct777 1 nets, 9 chunks: unstamped 0/1537 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1734 u, net 0,0); ct424242 1 nets, 9 chunks: unstamped 0/1323 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1688 u, net 0,0); n424242 13 nets, 93 chunks: unstamped 0/18870 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1624 u, net 0,-11); n999983 15 nets, 96 chunks: unstamped 0/21082 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1593 u, net -9,-1); n123 7 nets, 42 chunks: unstamped 0/9990 cave cells (nearest feather edge to generateChunk's 3x3-region reach 1610 u, net -3,5)"
+      },
+      {
+        "id": "caves_geometry: no more than 0.25% of water cells carry a grid wall",
+        "ok": false,
+        "detail": "[D17; the water-zone wall test calls terrainNoise under the wall noise seed L4978-4987] wall-on-water 365/39758 (0.92%); n424242 1/1075 e.g. chunk -5,7 cell 2,3 floor -3.16; n999983 168/24178 e.g. chunk 5,-4 cell 23,1 floor -3.07; n123 196/14505 e.g. chunk 7,-7 cell 38,28 floor -3.07"
+      },
+      {
+        "id": "caves_geometry: normal Endless generates some cave networks with exactly one entrance",
+        "ok": true,
+        "detail": "[D16; L4478 asks for 1 or 2, but rng and rng2 share chunkRng(rx,ry,100) L4465/L4472] 35/35 networks have exactly 1 entrance; n123: 7 nets, 1-entrance 7, 2-entrance 0; n424242: 13 nets, 1-entrance 13, 2-entrance 0; n999983: 15 nets, 1-entrance 15, 2-entrance 0"
+      }
+    ],
+    "metrics": {
+      "caves_geometry.ct12345.caps_raised_above_surface": 0,
+      "caves_geometry.ct12345.caps_max_raise_h": 0,
+      "caves_geometry.ct12345.min_headroom_h": 0,
+      "caves_geometry.ct12345.lowest_is_ceiling": 0,
+      "caves_geometry.ct12345.headroom_below_eye": 217,
+      "caves_geometry.ct12345.raised_cap_cliffs": 0,
+      "caves_geometry.ct12345.grid_walls_under_ceiling": 3,
+      "caves_geometry.ct12345.border_spike_h": 0.0267,
+      "caves_geometry.ct12345.control_spike_h": 0.7823,
+      "caves_geometry.ct12345.interior_step_max_h": 2.11,
+      "caves_geometry.ct12345.interior_steps_over_step_up": 253,
+      "caves_geometry.ct12345.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct12345.surface_border_spike_h": 0.0193,
+      "caves_geometry.ct12345.surface_control_spike_h": 0.0139,
+      "caves_geometry.ct12345.e0,0#0.roof_start_u": -6,
+      "caves_geometry.ct12345.trunc_unstamped_cells": 0,
+      "caves_geometry.ct12345.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct1.caps_raised_above_surface": 0,
+      "caves_geometry.ct1.caps_max_raise_h": 0,
+      "caves_geometry.ct1.min_headroom_h": 0.0001,
+      "caves_geometry.ct1.lowest_is_ceiling": 0,
+      "caves_geometry.ct1.headroom_below_eye": 200,
+      "caves_geometry.ct1.raised_cap_cliffs": 0,
+      "caves_geometry.ct1.grid_walls_under_ceiling": 9,
+      "caves_geometry.ct1.border_spike_h": 0.2813,
+      "caves_geometry.ct1.control_spike_h": 0.5473,
+      "caves_geometry.ct1.interior_step_max_h": 2.1678,
+      "caves_geometry.ct1.interior_steps_over_step_up": 292,
+      "caves_geometry.ct1.interior_border_steps_over_step_up": 6,
+      "caves_geometry.ct1.surface_border_spike_h": 0.0209,
+      "caves_geometry.ct1.surface_control_spike_h": 0.0125,
+      "caves_geometry.ct1.e0,0#0.roof_start_u": -18,
+      "caves_geometry.ct1.trunc_unstamped_cells": 0,
+      "caves_geometry.ct1.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct777.caps_raised_above_surface": 0,
+      "caves_geometry.ct777.caps_max_raise_h": 0,
+      "caves_geometry.ct777.min_headroom_h": 0,
+      "caves_geometry.ct777.lowest_is_ceiling": 0,
+      "caves_geometry.ct777.headroom_below_eye": 184,
+      "caves_geometry.ct777.raised_cap_cliffs": 0,
+      "caves_geometry.ct777.grid_walls_under_ceiling": 21,
+      "caves_geometry.ct777.border_spike_h": 0.3893,
+      "caves_geometry.ct777.control_spike_h": 0.4195,
+      "caves_geometry.ct777.interior_step_max_h": 2.1696,
+      "caves_geometry.ct777.interior_steps_over_step_up": 320,
+      "caves_geometry.ct777.interior_border_steps_over_step_up": 10,
+      "caves_geometry.ct777.surface_border_spike_h": 0.0112,
+      "caves_geometry.ct777.surface_control_spike_h": 0.0131,
+      "caves_geometry.ct777.e0,0#0.roof_start_u": -6,
+      "caves_geometry.ct777.trunc_unstamped_cells": 0,
+      "caves_geometry.ct777.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.ct424242.caps_raised_above_surface": 0,
+      "caves_geometry.ct424242.caps_max_raise_h": 0,
+      "caves_geometry.ct424242.min_headroom_h": 0.0001,
+      "caves_geometry.ct424242.lowest_is_ceiling": 0,
+      "caves_geometry.ct424242.headroom_below_eye": 178,
+      "caves_geometry.ct424242.raised_cap_cliffs": 0,
+      "caves_geometry.ct424242.grid_walls_under_ceiling": 5,
+      "caves_geometry.ct424242.border_spike_h": 0.0091,
+      "caves_geometry.ct424242.control_spike_h": 0.4885,
+      "caves_geometry.ct424242.interior_step_max_h": 2.1405,
+      "caves_geometry.ct424242.interior_steps_over_step_up": 222,
+      "caves_geometry.ct424242.interior_border_steps_over_step_up": 0,
+      "caves_geometry.ct424242.surface_border_spike_h": 0.0137,
+      "caves_geometry.ct424242.surface_control_spike_h": 0.0125,
+      "caves_geometry.ct424242.e0,0#0.roof_start_u": 2,
+      "caves_geometry.ct424242.trunc_unstamped_cells": 0,
+      "caves_geometry.ct424242.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n424242.regions_with_network_pct": 2.08,
+      "caves_geometry.n424242.nearest_entrance_u": 3530.3867,
+      "caves_geometry.n424242r-1,2.caps_raised_above_surface": 0,
+      "caves_geometry.n424242r-1,2.caps_max_raise_h": 0,
+      "caves_geometry.n424242r-1,2.min_headroom_h": 0.0001,
+      "caves_geometry.n424242r-1,2.lowest_is_ceiling": 0,
+      "caves_geometry.n424242r-1,2.headroom_below_eye": 197,
+      "caves_geometry.n424242r-1,2.raised_cap_cliffs": 0,
+      "caves_geometry.n424242r-1,2.grid_walls_under_ceiling": 42,
+      "caves_geometry.n424242r-1,2.border_spike_h": 0.2332,
+      "caves_geometry.n424242r-1,2.control_spike_h": 0.4471,
+      "caves_geometry.n424242r-1,2.interior_step_max_h": 2.154,
+      "caves_geometry.n424242r-1,2.interior_steps_over_step_up": 292,
+      "caves_geometry.n424242r-1,2.interior_border_steps_over_step_up": 5,
+      "caves_geometry.n424242r-1,2.surface_border_spike_h": 0.0166,
+      "caves_geometry.n424242r-1,2.surface_control_spike_h": 0.0126,
+      "caves_geometry.n424242r-1,2.e-1,2#0.roof_start_u": 8,
+      "caves_geometry.n424242.trunc_unstamped_cells": 0,
+      "caves_geometry.n424242.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n999983.regions_with_network_pct": 2.4,
+      "caves_geometry.n999983.nearest_entrance_u": 7133.2945,
+      "caves_geometry.n999983r3,-4.caps_raised_above_surface": 0,
+      "caves_geometry.n999983r3,-4.caps_max_raise_h": 0,
+      "caves_geometry.n999983r3,-4.min_headroom_h": 0.0001,
+      "caves_geometry.n999983r3,-4.lowest_is_ceiling": 0,
+      "caves_geometry.n999983r3,-4.headroom_below_eye": 363,
+      "caves_geometry.n999983r3,-4.raised_cap_cliffs": 0,
+      "caves_geometry.n999983r3,-4.grid_walls_under_ceiling": 14,
+      "caves_geometry.n999983r3,-4.border_spike_h": 0.158,
+      "caves_geometry.n999983r3,-4.control_spike_h": 0.4365,
+      "caves_geometry.n999983r3,-4.interior_step_max_h": 2.1452,
+      "caves_geometry.n999983r3,-4.interior_steps_over_step_up": 547,
+      "caves_geometry.n999983r3,-4.interior_border_steps_over_step_up": 13,
+      "caves_geometry.n999983r3,-4.surface_border_spike_h": 0.0125,
+      "caves_geometry.n999983r3,-4.surface_control_spike_h": 0.0134,
+      "caves_geometry.n999983r3,-4.e2,-5#0.roof_start_u": 2,
+      "caves_geometry.n999983r3,-4.e3,-4#0.roof_start_u": 8,
+      "caves_geometry.n999983.trunc_unstamped_cells": 0,
+      "caves_geometry.n999983.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n123.regions_with_network_pct": 1.12,
+      "caves_geometry.n123.nearest_entrance_u": 5057.3351,
+      "caves_geometry.n123r-4,-1.caps_raised_above_surface": 0,
+      "caves_geometry.n123r-4,-1.caps_max_raise_h": 0,
+      "caves_geometry.n123r-4,-1.min_headroom_h": 0,
+      "caves_geometry.n123r-4,-1.lowest_is_ceiling": 0,
+      "caves_geometry.n123r-4,-1.headroom_below_eye": 163,
+      "caves_geometry.n123r-4,-1.raised_cap_cliffs": 0,
+      "caves_geometry.n123r-4,-1.grid_walls_under_ceiling": 45,
+      "caves_geometry.n123r-4,-1.border_spike_h": 0.12,
+      "caves_geometry.n123r-4,-1.control_spike_h": 0.796,
+      "caves_geometry.n123r-4,-1.interior_step_max_h": 2.2852,
+      "caves_geometry.n123r-4,-1.interior_steps_over_step_up": 242,
+      "caves_geometry.n123r-4,-1.interior_border_steps_over_step_up": 6,
+      "caves_geometry.n123r-4,-1.surface_border_spike_h": 0.0106,
+      "caves_geometry.n123r-4,-1.surface_control_spike_h": 0.0175,
+      "caves_geometry.n123r-4,-1.e-4,-1#0.roof_start_u": 8,
+      "caves_geometry.n123.trunc_unstamped_cells": 0,
+      "caves_geometry.n123.cells_with_ceilZ_but_no_ceiling": 0,
+      "caves_geometry.n424242.walls_on_water": 1,
+      "caves_geometry.n999983.walls_on_water": 168,
+      "caves_geometry.n123.walls_on_water": 196,
+      "caves_geometry.caps_raised_above_surface_total": 0,
+      "caves_geometry.caps_max_raise_h": 0,
+      "caves_geometry.entrances_with_roofed_approach_start": 0,
+      "caves_geometry.entrances_tested": 8,
+      "caves_geometry.entrances_with_open_approach_start": 8,
+      "caves_geometry.grid_walls_under_ceiling_total": 139,
+      "caves_geometry.network_feather_min_margin_to_region_reach_u": 1593.0831
+    },
+    "notes": []
+  },
+  "caves_transition": {
+    "verdict": "HARNESS_RESULT FAIL 11",
+    "seconds": 3.84,
+    "checks": [
+      {
+        "id": "caves_transition: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "caves_transition: walk-in: the walk reaches the cave floor 150 u inside and returns to the open surface",
+        "ok": true,
+        "detail": "ct12345/E0: start along +470 world (1074,6), deep h -4.77 on floor -4.77, 338+369 ticks | ct31337/E0: start along +470 world (1416,1087), deep h -3.43 on floor -3.43, 338+369 ticks | ct98765/E0: start along +470 world (1328,1208), deep h -6.64 on floor -6.64, 338+369 ticks | end424242/E0: start along +470 world (48,3867), deep h -6.06 on floor -6.06, 292+330 ticks"
+      },
+      {
+        "id": "caves_transition: walk-in: height never changes by more than 0.35 h in one tick walking in or out",
+        "ok": true,
+        "detail": "ct12345/E0: in -0.100 at along +207 world (958,241) cell 1@-2.08 [walk ease (L10277)]; out 0.097 at along +249 world (976,204) cell 1@-0.80 [walk ease (L10277)] | ct31337/E0: in -0.064 at along +171 world (1151,948) cell 1@-2.12 [walk ease (L10277)]; out 0.069 at along +227 world (1201,974) cell 1@-1.16 [walk ease (L10277)] | ct98765/E0: in -0.098 at along +303 world (1197,1103) cell 1@-3.12 [walk ease (L10277)]; out 0.094 at along +247 world (1154,1068) cell 1@-3.93 [walk ease (L10277)] | end424242/E0: in -0.161 at along +240 world (-169,3791) cell 1@-1.62 [walk ease (L10277)]; out 0.157 at along +280 world (-131,3805) cell 1@-0.05 [walk ease (L10277)] || limit 0.35 h/tick (audit D1: +0.74/tick; N4 landing snap)"
+      },
+      {
+        "id": "caves_transition: walk-in: the player never goes airborne walking the entrance ramp",
+        "ok": true,
+        "detail": "ct12345/E0: 0 airborne episode(s): 0 D12 micro-fall(s) with a walkable layer in step range, 0 off an edge with none | ct31337/E0: 0 airborne episode(s): 0 D12 micro-fall(s) with a walkable layer in step range, 0 off an edge with none | ct98765/E0: 0 airborne episode(s): 0 D12 micro-fall(s) with a walkable layer in step range, 0 off an edge with none | end424242/E0: 0 airborne episode(s): 0 D12 micro-fall(s) with a walkable layer in step range, 0 off an edge with none || edge-fall threshold pos.floorZ > groundZ2 + 3 (= 0.075 h) at step L10179 (audit D12, physics suite)"
+      },
+      {
+        "id": "caves_transition: walk-in: playerUnderground changes exactly once going in and once coming out",
+        "ok": true,
+        "detail": "ct12345/E0: in F->T flips [F>T@-6]; out T->F flips [T>F@-5] | ct31337/E0: in F->T flips [F>T@+8]; out T->F flips [T>F@+10] | ct98765/E0: in F->T flips [F>T@+12]; out T->F flips [T>F@+14] | end424242/E0: in F->T flips [F>T@+11]; out T->F flips [T>F@+15] || playerUnderground = 'a walkable layer is above mine' L19342-19360; the cap hole within CAP_EXCL 30 u of the entrance (L6647) reads as outdoors (audit D3)"
+      },
+      {
+        "id": "caves_transition: walk-in: ambient light dims monotonically going in and brightens monotonically coming out",
+        "ok": false,
+        "detail": "ct31337/E0: in 0.90->0.45 rises 0.45->0.90 at along -2; out 0.45->0.90 drops 0.90->0.45 at along +2 | ct98765/E0: in 0.90->0.45 rises 0.45->0.90 at along -2; out 0.45->0.90 drops 0.90->0.45 at along +2 | end424242/E0: in 0.90->0.45 rises 0.45->0.90 at along -3; out 0.45->0.90 drops 0.90->0.45 at along +3 || ok: ct12345/E0: in 0.90->0.45 monotonic; out 0.45->0.90 monotonic || tolerance 0.02; the uncapped mouth reads as outdoors (D3) and the entrance blend L19380-19384 is brightest AT the entrance point (D9)"
+      },
+      {
+        "id": "caves_transition: walk-in: ambient light never changes by more than 0.2 in one tick",
+        "ok": false,
+        "detail": "ct31337/E0: max step 0.45 (0.90->0.45) at along +6 world (1005,871) | ct98765/E0: max step 0.45 (0.90->0.45) at along +10 world (969,920) | end424242/E0: max step 0.45 (0.90->0.45) at along +9 world (-387,3716) || ok: ct12345/E0: max step 0.01 (0.68->0.67) at along -75 world (832,494) || limit 0.2/tick; underground clamps ambient to min(amb,0.45) in one tick at L19372-19376 (audit D3)"
+      },
+      {
+        "id": "caves_transition: walk-in: sunlight and fog change by at most 0.2 and 0.05 in one tick walking in or out",
+        "ok": false,
+        "detail": "ct31337/E0: sun max step 0.60 (0.60->0.00) at along +6; fog max step 0.15 (0.30->0.15) at along +6 | ct98765/E0: sun max step 0.60 (0.60->0.00) at along +10; fog max step 0.15 (0.30->0.15) at along +10 | end424242/E0: sun max step 0.60 (0.60->0.00) at along +9; fog max step 0.15 (0.30->0.15) at along +9 || ok: ct12345/E0: sun max step 0.01 (0.31->0.29) at along -75; fog max step 0.00 (0.23->0.22) at along -75 || limits 0.2 sun / 0.05 fog per tick (a third of each swing); the underground branch sets sunIntensity = 0 and fogFloor = 0.15 in one tick (L19377-19378)"
+      },
+      {
+        "id": "caves_transition: walk-in: wherever a cave ceiling is above the player's floor, the eye (h + 2.4) stays below it",
+        "ok": true,
+        "detail": "ct12345/E0: 0/204 roofed ticks with headroom < 2.4 | ct31337/E0: 0/219 roofed ticks with headroom < 2.4 | ct98765/E0: 0/223 roofed ticks with headroom < 2.4 | end424242/E0: 0/207 roofed ticks with headroom < 2.4 || eye = h + 2.4 (getCam3D cameraZ L454); the roof reaches far outside the arch with the ceiling below the outside floor (D2, caves_geometry) and the player walks the 5 h trench under it (D1)"
+      },
+      {
+        "id": "caves_transition: walk-in: the player is never inside rock between a cave ceiling and the surface cap above it",
+        "ok": true,
+        "detail": "ct12345/E0: 0 tick(s) between ceiling and cap | ct31337/E0: 0 tick(s) between ceiling and cap | ct98765/E0: 0 tick(s) between ceiling and cap | end424242/E0: 0 tick(s) between ceiling and cap || cap (type 4) over every ceilinged cell (assembleWindow L6647-6693); the ceiling is stamped at full value (L5621) below the lerped floor (L5618) (audit D2/D14)"
+      },
+      {
+        "id": "caves_transition: walk-in: the player never sinks more than a step height below every floor of its cell",
+        "ok": true,
+        "detail": "ct12345/E0: 0 tick(s) sunk > 1 h below every floor | ct31337/E0: 0 tick(s) sunk > 1 h below every floor | ct98765/E0: 0 tick(s) sunk > 1 h below every floor | end424242/E0: 0 tick(s) sunk > 1 h below every floor || step height = STEP_UP 1.0 (L7844)"
+      },
+      {
+        "id": "caves_transition: entrance light: on open ground ambient light darkens gradually and never brightens as the player approaches a cave entrance",
+        "ok": false,
+        "detail": "end424242 open ground: never brightens; the entrance is not darker than 130 u out by 0.1 [130:0.90 120:0.90 110:0.90 100:0.90 90:0.90 80:0.90 70:0.90 60:0.90 50:0.90 40:0.90 30:0.90 20:0.90 10:0.90 0:0.90] || tolerance 0.02 per 10 u; the blend at L19380-19384 weights the cave ambient by distance/120 instead of by closeness (audit D9)"
+      },
+      {
+        "id": "caves_transition: lateral: walking sideways inside the corridor never puts the player inside rock between ceiling and cap",
+        "ok": true,
+        "detail": "ct12345/E0 lateral-: 0 tick(s) between ceiling and cap; max |perp| 61 | ct12345/E0 lateral+: 0 tick(s) between ceiling and cap; max |perp| 73 | ct31337/E0 lateral-: 0 tick(s) between ceiling and cap; max |perp| 63 | ct31337/E0 lateral+: 0 tick(s) between ceiling and cap; max |perp| 74 | ct98765/E0 lateral-: 0 tick(s) between ceiling and cap; max |perp| 68 | ct98765/E0 lateral+: 0 tick(s) between ceiling and cap; max |perp| 68 | end424242/E0 lateral-: 0 tick(s) between ceiling and cap; max |perp| 56 | end424242/E0 lateral+: 0 tick(s) between ceiling and cap; max |perp| 66 || corridor feather hw+108 (queryCaveGeometry L4684) with walls only where fade>0.3 (L4773) (audit D14)"
+      },
+      {
+        "id": "caves_transition: lateral: walking sideways inside the corridor never sinks the player below every floor",
+        "ok": true,
+        "detail": "ct12345/E0 lateral-: 0 tick(s) sunk > 1 h below every floor | ct12345/E0 lateral+: 0 tick(s) sunk > 1 h below every floor | ct31337/E0 lateral-: 0 tick(s) sunk > 1 h below every floor | ct31337/E0 lateral+: 0 tick(s) sunk > 1 h below every floor | ct98765/E0 lateral-: 0 tick(s) sunk > 1 h below every floor | ct98765/E0 lateral+: 0 tick(s) sunk > 1 h below every floor | end424242/E0 lateral-: 0 tick(s) sunk > 1 h below every floor | end424242/E0 lateral+: 0 tick(s) sunk > 1 h below every floor || no-candidate fallback returns topH 0 (L7901, audit D11, physics suite) and step() eases to h=0 (L10277) past the open corridor edge (audit D14)"
+      },
+      {
+        "id": "caves_transition: lateral: walking sideways inside the corridor never raises the player more than a step height (1.0 h) in one tick",
+        "ok": true,
+        "detail": "ct12345/E0 lateral-: max gain 0.19 at perp -55 world (753,528) cell 1@-3.79 2@-0.96 4@0.82 [walk ease (L10277)] | ct12345/E0 lateral+: max gain 0.12 at perp +67 world (854,600) cell 1@-4.32 2@-0.96 4@1.25 [walk ease (L10277)] | ct31337/E0 lateral-: max gain 0.00 at perp +0 world (867,798) cell 1@-3.43 2@0.41 4@4.18 [walk ease (L10277)] | ct31337/E0 lateral+: max gain 0.10 at perp +68 world (827,854) cell 1@-2.81 2@0.41 4@3.65 [walk ease (L10277)] | ct98765/E0 lateral-: max gain 0.03 at perp -52 world (876,780) cell 1@-6.55 2@-2.78 4@-0.98 [walk ease (L10277)] | ct98765/E0 lateral+: max gain 0.20 at perp +64 world (804,869) cell 1@-5.93 2@-2.78 4@-0.56 [walk ease (L10277)] | end424242/E0 lateral-: max gain 0.00 at perp +0 world (-537,3663) cell 1@-6.06 2@-2.14 4@2.43 [walk ease (L10277)] | end424242/E0 lateral+: max gain 0.19 at perp +61 world (-557,3721) cell 1@-5.42 2@-2.14 4@1.85 [walk ease (L10277)] || limit = STEP_UP 1.0 (L7844) (audit D14: +1.70 h/tick via the D11 fallback, physics suite)"
+      },
+      {
+        "id": "caves_transition: lateral: walking sideways the player stays under the cave roof (stopped by a wall or still on the cave floor)",
+        "ok": true,
+        "detail": "ct12345/E0 lateral-: 0 tick(s) with no ceiling overhead; ended perp -61 h -3.79 cell 1@-3.79 2@-0.96 4@0.82 | ct12345/E0 lateral+: 0 tick(s) with no ceiling overhead; ended perp +73 h -4.32 cell 1@-4.32 2@-0.96 4@1.25 | ct31337/E0 lateral-: 0 tick(s) with no ceiling overhead; ended perp -63 h -3.43 cell 1@-3.43 2@0.41 4@4.00 | ct31337/E0 lateral+: 0 tick(s) with no ceiling overhead; ended perp +74 h -2.81 cell 1@-2.81 2@0.41 4@3.65 | ct98765/E0 lateral-: 0 tick(s) with no ceiling overhead; ended perp -68 h -6.55 cell 1@-6.55 2@-2.78 4@-0.98 | ct98765/E0 lateral+: 0 tick(s) with no ceiling overhead; ended perp +68 h -5.93 cell 1@-5.93 2@-2.78 4@-0.56 | end424242/E0 lateral-: 0 tick(s) with no ceiling overhead; ended perp -56 h -6.06 cell 1@-6.06 2@-2.14 4@2.35 | end424242/E0 lateral+: 0 tick(s) with no ceiling overhead; ended perp +66 h -5.42 cell 1@-5.42 2@-2.14 4@1.85 || cave walls are skipped for non-underground players (isInGridWall L9999) and carved only where fade>0.3 (L4773) (audit D14)"
+      },
+      {
+        "id": "caves_transition: mouth: walking sideways in the uncapped cave mouth never sinks the player below every floor",
+        "ok": false,
+        "detail": "PRECONDITION ct12345/E0 mouth+: precondition failed -- start is not on the cave floor under a ceiling: h -4.75 layers 1@-4.75 air false | ct31337/E0 mouth+: precondition failed -- start is not on the cave floor under a ceiling: h -3.43 layers 1@-3.43 air false || ct98765/E0 mouth+: 0 tick(s) sunk > 1 h below every floor; start ug T, ended perp +69 h -6.59 cell 1@-6.59 || the mouth reads as outdoors (D3), so cave walls are skipped (F6, isInGridWall L9999); past the open corridor edge (D14) the picker falls back to topH 0 (D11, physics suite)"
+      },
+      {
+        "id": "caves_transition: cap walk: walking on the surface across a roofed corridor never drops the player more than a step below the top walkable layer",
+        "ok": false,
+        "detail": "PRECONDITION ct31337/E0 capwalk+: precondition failed -- no open, wall-free surface start 150..300 u beside the corridor || ct12345/E0 capwalk+: 0 tick(s) more than 1 h below the top walkable layer; 90 ticks over a cap | ct98765/E0 capwalk+: 0 tick(s) more than 1 h below the top walkable layer; 89 ticks over a cap || the surface over a cave is the cap (type 4, L6680) and the picker prefers the layer nearest the feet (L7877-7890)"
+      },
+      {
+        "id": "caves_transition: cap walk: playerUnderground is never true while no cave ceiling is above the player",
+        "ok": false,
+        "detail": "PRECONDITION ct31337/E0 capwalk+: precondition failed -- no open, wall-free surface start 150..300 u beside the corridor || ct12345/E0 capwalk+: 0 tick(s) underground with no ceiling above | ct98765/E0 capwalk+: 0 tick(s) underground with no ceiling above || playerUnderground = 'a walkable layer is above mine' (L19355-19360, D3): a cap just above a feather floor that rose over the ceiling (D2/D14, E4) reads as a roof"
+      },
+      {
+        "id": "caves_transition: spawn: Cave Test puts the player on a walkable layer of the spawn cell",
+        "ok": false,
+        "detail": "ct12345: h 0.00 at world (892,373) cell 1@-4.53, nearest walkable -4.53 | ct31337: h 0.00 at world (1053,896) cell 1@-3.24, nearest walkable -3.24 | ct98765: h 0.00 at world (1008,951) cell 1@-6.48, nearest walkable -6.48 || tolerance 0.1 h; spawn keeps pos.floorZ = 60 (h=0) from L7600 after moving 60 u outside the entrance at L7612-7617 (audit D13)"
+      },
+      {
+        "id": "caves_transition: spawn: the Cave Test spawn is not airborne after one tick",
+        "ok": false,
+        "detail": "ct12345: airborne true, h 0.00 -> 0.00 | ct31337: airborne true, h 0.00 -> 0.00 | ct98765: airborne true, h 0.00 -> 0.00 || audit D13"
+      },
+      {
+        "id": "caves_transition: restart: a world started while the previous one is mid-jump behaves like one started from a fresh page",
+        "ok": false,
+        "detail": "end424242: at the restart jumpAirborne true jumpVelZ 250.00 (fresh page: false, 0.00); first 20 ticks max |dh| vs fresh 0.829 at tick 20 (0.380 vs 1.208), airborne differs from tick 1 || previous world left mid-jump (air true, jumpVelZ 250.00); resetEndlessMode (L7511) resets neither jumpAirborne nor jumpVelZ (audit N5)"
+      },
+      {
+        "id": "caves_transition: dayNight off: playerUnderground is false on the surface and true deep in the cave",
+        "ok": true,
+        "detail": "ct12345/E0 dayNight-off: surface F, deep (along -150) T, back on surface F || updateDayNight returns at L19294 before the underground test at L19342, so playerUnderground keeps its last value (audit D10)"
+      },
+      {
+        "id": "caves_transition: window shift: re-centring the window keeps the layer stack under the player unchanged",
+        "ok": true,
+        "detail": "ct12345/E0 in @(959,237) origin -480,-1440->-960,-1440: same 1@-1.83 | ct12345/E0 in @(838,481) origin -960,-1440->-960,-960: same 1@-4.77 2@-0.96 4@0.88 | ct12345/E0 out @(839,480) origin -960,-960->-960,-1440: same 1@-4.77 2@-0.96 4@0.83 | ct12345/E0 out @(961,234) origin -960,-1440->-480,-1440: same 1@-1.71 | ct12345/E0 capwalk+ @(666,480) origin -960,-1440->-960,-960: same 1@1.28 | ct12345/E0 capwalk+ @(961,638) origin -960,-960->-480,-960: same 1@0.39 | ct12345 corridor6 across (702,960) @30fps @(702,961) origin -960,-960->-960,-480: same 1@-4.77 2@-0.96 4@1.76 | ct12345 corridors 1-6 (785,588)->(699,967) @(698,961) origin -960,-960->-960,-480: same 1@-4.77 2@-0.96 4@1.76 | ct31337/E0 in @(1173,959) origin -480,-480->-480,-960: same 1@-1.78 | ct31337/E0 in @(959,846) origin -480,-960->-960,-960: same 1@-3.43 2@0.41 4@3.66 | ct31337/E0 out @(961,847) origin -960,-960->-480,-960: same 1@-3.43 2@0.41 4@3.63 | ct31337/E0 out @(1176,961) origin -480,-960->-480,-480: same 1@-1.70 | ct31337 corridor6 across (480,747) @30fps @(479,747) origin -960,-960->-1440,-960: same 1@-3.43 2@0.41 4@3.85 | ct31337 corridors 0-6 (1000,868)->(450,751) @(960,847) origin -480,-960->-960,-960: same 1@-3.43 2@0.41 4@3.66 | ct31337 corridors 0-6 (1000,868)->(450,751) @(479,747) origin -960,-960->-1440,-960: same 1@-3.43 2@0.41 4@3.85 | ct98765/E0 in @(1018,959) origin -480,-480->-480,-960: same 1@-6.43 | ct98765/E0 in @(959,912) origin -480,-960->-960,-960: same 1@-6.64 2@-2.78 4@-1.12 | ct98765/E0 out @(960,913) origin -960,-960->-480,-960: same 1@-6.64 2@-2.78 4@-1.14 | ct98765/E0 out @(1020,961) origin -480,-960->-480,-480: same 1@-6.31 | ct98765/E0 capwalk+ @(959,675) origin -480,-960->-960,-960: same 1@-0.93 | ct98765/E0 capwalk+ @(731,960) origin -960,-960->-960,-480: same 1@-0.23 | ct98765/E0 mouth+ @(960,931) origin -480,-960->-960,-960: same 1@-6.64 2@-2.78 4@-1.09 | ct98765/E0 mouth+ @(937,960) origin -960,-960->-960,-480: same 1@-6.63 | ct98765 corridors 0-5 (961,914)->(531,679) @(960,913) origin -480,-960->-960,-960: same 1@-6.64 2@-2.78 4@-1.12 | end424242/E0 in @(-481,3683) origin -1920,1920->-2400,1920: same 1@-6.06 2@-2.14 4@3.23 | end424242/E0 out @(-479,3684) origin -2400,1920->-1920,1920: same 1@-6.06 2@-2.14 4@3.38"
+      },
+      {
+        "id": "caves_transition: window shift: the player's world position stays continuous across a window re-centre",
+        "ok": true,
+        "detail": "ct12345/E0 in @(838,481) origin -960,-1440->-960,-960: moved 2.02 u on the shift tick vs 2.02 u the one before | ct12345/E0 out @(839,480) origin -960,-960->-960,-1440: moved 1.86 u on the shift tick vs 1.86 u the one before | ct12345 corridor6 across (702,960) @30fps @(702,961) origin -960,-960->-960,-480: moved 1.89 u on the shift frame vs 1.88 u the one before | ct31337/E0 in @(959,846) origin -480,-960->-960,-960: moved 2.02 u on the shift tick vs 2.02 u the one before | ct31337/E0 out @(961,847) origin -960,-960->-480,-960: moved 1.90 u on the shift tick vs 1.89 u the one before | ct31337 corridor6 across (480,747) @30fps @(479,747) origin -960,-960->-1440,-960: moved 1.89 u on the shift frame vs 1.88 u the one before | ct31337 corridors 0-6 (1000,868)->(450,751) @(960,847) origin -480,-960->-960,-960: moved 1.54 u on the shift tick vs 1.52 u the one before | ct31337 corridors 0-6 (1000,868)->(450,751) @(479,747) origin -960,-960->-1440,-960: moved 1.96 u on the shift tick vs 1.96 u the one before | ct98765/E0 in @(959,912) origin -480,-960->-960,-960: moved 2.02 u on the shift tick vs 2.02 u the one before | ct98765/E0 out @(960,913) origin -960,-960->-480,-960: moved 1.96 u on the shift tick vs 1.95 u the one before | ct98765/E0 capwalk+ @(959,675) origin -480,-960->-960,-960: moved 1.88 u on the shift tick vs 1.87 u the one before | ct98765/E0 capwalk+ @(731,960) origin -960,-960->-960,-480: moved 2.02 u on the shift tick vs 2.02 u the one before | ct98765/E0 mouth+ @(960,931) origin -480,-960->-960,-960: moved 1.05 u on the shift tick vs 1.02 u the one before | ct98765/E0 mouth+ @(937,960) origin -960,-960->-960,-480: moved 1.59 u on the shift tick vs 1.58 u the one before | ct98765 corridors 0-5 (961,914)->(531,679) @(960,913) origin -480,-960->-960,-960: moved 0.39 u on the shift tick vs 0.34 u the one before | end424242/E0 in @(-481,3683) origin -1920,1920->-2400,1920: moved 2.43 u on the shift tick vs 2.43 u the one before | end424242/E0 out @(-479,3684) origin -2400,1920->-1920,1920: moved 2.00 u on the shift tick vs 1.99 u the one before || rebase pos -= shift at assembleWindow L7289-7291; allowance +1.0 u over the previous tick's/frame's travel"
+      },
+      {
+        "id": "caves_transition: window shift: crossing a chunk line near or inside a cave does not jolt the player's height",
+        "ok": true,
+        "detail": "ct12345/E0 in @(838,481) origin -960,-1440->-960,-960: |dh| 0.000 under roof | ct12345/E0 out @(839,480) origin -960,-960->-960,-1440: |dh| 0.000 under roof | ct12345 corridor6 across (702,960) @30fps @(702,961) origin -960,-960->-960,-480: |dh| 0.000 per frame under roof | ct31337/E0 in @(959,846) origin -480,-960->-960,-960: |dh| 0.000 under roof | ct31337/E0 out @(961,847) origin -960,-960->-480,-960: |dh| 0.000 under roof | ct31337 corridor6 across (480,747) @30fps @(479,747) origin -960,-960->-1440,-960: |dh| 0.000 per frame under roof | ct31337 corridors 0-6 (1000,868)->(450,751) @(960,847) origin -480,-960->-960,-960: |dh| 0.000 under roof | ct31337 corridors 0-6 (1000,868)->(450,751) @(479,747) origin -960,-960->-1440,-960: |dh| 0.000 under roof | ct98765/E0 in @(959,912) origin -480,-960->-960,-960: |dh| 0.000 under roof | ct98765/E0 out @(960,913) origin -960,-960->-480,-960: |dh| 0.000 under roof | ct98765/E0 capwalk+ @(959,675) origin -480,-960->-960,-960: |dh| 0.002 239 u from entrance | ct98765/E0 capwalk+ @(731,960) origin -960,-960->-960,-480: |dh| 0.011 235 u from entrance | ct98765/E0 mouth+ @(960,931) origin -480,-960->-960,-960: |dh| 0.001 under roof | ct98765/E0 mouth+ @(937,960) origin -960,-960->-960,-480: |dh| 0.013 53 u from entrance | ct98765 corridors 0-5 (961,914)->(531,679) @(960,913) origin -480,-960->-960,-960: |dh| 0.000 under roof | end424242/E0 in @(-481,3683) origin -1920,1920->-2400,1920: |dh| 0.000 under roof | end424242/E0 out @(-479,3684) origin -2400,1920->-1920,1920: |dh| 0.000 under roof || limit 0.35 h per physics step (0.7 per 30 fps frame)"
+      },
+      {
+        "id": "caves_transition: window shift: playerUnderground does not flicker across a window re-centre",
+        "ok": true,
+        "detail": "ct12345/E0 in @(838,481) origin -960,-1440->-960,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct12345/E0 out @(839,480) origin -960,-960->-960,-1440: 0 change(s) in records k-2..k+3 [TTTTTT] | ct12345 corridor6 across (702,960) @30fps @(702,961) origin -960,-960->-960,-480: 0 change(s) in records k-2..k+3 [TTTTTT] | ct31337/E0 in @(959,846) origin -480,-960->-960,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct31337/E0 out @(961,847) origin -960,-960->-480,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct31337 corridor6 across (480,747) @30fps @(479,747) origin -960,-960->-1440,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct31337 corridors 0-6 (1000,868)->(450,751) @(960,847) origin -480,-960->-960,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct31337 corridors 0-6 (1000,868)->(450,751) @(479,747) origin -960,-960->-1440,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct98765/E0 in @(959,912) origin -480,-960->-960,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct98765/E0 out @(960,913) origin -960,-960->-480,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | ct98765/E0 capwalk+ @(959,675) origin -480,-960->-960,-960: 0 change(s) in records k-2..k+3 [FFFFFF] | ct98765/E0 capwalk+ @(731,960) origin -960,-960->-960,-480: 0 change(s) in records k-2..k+3 [FFFFFF] | ct98765/E0 mouth+ @(960,931) origin -480,-960->-960,-960: 1 change(s) in records k-2..k+3 [FFTTTT] | ct98765/E0 mouth+ @(937,960) origin -960,-960->-960,-480: 0 change(s) in records k-2..k+3 [FFFFFF] | ct98765 corridors 0-5 (961,914)->(531,679) @(960,913) origin -480,-960->-960,-960: 0 change(s) in records k-2..k+3 [TTTTTT] | end424242/E0 in @(-481,3683) origin -1920,1920->-2400,1920: 0 change(s) in records k-2..k+3 [TTTTTT] | end424242/E0 out @(-479,3684) origin -2400,1920->-1920,1920: 0 change(s) in records k-2..k+3 [TTTTTT]"
+      },
+      {
+        "id": "caves_transition: window shift: dithering 20 u back and forth across a chunk line at a cave mouth re-centres the window at most once",
+        "ok": false,
+        "detail": "ct12345/E0 line at along -59: 6 re-centre(s) (assembleWindow calls) for 6 crossings || each re-centre is a synchronous assembleWindow (METRIC build_ms); updateChunks re-centres on any chunk change with no hysteresis (L7483, audit G3)"
+      },
+      {
+        "id": "caves_transition: 30 fps: every real-loop frame of the 30 fps cave walks runs without a render, update or console error",
+        "ok": true,
+        "detail": "ct12345 corridor6 across (702,960) @30fps: 74 frames, 0 _pt/loop error(s), 0 console.error line(s) | ct31337 corridor6 across (480,747) @30fps: 74 frames, 0 _pt/loop error(s), 0 console.error line(s) || LAB.frameAt -> LAB.renderErrorsSince (loop crashes + _ptErrors) and LAB.errorCount"
+      },
+      {
+        "id": "caves_transition: network: walking each corridor end to end, height never changes by more than 0.35 h in one tick",
+        "ok": true,
+        "detail": "ct12345 corridors 1-6 (785,588)->(699,967): worst 0.000 at world (785,588) cell 1@-4.77 2@-0.96 4@1.25 [walk ease (L10277)] | ct31337 corridors 0-6 (1000,868)->(450,751): worst 0.000 at world (1000,868) cell 1@-3.43 2@0.41 4@3.39 [walk ease (L10277)] | ct98765 corridors 0-5 (961,914)->(531,679): worst 0.000 at world (961,914) cell 1@-6.64 2@-2.78 4@-1.14 [walk ease (L10277)] || limit 0.35 h/tick; two entrance trees of one network get independent depths (N14)"
+      },
+      {
+        "id": "caves_transition: network: walking each corridor end to end, the player never sinks more than a step height below every floor",
+        "ok": true,
+        "detail": "ct12345 corridors 1-6 (785,588)->(699,967): 0 tick(s) sunk > 1 h below every floor | ct31337 corridors 0-6 (1000,868)->(450,751): 0 tick(s) sunk > 1 h below every floor | ct98765 corridors 0-5 (961,914)->(531,679): 0 tick(s) sunk > 1 h below every floor || step height = STEP_UP 1.0 (L7844)"
+      },
+      {
+        "id": "caves_transition: jump: a jump that would carry the player above the cave ceiling is stopped by it",
+        "ok": true,
+        "detail": "ct12345/E0: 0/3 jumps pass the ceiling, tightest clearance 2.80 at along -36 | ct31337/E0: 0/3 jumps pass the ceiling, tightest clearance 2.80 at along -36 | ct98765/E0: 0/4 jumps pass the ceiling, tightest clearance 2.80 at along +12 || impulse raised so the free apex clears the ceiling by 1 h; margin 0.05 h; the airborne integrator (L10137-10139) has no ceiling test and the landing picker ignores ceilings (L7877) (N3)"
+      },
+      {
+        "id": "caves_transition: jump: a vertical jump inside the cave lands back on the cave floor it left",
+        "ok": true,
+        "detail": "ct12345/E0: 0/6 bad landings | ct31337/E0: 0/6 bad landings | ct98765/E0: 0/7 bad landings || the game's own impulse; tolerance 0.1 h"
+      }
+    ],
+    "metrics": {
+      "caves_transition.ct12345.first_tick_recentres": 1,
+      "caves_transition.ct12345.start_assembles": 1,
+      "caves_transition.ct12345.build_ms": 274.94,
+      "caves_transition.ct12345.axis_ms": 259.12,
+      "caves_transition.ct12345.axis.assembles": 5,
+      "caves_transition.ct12345.jumps_ms": 46.2,
+      "caves_transition.ct12345.jumps.assembles": 2,
+      "caves_transition.ct12345.lateral_ms": 32.26,
+      "caves_transition.ct12345.lateral.assembles": 0,
+      "caves_transition.ct12345.capwalk_ms": 68.48,
+      "caves_transition.ct12345.capwalk.assembles": 3,
+      "caves_transition.ct12345.mouth_ms": 26.62,
+      "caves_transition.ct12345.mouth.assembles": 1,
+      "caves_transition.ct12345.crossings_ms": 561.5,
+      "caves_transition.ct12345.crossings.assembles": 2,
+      "caves_transition.ct12345.network_ms": 148.06,
+      "caves_transition.ct12345.network.assembles": 3,
+      "caves_transition.ct12345.dither_ms": 195.44,
+      "caves_transition.ct12345.dither.assembles": 7,
+      "caves_transition.ct12345.daynight_ms": 116.64,
+      "caves_transition.ct12345.daynight.assembles": 5,
+      "caves_transition.ct12345.scenario_ms": 1729.44,
+      "caves_transition.ct31337.first_tick_recentres": 1,
+      "caves_transition.ct31337.start_assembles": 1,
+      "caves_transition.ct31337.build_ms": 204.98,
+      "caves_transition.ct31337.axis_ms": 137.14,
+      "caves_transition.ct31337.axis.assembles": 5,
+      "caves_transition.ct31337.jumps_ms": 47.22,
+      "caves_transition.ct31337.jumps.assembles": 2,
+      "caves_transition.ct31337.lateral_ms": 21.04,
+      "caves_transition.ct31337.lateral.assembles": 0,
+      "caves_transition.ct31337.capwalk_ms": 0.08,
+      "caves_transition.ct31337.capwalk.assembles": 0,
+      "caves_transition.ct31337.mouth_ms": 23.34,
+      "caves_transition.ct31337.mouth.assembles": 1,
+      "caves_transition.ct31337.crossings_ms": 314.32,
+      "caves_transition.ct31337.crossings.assembles": 2,
+      "caves_transition.ct31337.network_ms": 54.18,
+      "caves_transition.ct31337.network.assembles": 3,
+      "caves_transition.ct31337.scenario_ms": 802.4,
+      "caves_transition.ct98765.first_tick_recentres": 1,
+      "caves_transition.ct98765.start_assembles": 1,
+      "caves_transition.ct98765.build_ms": 141.16,
+      "caves_transition.ct98765.axis_ms": 105.32,
+      "caves_transition.ct98765.axis.assembles": 5,
+      "caves_transition.ct98765.jumps_ms": 42.18,
+      "caves_transition.ct98765.jumps.assembles": 2,
+      "caves_transition.ct98765.lateral_ms": 16.44,
+      "caves_transition.ct98765.lateral.assembles": 0,
+      "caves_transition.ct98765.capwalk_ms": 56.08,
+      "caves_transition.ct98765.capwalk.assembles": 3,
+      "caves_transition.ct98765.mouth_ms": 52.08,
+      "caves_transition.ct98765.mouth.assembles": 3,
+      "caves_transition.ct98765.network_ms": 36,
+      "caves_transition.ct98765.network.assembles": 2,
+      "caves_transition.ct98765.scenario_ms": 449.32,
+      "caves_transition.end424242.build_ms": 149.36,
+      "caves_transition.end424242.axis_ms": 319.14,
+      "caves_transition.end424242.axis.assembles": 7,
+      "caves_transition.end424242.lateral_ms": 63.06,
+      "caves_transition.end424242.lateral.assembles": 1,
+      "caves_transition.end424242.scenario_ms": 531.7,
+      "caves_transition.total_ms": 3781.4,
+      "caves_transition.ct12345_E0.in.ug_flips": 1,
+      "caves_transition.ct12345_E0.in.airborne_episodes": 0,
+      "caves_transition.ct12345_E0.in.max_abs_dh": 0.0995,
+      "caves_transition.ct12345_E0.in.no_candidate_ticks": 0,
+      "caves_transition.ct12345_E0.in.ticks": 338,
+      "caves_transition.ct12345_E0.out.ug_flips": 1,
+      "caves_transition.ct12345_E0.out.airborne_episodes": 0,
+      "caves_transition.ct12345_E0.out.max_abs_dh": 0.0967,
+      "caves_transition.ct12345_E0.out.no_candidate_ticks": 0,
+      "caves_transition.ct12345_E0.out.ticks": 369,
+      "caves_transition.ct12345_E0.start_along": 470,
+      "caves_transition.ct31337_E0.in.ug_flips": 1,
+      "caves_transition.ct31337_E0.in.airborne_episodes": 0,
+      "caves_transition.ct31337_E0.in.max_abs_dh": 0.0637,
+      "caves_transition.ct31337_E0.in.no_candidate_ticks": 0,
+      "caves_transition.ct31337_E0.in.ticks": 338,
+      "caves_transition.ct31337_E0.out.ug_flips": 1,
+      "caves_transition.ct31337_E0.out.airborne_episodes": 0,
+      "caves_transition.ct31337_E0.out.max_abs_dh": 0.0693,
+      "caves_transition.ct31337_E0.out.no_candidate_ticks": 0,
+      "caves_transition.ct31337_E0.out.ticks": 369,
+      "caves_transition.ct31337_E0.start_along": 470,
+      "caves_transition.ct98765_E0.in.ug_flips": 1,
+      "caves_transition.ct98765_E0.in.airborne_episodes": 0,
+      "caves_transition.ct98765_E0.in.max_abs_dh": 0.098,
+      "caves_transition.ct98765_E0.in.no_candidate_ticks": 0,
+      "caves_transition.ct98765_E0.in.ticks": 338,
+      "caves_transition.ct98765_E0.out.ug_flips": 1,
+      "caves_transition.ct98765_E0.out.airborne_episodes": 0,
+      "caves_transition.ct98765_E0.out.max_abs_dh": 0.0937,
+      "caves_transition.ct98765_E0.out.no_candidate_ticks": 0,
+      "caves_transition.ct98765_E0.out.ticks": 369,
+      "caves_transition.ct98765_E0.start_along": 470,
+      "caves_transition.end424242_E0.in.ug_flips": 1,
+      "caves_transition.end424242_E0.in.airborne_episodes": 0,
+      "caves_transition.end424242_E0.in.max_abs_dh": 0.1609,
+      "caves_transition.end424242_E0.in.no_candidate_ticks": 0,
+      "caves_transition.end424242_E0.in.ticks": 292,
+      "caves_transition.end424242_E0.out.ug_flips": 1,
+      "caves_transition.end424242_E0.out.airborne_episodes": 0,
+      "caves_transition.end424242_E0.out.max_abs_dh": 0.1566,
+      "caves_transition.end424242_E0.out.no_candidate_ticks": 0,
+      "caves_transition.end424242_E0.out.ticks": 330,
+      "caves_transition.end424242_E0.start_along": 470,
+      "caves_transition.ct12345_E0_lateralm.max_gain": 0.1928,
+      "caves_transition.ct12345_E0_lateralm.max_perp": 61.0737,
+      "caves_transition.ct12345_E0_lateralp.max_gain": 0.1218,
+      "caves_transition.ct12345_E0_lateralp.max_perp": 72.9684,
+      "caves_transition.ct31337_E0_lateralm.max_gain": 0,
+      "caves_transition.ct31337_E0_lateralm.max_perp": 62.8457,
+      "caves_transition.ct31337_E0_lateralp.max_gain": 0.1013,
+      "caves_transition.ct31337_E0_lateralp.max_perp": 74.375,
+      "caves_transition.ct98765_E0_lateralm.max_gain": 0.0264,
+      "caves_transition.ct98765_E0_lateralm.max_perp": 67.7172,
+      "caves_transition.ct98765_E0_lateralp.max_gain": 0.1971,
+      "caves_transition.ct98765_E0_lateralp.max_perp": 68.129,
+      "caves_transition.end424242_E0_lateralm.max_gain": 0,
+      "caves_transition.end424242_E0_lateralm.max_perp": 55.6042,
+      "caves_transition.end424242_E0_lateralp.max_gain": 0.1936,
+      "caves_transition.end424242_E0_lateralp.max_perp": 65.8433,
+      "caves_transition.ct12345_E0_mouthp.max_gain": 0.0073,
+      "caves_transition.ct12345_E0_mouthp.max_perp": 76.2137,
+      "caves_transition.ct31337_E0_mouthp.max_gain": 0.1398,
+      "caves_transition.ct31337_E0_mouthp.max_perp": 70.7671,
+      "caves_transition.ct98765_E0_mouthp.max_gain": 0.0127,
+      "caves_transition.ct98765_E0_mouthp.max_perp": 68.8138,
+      "caves_transition.axis_transition_eligible": 4,
+      "caves_transition.axis_transition_excluded": 0,
+      "caves_transition.window_shifts_total": 30,
+      "caves_transition.window_shifts_near_cave": 26,
+      "caves_transition.window_shifts_level": 17,
+      "caves_transition.window_shifts_level_fps": 2,
+      "caves_transition.natural_jumps": 19,
+      "caves_transition.natural_jumps_through_ceiling": 0
+    },
+    "notes": [
+      "ct12345/E0: walk starts at along +470 (candidates rejected: 0 roofed, 0 behind surface rock, 0 approach roofed by another corridor)",
+      "ct12345/E0 dayNight-off: walk starts at along +470 (candidates rejected: 0 roofed, 0 behind surface rock, 0 approach roofed by another corridor)",
+      "ct31337/E0: walk starts at along +470 (candidates rejected: 0 roofed, 0 behind surface rock, 0 approach roofed by another corridor)",
+      "ct98765/E0: walk starts at along +470 (candidates rejected: 0 roofed, 0 behind surface rock, 0 approach roofed by another corridor)",
+      "end424242: nearest cave network region -1,2 entrance 3530 u from spawn, 1 entrance(s)",
+      "end424242/E0: walk starts at along +470 (candidates rejected: 0 roofed, 0 behind surface rock, 0 approach roofed by another corridor)"
+    ]
+  },
+  "render": {
+    "verdict": "HARNESS_RESULT FAIL 15",
+    "seconds": 7.6,
+    "checks": [
+      {
+        "id": "render: game script evaluates without throwing",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "id": "render: inside the tunnel the ceiling pass draws the tunnel ceiling",
+        "ok": true,
+        "detail": "ok s12345e0 along=-150 perp=0 world=(799,561) h=-4.77 ug=1 cell=[1@-4.77 2@-0.96 4@1.11] buriedCeilingQuads=591 of cappedCeilingCellsInView=621 (with pits: 591) stitched=613 | ok s424242e0 along=-150 perp=0 world=(888,657) h=-6.45 ug=1 cell=[1@-6.45 2@-2.48 4@1.76] buriedCeilingQuads=451 of cappedCeilingCellsInView=475 (with pits: 451) stitched=471 | ok s1e0 along=-150 perp=0 world=(561,506) h=-7.21 ug=1 cell=[1@-7.21 2@-3.25 4@0.71] buriedCeilingQuads=592 of cappedCeilingCellsInView=648 (with pits: 592) stitched=612 | ok s777e0 along=-150 perp=0 world=(645,804) h=-7.57 ug=1 cell=[1@-7.57 2@-3.45 4@-0.60] buriedCeilingQuads=626 of cappedCeilingCellsInView=662 (with pits: 626) stitched=646"
+      },
+      {
+        "id": "render: inside the tunnel the floor pass draws no surface or cap undersides overhead",
+        "ok": true,
+        "detail": "ok s12345e0 along=-150 perp=0 world=(799,561) h=-4.77 ug=1 cell=[1@-4.77 2@-0.96 4@1.11] overheadCap=0 overheadSurface=0 floorFills=582 | ok s424242e0 along=-150 perp=0 world=(888,657) h=-6.45 ug=1 cell=[1@-6.45 2@-2.48 4@1.76] overheadCap=0 overheadSurface=0 floorFills=434 | ok s1e0 along=-150 perp=0 world=(561,506) h=-7.21 ug=1 cell=[1@-7.21 2@-3.25 4@0.71] overheadCap=0 overheadSurface=0 floorFills=582 | ok s777e0 along=-150 perp=0 world=(645,804) h=-7.57 ug=1 cell=[1@-7.57 2@-3.45 4@-0.60] overheadCap=0 overheadSurface=0 floorFills=615"
+      },
+      {
+        "id": "render: inside the tunnel the floor pass draws the tunnel floor",
+        "ok": true,
+        "detail": "ok s12345e0 along=-150 perp=0 world=(799,561) h=-4.77 ug=1 cell=[1@-4.77 2@-0.96 4@1.11] caveFloorQuads=582 of cappedCaveFloorCellsInView=621 | ok s424242e0 along=-150 perp=0 world=(888,657) h=-6.45 ug=1 cell=[1@-6.45 2@-2.48 4@1.76] caveFloorQuads=434 of cappedCaveFloorCellsInView=475 | ok s1e0 along=-150 perp=0 world=(561,506) h=-7.21 ug=1 cell=[1@-7.21 2@-3.25 4@0.71] caveFloorQuads=582 of cappedCaveFloorCellsInView=648 | ok s777e0 along=-150 perp=0 world=(645,804) h=-7.57 ug=1 cell=[1@-7.57 2@-3.45 4@-0.60] caveFloorQuads=615 of cappedCaveFloorCellsInView=662"
+      },
+      {
+        "id": "render: looking back out from inside the tunnel the ceiling is drawn and no cap or surface underside is painted overhead",
+        "ok": false,
+        "detail": "BAD s12345e0 along=-60 perp=0 world=(839,481) h=-4.77 ug=1 cell=[1@-4.77 2@-0.96 4@0.88] buriedCeilingQuads=15 of cappedCeilingCellsInView=15 overheadCap=0 overheadSurface=2 openGroundCellsInView=1161 surfaceQuadsBelowHorizon=198 (anyAlpha=198) PRECONDITION FAILED (not on the cave floor, or <50 capped ceiling/open-ground cells in view) | BAD s424242e0 along=-60 perp=0 world=(972,625) h=-6.45 ug=1 cell=[1@-6.45 2@-2.48 4@2.52] buriedCeilingQuads=18 of cappedCeilingCellsInView=23 overheadCap=0 overheadSurface=2 openGroundCellsInView=1161 surfaceQuadsBelowHorizon=167 (anyAlpha=167) PRECONDITION FAILED (not on the cave floor, or <50 capped ceiling/open-ground cells in view)"
+      },
+      {
+        "id": "render: from the open approach ramp the cave floor ahead is drawn",
+        "ok": true,
+        "detail": "ok s12345e0 roofEdge=+-6 along=18 perp=0 world=(873,411) h=-4.75 ug=0 cell=[1@-4.75] cappedCaveCellsInView=851 buriedCaveFloorQuads=777 (all caveFloorQuads=777) | ok s424242e0 roofEdge=+3 along=27 perp=0 world=(1054,595) h=-6.40 ug=0 cell=[1@-6.40] cappedCaveCellsInView=698 buriedCaveFloorQuads=637 (all caveFloorQuads=637) | ok s1e0 roofEdge=+-15 along=9 perp=0 world=(467,378) h=-7.17 ug=0 cell=[1@-7.17] cappedCaveCellsInView=842 buriedCaveFloorQuads=767 (all caveFloorQuads=767) | ok s777e0 roofEdge=+-6 along=18 perp=0 world=(533,929) h=-7.54 ug=0 cell=[1@-7.54] cappedCaveCellsInView=878 buriedCaveFloorQuads=811 (all caveFloorQuads=811)"
+      },
+      {
+        "id": "render: standing in the archway the tunnel floor ahead is drawn",
+        "ok": true,
+        "detail": "ok s12345e0 along=0 perp=0 world=(865,427) h=-4.77 ug=0 cell=[1@-4.77] cappedCaveCellsInView=830 buriedCaveFloorQuads=757 (all caveFloorQuads=757) | ok s424242e0 along=0 perp=0 world=(1028,604) h=-6.45 ug=1 cell=[1@-6.45 2@-2.48 4@2.06] cappedCaveCellsInView=666 buriedCaveFloorQuads=609 (all caveFloorQuads=609) | ok s1e0 along=0 perp=0 world=(472,385) h=-7.21 ug=0 cell=[1@-7.21] cappedCaveCellsInView=832 buriedCaveFloorQuads=752 (all caveFloorQuads=752) | ok s777e0 along=0 perp=0 world=(545,916) h=-7.57 ug=0 cell=[1@-7.57] cappedCaveCellsInView=857 buriedCaveFloorQuads=790 (all caveFloorQuads=790)"
+      },
+      {
+        "id": "render: a camera on the ground above the tunnel draws no buried cave floor or cave ceiling",
+        "ok": false,
+        "detail": "BAD s12345e0 no cap-over-tunnel cell at along=-150 perp=+-100 -- PRECONDITION FAILED | ok s424242e0 along=-150 perp=100 world=(923,750) h=2.85 ug=0 cell=[1@-2.50 2@-2.48 4@2.85] cappedCaveCellsInView=417 openPitCellsHidden=0 buriedCaveFloorQuads=0 buriedCeilingQuads=0 (with pits: caveFloor=0 ceiling=0) surface=4684 cap=452 | BAD s1e0 no cap-over-tunnel cell at along=-150 perp=+-100 -- PRECONDITION FAILED | ok s777e0 along=-150 perp=-100 world=(720,871) h=-0.46 ug=0 cell=[1@-3.82 2@-3.45 4@-0.46] cappedCaveCellsInView=605 openPitCellsHidden=0 buriedCaveFloorQuads=0 buriedCeilingQuads=0 (with pits: caveFloor=0 ceiling=0) surface=4467 cap=638"
+      },
+      {
+        "id": "render: a camera on the cap above the cave draws no buried cave walls",
+        "ok": false,
+        "detail": "ok s12345 spot world=(798,510) cell=[1@-4.77 2@-0.96 4@0.78] facing wall (738,510) cappedWallCells=5 fillsFromTunnelFloor(h=-4.77,ug=1)=8 fillsFromCap(h=0.78,ug=0)=0 allWallFillsFromCap=217 | ok s424242 spot world=(983,701) cell=[1@-5.58 2@-2.48 4@2.99] facing wall (1038,678) cappedWallCells=5 fillsFromTunnelFloor(h=-5.58,ug=1)=6 fillsFromCap(h=2.99,ug=0)=0 allWallFillsFromCap=252 | ok s1 spot world=(569,421) cell=[1@-7.21 2@-3.25 4@1.21] facing wall (546,366) cappedWallCells=12 fillsFromTunnelFloor(h=-7.21,ug=1)=10 fillsFromCap(h=1.21,ug=0)=0 allWallFillsFromCap=273 | BAD s777 spot world=(570,930) cell=[1@-7.57 2@-3.45 4@-1.25] facing wall (630,930) cappedWallCells=27 fillsFromTunnelFloor(h=-7.57,ug=1)=42 fillsFromCap(h=-1.25,ug=0)=13 allWallFillsFromCap=192"
+      },
+      {
+        "id": "render: the archway is drawn to a player on the open approach ramp",
+        "ok": false,
+        "detail": "ok s12345e0 arch at along=0 roofEdge=+-6 along=18 perp=0 world=(873,411) h=-4.75 ug=0 cell=[1@-4.75] archFills=15 | BAD s424242e0 arch at along=0 roofEdge=+3 along=27 perp=0 world=(1054,595) h=-6.40 ug=0 cell=[1@-6.40] archFills=0 (canSeePoint: no reason recorded) | ok s1e0 arch at along=0 roofEdge=+-15 along=9 perp=0 world=(467,378) h=-7.17 ug=0 cell=[1@-7.17] archFills=15 | ok s777e0 arch at along=0 roofEdge=+-6 along=18 perp=0 world=(533,929) h=-7.54 ug=0 cell=[1@-7.54] archFills=15"
+      },
+      {
+        "id": "render: the rock drawn above a cave wall follows the cave ceiling beside it",
+        "ok": false,
+        "detail": "nothing was measured -- PRECONDITION FAILED"
+      },
+      {
+        "id": "render: a real frame loop walking into the cave and back out raises no render errors",
+        "ok": true,
+        "detail": "ok s12345 in: 114 frames to along=-143 h=-4.77 cell=[1@-4.77 2@-0.96 4@1.11]; out: 157 frames to along=47 h=-4.65 cell=[1@-4.64]; undergroundFrames=208 renderErrors+=0 {} consoleErrors+=0 | ok s424242 in: 119 frames to along=-144 h=-6.45 cell=[1@-6.45 2@-2.48 4@1.89]; out: 162 frames to along=55 h=-6.21 cell=[1@-6.13]; undergroundFrames=219 renderErrors+=0 {} consoleErrors+=0 | ok s1 in: 109 frames to along=-142 h=-7.21 cell=[1@-7.21 2@-3.25 4@0.80]; out: 152 frames to along=38 h=-7.03 cell=[1@-7.00]; undergroundFrames=199 renderErrors+=0 {} consoleErrors+=0 | ok s777 in: 114 frames to along=-143 h=-7.57 cell=[1@-7.57 2@-3.45 4@-0.57]; out: 157 frames to along=47 h=-7.43 cell=[1@-7.38]; undergroundFrames=208 renderErrors+=0 {} consoleErrors+=0"
+      },
+      {
+        "id": "render: canvas save/restore stays balanced through the cave walk",
+        "ok": true,
+        "detail": "ok s12345 in: 114 frames to along=-143 h=-4.77 cell=[1@-4.77 2@-0.96 4@1.11]; out: 157 frames to along=47 h=-4.65 cell=[1@-4.64]; undergroundFrames=208 saveDepthDelta=0 save=10665 restore=10665 | ok s424242 in: 119 frames to along=-144 h=-6.45 cell=[1@-6.45 2@-2.48 4@1.89]; out: 162 frames to along=55 h=-6.21 cell=[1@-6.13]; undergroundFrames=219 saveDepthDelta=0 save=17699 restore=17699 | ok s1 in: 109 frames to along=-142 h=-7.21 cell=[1@-7.21 2@-3.25 4@0.80]; out: 152 frames to along=38 h=-7.03 cell=[1@-7.00]; undergroundFrames=199 saveDepthDelta=0 save=16469 restore=16469 | ok s777 in: 114 frames to along=-143 h=-7.57 cell=[1@-7.57 2@-3.45 4@-0.57]; out: 157 frames to along=47 h=-7.43 cell=[1@-7.38]; undergroundFrames=208 saveDepthDelta=0 save=25785 restore=25785"
+      },
+      {
+        "id": "render: surface enemies standing below h=0 are visible to a camera 60 u away facing them",
+        "ok": false,
+        "detail": "s424242 playerOnSurface=1 caveCellsInWindow=0 lowGround hidden 5/6 | s777000 playerOnSurface=1 caveCellsInWindow=0 lowGround hidden 2/2 || hidden e.g.: s424242 e12 world=(-426,-390) ground h=-0.36 e.z=0.00 cull=surfaceUnderground(511); s424242 e16 world=(1326,366) ground h=-0.17 e.z=0.00 cull=surfaceUnderground(511); s424242 e18 world=(1518,294) ground h=-1.15 e.z=0.00 cull=surfaceUnderground(511); s424242 e20 world=(-690,798) ground h=-0.52 e.z=0.00 cull=surfaceUnderground(511); s424242 e23 world=(1482,582) ground h=-0.46 e.z=0.00 cull=surfaceUnderground(511); s777000 e12 world=(366,-762) ground h=-0.37 e.z=0.00 cull=surfaceUnderground(511)"
+      },
+      {
+        "id": "render: surface enemies standing at or above h=0 are visible to a camera 60 u away facing them",
+        "ok": false,
+        "detail": "s424242 playerOnSurface=1 caveCellsInWindow=0 highGround hidden 3/7 | s777000 playerOnSurface=1 caveCellsInWindow=0 highGround hidden 0/13 || hidden e.g.: s424242 e2 world=(-138,-1038) ground h=1.79 e.z=0.00 cull=belowFloor(508); s424242 e8 world=(150,-858) ground h=1.70 e.z=0.00 cull=belowFloor(508); s424242 e25 world=(1122,1254) ground h=2.36 e.z=0.00 cull=belowFloor(508)"
+      },
+      {
+        "id": "render: surface treasure chests are visible to a camera 60 u away facing them",
+        "ok": false,
+        "detail": "s424242 playerOnSurface=1 caveCellsInWindow=0 chests hidden 6/14 | s777000 playerOnSurface=1 caveCellsInWindow=0 chests hidden 5/19 || hidden e.g.: s424242 chest2 world=(822,-594) ground h=-0.91 cull=surfaceUnderground(511); s424242 chest3 world=(1770,-630) ground h=-0.93 cull=surfaceUnderground(511); s424242 chest8 world=(894,258) ground h=-0.69 cull=surfaceUnderground(511); s424242 chest9 world=(1614,450) ground h=-0.86 cull=surfaceUnderground(511); s424242 chest11 world=(630,1182) ground h=2.36 cull=belowFloor(508); s424242 chest13 world=(1890,1770) ground h=1.91 cull=belowFloor(508); s777000 chest2 world=(318,-894) ground h=-1.39 cull=surfaceUnderground(511); s777000 chest9 world=(1698,318) ground h=-0.66 cull=surfaceUnderground(511)"
+      },
+      {
+        "id": "render: ore veins remain visible on open surface at every terrain height",
+        "ok": false,
+        "detail": "measuredWorlds=2 | s424242 low(h=-0.26): calls=1 wz=0 result=null cameraH=-0.12 fills=0->0 | s424242 mid(h=0.89): calls=1 wz=0 result=visible cameraH=0.64 fills=0->3 | s424242 high(h=1.85): calls=1 wz=0 result=null cameraH=1.65 fills=0->0 | s777000 low(h=-0.27): calls=1 wz=0 result=null cameraH=-0.76 fills=0->0 | s777000 mid(h=0.27): calls=1 wz=0 result=visible cameraH=0.84 fills=0->3 | s777000 high(h=1.82): calls=1 wz=0 result=null cameraH=1.10 fills=0->0"
+      },
+      {
+        "id": "render: the exit goal remains visible on open surface at every terrain height",
+        "ok": false,
+        "detail": "measuredWorlds=2 | s424242 low(h=-0.26): calls=1 wz=0 result=null cameraH=-0.14 fills=0->0 | s424242 mid(h=0.89): calls=1 wz=0 result=visible cameraH=0.65 fills=0->1 | s424242 high(h=1.85): calls=1 wz=0 result=null cameraH=1.25 fills=0->0 | s777000 low(h=-0.27): calls=1 wz=0 result=null cameraH=-0.20 fills=0->0 | s777000 mid(h=0.27): calls=1 wz=0 result=visible cameraH=0.36 fills=0->1 | s777000 high(h=1.82): calls=1 wz=0 result=null cameraH=1.26 fills=0->0"
+      },
+      {
+        "id": "render: the shop tower remains visible on open surface at every terrain height",
+        "ok": false,
+        "detail": "measuredWorlds=2 | s424242 low(h=-0.26): calls=1 wz=0 result=null cameraH=-0.23 fills=0->0 | s424242 mid(h=0.89): calls=1 wz=0 result=visible cameraH=0.63 fills=0->9 | s424242 high(h=1.85): calls=1 wz=0 result=null cameraH=1.61 fills=0->0 | s777000 low(h=-0.27): calls=1 wz=0 result=null cameraH=0.19 fills=0->0 | s777000 mid(h=0.27): calls=1 wz=0 result=visible cameraH=0.17 fills=0->9 | s777000 high(h=1.82): calls=1 wz=0 result=null cameraH=1.75 fills=0->0"
+      },
+      {
+        "id": "render: enemies on a capped tunnel floor stay hidden from a camera on the ground above",
+        "ok": true,
+        "detail": "s12345 hidden 0/0 | s424242 hidden 2/2 | s1 hidden 2/2 | s777 hidden 3/3"
+      },
+      {
+        "id": "render: an enemy's walk-cycle frame advances only while the enemy itself moves",
+        "ok": false,
+        "detail": "BAD s424242 fast (chaseRange 450) idle@60u frames=8 [fast/3/5,fast/3/6,fast/3/7,fast/3/0,fast/3/1,fast/3/2,fast/3/3,fast/3/4] walking@495u frames=1 [fast/3/0] | BAD s777000 tank (chaseRange 350) idle@60u frames=6 [tank/3/2,tank/3/3,tank/3/4,tank/3/5,tank/3/6,tank/3/7] walking@385u frames=1 [tank/3/0]"
+      },
+      {
+        "id": "render: fixed level 1 renders 3D frames without render-pass exceptions",
+        "ok": false,
+        "detail": "level=1 floorMesh=240x160 l0Color=MISSING frames=30 renderErrors+=30 byPass={\"platforms3D\":30} consoleErrors+=3"
+      },
+      {
+        "id": "render: fixed level 1 floor pass draws ground quads",
+        "ok": false,
+        "detail": "level=1 floorMesh=240x160 l0Color=MISSING frames=30 floorFills=0 drawLayersFloor3D threw TypeError"
+      },
+      {
+        "id": "render: fixed level 1 keeps canvas save/restore balanced across frames",
+        "ok": false,
+        "detail": "level=1 floorMesh=240x160 l0Color=MISSING frames=30 saveDepthDelta=30 save=810 restore=780"
+      }
+    ],
+    "metrics": {
+      "render.s12345e0.roof_edge_along": -6,
+      "render.s12345e0.inside.ceiling": 591,
+      "render.s12345e0.inside.floor": {
+        "caveFloor": 582
+      },
+      "render.s12345e0.inside.floor_overhead": {
+        "caveFloor": 6
+      },
+      "render.s12345e0.out.floor_overhead": {
+        "surface": 2,
+        "tilted": 1
+      },
+      "render.s12345e0.out.open_ground_cells": 1161,
+      "render.s12345e0.out.surface_below_horizon_any_alpha": 198,
+      "render.s12345e0.out.surface_below_horizon": 198,
+      "render.s12345e0.ramp.floor": {
+        "caveFloor": 777,
+        "cap": 2,
+        "surface": 2
+      },
+      "render.s12345e0.ramp.arch_fills": 15,
+      "render.s12345e0.arch.floor": {
+        "caveFloor": 757
+      },
+      "render.s12345e0.arch_fills_from_200_top": 15,
+      "render.s12345e0.arch_fills_from_200_bottom": 15,
+      "render.s12345.capped_walls.from_below": 8,
+      "render.s12345.capped_walls.from_cap": 0,
+      "render.s424242e0.roof_edge_along": 3,
+      "render.s424242e0.inside.ceiling": 451,
+      "render.s424242e0.inside.floor": {
+        "caveFloor": 434
+      },
+      "render.s424242e0.inside.floor_overhead": {
+        "caveFloor": 2
+      },
+      "render.s424242e0.out.floor_overhead": {
+        "surface": 2
+      },
+      "render.s424242e0.out.open_ground_cells": 1161,
+      "render.s424242e0.out.surface_below_horizon_any_alpha": 167,
+      "render.s424242e0.out.surface_below_horizon": 167,
+      "render.s424242e0.ramp.floor": {
+        "caveFloor": 637,
+        "surface": 2
+      },
+      "render.s424242e0.ramp.arch_fills": 0,
+      "render.s424242e0.arch.floor": {
+        "caveFloor": 609
+      },
+      "render.s424242e0.above.floor": {
+        "surface": 4684,
+        "cap": 452
+      },
+      "render.s424242e0.above.ceiling": 0,
+      "render.s424242e0.arch_fills_from_200_top": 0,
+      "render.s424242e0.arch_fills_from_200_bottom": 0,
+      "render.s424242.capped_walls.from_below": 6,
+      "render.s424242.capped_walls.from_cap": 0,
+      "render.s1e0.roof_edge_along": -15,
+      "render.s1e0.inside.ceiling": 592,
+      "render.s1e0.inside.floor": {
+        "caveFloor": 582
+      },
+      "render.s1e0.inside.floor_overhead": {
+        "caveFloor": 2
+      },
+      "render.s1e0.out.floor_overhead": {
+        "surface": 3
+      },
+      "render.s1e0.out.open_ground_cells": 1160,
+      "render.s1e0.out.surface_below_horizon_any_alpha": 166,
+      "render.s1e0.out.surface_below_horizon": 166,
+      "render.s1e0.ramp.floor": {
+        "caveFloor": 767,
+        "surface": 1
+      },
+      "render.s1e0.ramp.arch_fills": 15,
+      "render.s1e0.arch.floor": {
+        "caveFloor": 752
+      },
+      "render.s1e0.arch_fills_from_200_top": 15,
+      "render.s1e0.arch_fills_from_200_bottom": 15,
+      "render.s1.capped_walls.from_below": 10,
+      "render.s1.capped_walls.from_cap": 0,
+      "render.s777e0.roof_edge_along": -6,
+      "render.s777e0.inside.ceiling": 626,
+      "render.s777e0.inside.floor": {
+        "caveFloor": 615
+      },
+      "render.s777e0.inside.floor_overhead": {},
+      "render.s777e0.out.floor_overhead": {
+        "surface": 2
+      },
+      "render.s777e0.out.open_ground_cells": 1158,
+      "render.s777e0.out.surface_below_horizon_any_alpha": 188,
+      "render.s777e0.out.surface_below_horizon": 188,
+      "render.s777e0.ramp.floor": {
+        "caveFloor": 811,
+        "cap": 2,
+        "surface": 1
+      },
+      "render.s777e0.ramp.arch_fills": 15,
+      "render.s777e0.arch.floor": {
+        "caveFloor": 790
+      },
+      "render.s777e0.above.floor": {
+        "surface": 4467,
+        "cap": 638
+      },
+      "render.s777e0.above.ceiling": 0,
+      "render.s777e0.arch_fills_from_200_top": 15,
+      "render.s777e0.arch_fills_from_200_bottom": 15,
+      "render.s777.capped_walls.from_below": 42,
+      "render.s777.capped_walls.from_cap": 13,
+      "render.s12345.walk.frames": 271,
+      "render.s12345.walk.underground_frames": 208,
+      "render.s12345.walk_ms": 1376,
+      "render.s424242.walk.frames": 281,
+      "render.s424242.walk.underground_frames": 219,
+      "render.s424242.walk_ms": 866.22,
+      "render.s1.walk.frames": 261,
+      "render.s1.walk.underground_frames": 199,
+      "render.s1.walk_ms": 859.52,
+      "render.s777.walk.frames": 271,
+      "render.s777.walk.underground_frames": 208,
+      "render.s777.walk_ms": 664.14,
+      "render.endless424242.surface_enemies_low": 6,
+      "render.endless424242.surface_enemies_high": 7,
+      "render.endless424242.hidden_low": 5,
+      "render.endless424242.hidden_high": 3,
+      "render.endless424242.surface_chests": 14,
+      "render.endless424242.hidden_chests": 6,
+      "render.endless777000.surface_enemies_low": 2,
+      "render.endless777000.surface_enemies_high": 13,
+      "render.endless777000.hidden_low": 2,
+      "render.endless777000.hidden_high": 0,
+      "render.endless777000.surface_chests": 19,
+      "render.endless777000.hidden_chests": 5,
+      "render.literal0.s424242.ore.low.calls": 1,
+      "render.literal0.s424242.ore.low.fill_delta": 0,
+      "render.literal0.s424242.ore.mid.calls": 1,
+      "render.literal0.s424242.ore.mid.fill_delta": 3,
+      "render.literal0.s424242.ore.high.calls": 1,
+      "render.literal0.s424242.ore.high.fill_delta": 0,
+      "render.literal0.s424242.goal.low.calls": 1,
+      "render.literal0.s424242.goal.low.fill_delta": 0,
+      "render.literal0.s424242.goal.mid.calls": 1,
+      "render.literal0.s424242.goal.mid.fill_delta": 1,
+      "render.literal0.s424242.goal.high.calls": 1,
+      "render.literal0.s424242.goal.high.fill_delta": 0,
+      "render.literal0.s424242.shop.low.calls": 1,
+      "render.literal0.s424242.shop.low.fill_delta": 0,
+      "render.literal0.s424242.shop.mid.calls": 1,
+      "render.literal0.s424242.shop.mid.fill_delta": 9,
+      "render.literal0.s424242.shop.high.calls": 1,
+      "render.literal0.s424242.shop.high.fill_delta": 0,
+      "render.literal0.s777000.ore.low.calls": 1,
+      "render.literal0.s777000.ore.low.fill_delta": 0,
+      "render.literal0.s777000.ore.mid.calls": 1,
+      "render.literal0.s777000.ore.mid.fill_delta": 3,
+      "render.literal0.s777000.ore.high.calls": 1,
+      "render.literal0.s777000.ore.high.fill_delta": 0,
+      "render.literal0.s777000.goal.low.calls": 1,
+      "render.literal0.s777000.goal.low.fill_delta": 0,
+      "render.literal0.s777000.goal.mid.calls": 1,
+      "render.literal0.s777000.goal.mid.fill_delta": 1,
+      "render.literal0.s777000.goal.high.calls": 1,
+      "render.literal0.s777000.goal.high.fill_delta": 0,
+      "render.literal0.s777000.shop.low.calls": 1,
+      "render.literal0.s777000.shop.low.fill_delta": 0,
+      "render.literal0.s777000.shop.mid.calls": 1,
+      "render.literal0.s777000.shop.mid.fill_delta": 9,
+      "render.literal0.s777000.shop.high.calls": 1,
+      "render.literal0.s777000.shop.high.fill_delta": 0,
+      "render.level1.floor": {}
+    },
+    "notes": [
+      "s12345e0 arch from along=+200 on top layer: 15 fills; along=200 perp=0 world=(954,248) h=-2.08 ug=0 cell=[1@-2.08]",
+      "s12345e0 arch from along=+200 on bottom layer: 15 fills; along=200 perp=0 world=(954,248) h=-2.08 ug=0 cell=[1@-2.08]",
+      "s424242e0 arch from along=+200 on top layer: 0 fills; along=200 perp=0 world=(1216,534) h=-3.78 ug=0 cell=[1@-3.78] hidden by canSeePoint: ?",
+      "s424242e0 arch from along=+200 on bottom layer: 0 fills; along=200 perp=0 world=(1216,534) h=-3.78 ug=0 cell=[1@-3.78] hidden by canSeePoint: ?",
+      "s1e0 arch from along=+200 on top layer: 15 fills; along=200 perp=0 world=(353,224) h=-4.22 ug=0 cell=[1@-4.22]",
+      "s1e0 arch from along=+200 on bottom layer: 15 fills; along=200 perp=0 world=(353,224) h=-4.22 ug=0 cell=[1@-4.22]",
+      "s777e0 arch from along=+200 on top layer: 15 fills; along=200 perp=0 world=(412,1065) h=-5.09 ug=0 cell=[1@-5.09]",
+      "s777e0 arch from along=+200 on bottom layer: 15 fills; along=200 perp=0 world=(412,1065) h=-5.09 ug=0 cell=[1@-5.09]",
+      "s12345 cave wall rock: no underground view with >=3 wall-top rock quads (seed skipped)",
+      "game console.error lines: 3 -- first: [RENDER CRASH in platforms3D #1] undefined is not an object (evaluating 'mesh.l0Color[idx0]') "
+    ]
+  }
+}

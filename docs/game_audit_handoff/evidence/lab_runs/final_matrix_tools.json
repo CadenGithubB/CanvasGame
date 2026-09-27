@@ -1,0 +1,1226 @@
+[
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#0",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture takes floorH from the walkable layer at the player's height",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#1",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#2",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag takes floorH from the walkable layer at the player's height",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#3",
+  "kind": "FIX",
+  "desc": "FIX: caveDiag reports the lowest ceiling layer above the player's height",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#4",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart draws every ceiling, not only those > 0.1",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#6",
+  "kind": "FIX",
+  "desc": "FIX: the profile chart samples the walkable layer nearest the player's height",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#7",
+  "kind": "FIX",
+  "desc": "FIX: caveCapture records the window origin, pos.floorZ and cam.ang",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#8",
+  "kind": "FIX",
+  "desc": "FIX: every frame writes window.__caveDebugLast",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#9",
+  "kind": "FIX",
+  "desc": "FIX: count floor layer-stitch misses in floorOutsideBlend",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#10",
+  "kind": "FIX",
+  "desc": "FIX: count blendRange at most once per cell",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#11",
+  "kind": "FIX",
+  "desc": "FIX I5 at the label side: stop presenting per-layer stitch counters as percentages of per-cell visits",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#12",
+  "kind": "FIX",
+  "desc": "FIX: do not count non-ceiling layers as skipped low ceilings",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#13",
+  "kind": "FIX",
+  "desc": "FIX: the control map colours each cell by its lowest walkable layer",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#14",
+  "kind": "FIX",
+  "desc": "FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#15",
+  "kind": "FIX",
+  "desc": "FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#16",
+  "kind": "FIX",
+  "desc": "FIX: the three dead debug flags each do something observable",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "tools#17",
+  "kind": "FIX",
+  "desc": "FIX: implement Floor LINE debug as its declaration promises, by painting the ground plane red",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ }
+]

@@ -1,0 +1,872 @@
+[
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "persistence",
+  "flips": [
+   {
+    "check": "persistence: a cave (underground) enemy is still underground after a window shift",
+    "to": "PASS",
+    "expected": false
+   }
+  ],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#0",
+  "kind": "FIX",
+  "desc": "FIX D19: saveEnemyStateToChunks keeps the underground flag",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#1",
+  "kind": "FIX",
+  "desc": "FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#2",
+  "kind": "FIX",
+  "desc": "FIX F4: _separatePair tests the enemy's radius, not just the centre cell",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#3",
+  "kind": "FIX",
+  "desc": "FIX F3: Brute footprint fits inside half a cell (size 1.4 -> 1.2)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#4",
+  "kind": "FIX",
+  "desc": "FIX F3 at the spawn site: require the 3x3 block around the spawn cell open (L5885)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#5",
+  "kind": "FIX",
+  "desc": "FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#6",
+  "kind": "FIX",
+  "desc": "FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#7",
+  "kind": "FIX",
+  "desc": "FIX ring (crude): Z-less isInGridWall (enemy movement) collides like a surface player",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#8",
+  "kind": "FIX",
+  "desc": "FIX F7 by layer: chase only a player on the enemy's own side of the cave roof",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#9",
+  "kind": "FIX",
+  "desc": "FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#10",
+  "kind": "FIX",
+  "desc": "FIX patrol freeze: F1 validated waypoints + F3 Brute size + a patrol wall slide (each part is needed) + ruin order",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "loot",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "enemies#11",
+  "kind": "FIX",
+  "desc": "FIX F2: patrol slides along a wall (per axis) instead of only advancing patrolIdx",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]

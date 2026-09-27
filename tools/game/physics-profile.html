@@ -1,0 +1,705 @@
+<!-- Developer-only fragment, appended after preview_html's real game scripts. -->
+<section id="physics-browser-profile" aria-label="Browser physics benchmark">
+  <style>
+    #physics-browser-profile{padding:12px;margin:0 0 16px;border:1px solid #536476;border-radius:8px;background:#17212b;max-width:950px}
+    #physics-browser-profile p{margin:6px 0;line-height:1.4}
+    #physics-browser-profile label{display:inline-block;margin:5px 12px 5px 0}
+    #physics-browser-profile button,#physics-browser-profile select{padding:6px 10px;background:#25384a;color:#eff6ff;border:1px solid #7c93a8;border-radius:4px}
+    #physics-browser-profile button:disabled{opacity:.5}
+    #physics-profile-result{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;font-size:12px}
+  </style>
+  <strong>Actual-browser physics profile · developer fixture</strong>
+  <p>Fixture v5: generated cave combat, or an explicitly separate authored navigation workload. Both run normal simulation and Canvas rendering: 5 seconds warm-up, then 30 seconds measured. Keep this tab and the game canvas visible.</p>
+  <label>View <select id="physics-profile-view"><option value="3d">First-person / 3D</option><option value="2d">Top-down / 2D</option></select></label>
+  <label><input id="physics-profile-stages" type="checkbox" checked> Coarse physics-stage timers</label>
+  <label><input id="physics-profile-counters" type="checkbox"> Detailed query work counters (extra overhead)</label>
+  <label><input id="physics-profile-interpolation" type="checkbox" checked> Render interpolation</label>
+  <label><input id="physics-profile-mixed-npcs" type="checkbox"> Mixed NPC workload (slime + 2 allies)</label>
+  <label><input id="physics-profile-navigation" type="checkbox"> Authored navigation workload</label>
+  <button id="physics-profile-run" type="button">Run 30-second profile</button>
+  <button id="physics-profile-cancel" type="button" disabled>Cancel profile</button>
+  <p id="physics-profile-status" role="status" data-status="ready">Ready. This separate page replaces only its own world when run.</p>
+  <details><summary>Fixture and timing limitations</summary>
+    <p>Authored navigation mode replaces cave combat with 20 independent short-wall patrol stations on a flat 384 × 480 world. Opposing waypoints force real detours; the actors are never teleported. Each actor must cross its wall outside the blocked interval and receive a measured completed route. The route-only workload has no missile releases, followers, melee or pursuit. It measures production planning, locomotion, separation and drawing, not cave rendering, target memory, streaming or crowd congestion through a single doorway. A route request alone is not accepted as evidence of successful navigation.</p>
+    <p>Mixed-workload motion: soldiers begin at supported positions at least 72 units from the player and 30 units from initial enemies. Every five simulated seconds they return to those same revalidated positions so following and engaging continue after warm-up. This synthetic maintenance clears pending windups and visual history, preserves cooldowns, and is reported separately. Teleport distance never counts as NPC movement.</p>
+    <p>This is a seeded cave combat workload, not a complete playthrough or a minimum-device certification. Before each real simulation tick the player is returned to a validated supported anchor, with velocity cleared, so crowd pressure cannot turn this steady-state test into a chunk-streaming test. Player collision and pushback still execute normally. Enemies and player receive health refills to keep combat alive; shots bypass mana/cooldown input at a fixed simulation-tick cadence. Mixed mode adds supported followers, refills soldier health, and requires their actual movement and attack activity. Slime invulnerability remains its production policy. AI, support, separation, projectile collision, impacts and rendering are production code. A tower is deliberately absent: a market marker changes enemy safe-zone behavior, and a separate tower fixture must validate its elevated firing clearance. Production projectile console logging remains enabled (up to 30 lines per simulation second); its cost is included. Gameplay uses the fixed simulation clock; native performance.now measures every reported timing. The player pin and scripted camera heading are applied before interpolation capture: this measures moving-entity overhead, not camera-translation smoothness. JavaScript/Canvas submission time is not GPU completion time. RAF cadence includes browser scheduling. Compare multiple runs with the same fixture version, workload, view, resolution, counters and machine; earlier fixture timings are not directly comparable with v5. Toggle only interpolation for an on/off comparison. Snapshot timing combines capture and finish for the same tick; adapter timing subtracts that frame's inner drawing time from its wrapper duration and includes timer-call overhead. Do not add stage percentiles together. Disable coarse timers for a paired instrumentation-overhead baseline; outer frame, update, rendering and interpolation measurements remain active.</p>
+  </details>
+  <pre id="physics-profile-result" aria-label="Physics profile JSON"></pre>
+</section>
+<script>
+(function () {
+  'use strict';
+  var panel = document.getElementById('physics-browser-profile');
+  document.body.insertBefore(panel, document.body.firstChild);
+  var runButton = document.getElementById('physics-profile-run');
+  var cancelButton = document.getElementById('physics-profile-cancel');
+  var viewSelect = document.getElementById('physics-profile-view');
+  var stagesBox = document.getElementById('physics-profile-stages');
+  var countersBox = document.getElementById('physics-profile-counters');
+  var interpolationBox = document.getElementById('physics-profile-interpolation');
+  var mixedNPCsBox = document.getElementById('physics-profile-mixed-npcs');
+  var navigationBox = document.getElementById('physics-profile-navigation');
+  var statusNode = document.getElementById('physics-profile-status');
+  var output = document.getElementById('physics-profile-result');
+  var active = null, seed = 12345, warmupMs = 5000, measurementMs = 30000;
+
+  function status(state, text) {
+    statusNode.dataset.status = state;
+    statusNode.textContent = text;
+  }
+  function summary(values) {
+    if (!values.length) return {samples:0,p50Ms:null,p95Ms:null,p99Ms:null,maxMs:null};
+    var sorted = values.slice().sort(function (a,b) { return a-b; });
+    function pct(p) { return sorted[Math.max(0,Math.ceil(sorted.length*p)-1)]; }
+    return {samples:sorted.length,p50Ms:pct(.5),p95Ms:pct(.95),p99Ms:pct(.99),maxMs:sorted[sorted.length-1],
+      meanMs:sorted.reduce(function (a,b) { return a+b; },0)/sorted.length};
+  }
+  function errorCounts() { return Object.assign({},_ptErrors); }
+  function errorDelta(before) {
+    var result = {};
+    Object.keys(_ptErrors).forEach(function (key) {
+      var count = _ptErrors[key]-(before[key]||0);
+      if (count) result[key] = count;
+    });
+    return result;
+  }
+  function assertNoRuntimeErrors(job,phase) {
+    if (job.errors.length) throw Error(phase+': browser error: '+job.errors[0]);
+    for (var key in _ptErrors) {
+      if (_ptErrors[key]>(job.errorBaseline[key]||0)) throw Error(phase+': production stage '+key+' reported an error.');
+    }
+  }
+  function canvasInfo() {
+    var rect = canvas.getBoundingClientRect();
+    var area = Math.max(0,Math.min(rect.right,innerWidth)-Math.max(rect.left,0))*
+      Math.max(0,Math.min(rect.bottom,innerHeight)-Math.max(rect.top,0));
+    return {width:canvas.width,height:canvas.height,cssWidth:rect.width,cssHeight:rect.height,
+      visibleFraction:rect.width*rect.height ? area/(rect.width*rect.height) : 0,
+      devicePixelRatio:devicePixelRatio,viewportWidth:innerWidth,viewportHeight:innerHeight,
+      resolutionSetting:settings.resolution,viewDistance:viewDist,chunkWindow:WINDOW_CHUNKS,
+      particleSetting:settings.particles,qualityPreset:qualityPreset};
+  }
+  function randomSource(value) {
+    return function () {
+      value=(value+0x6D2B79F5)|0;
+      var n=Math.imul(value^(value>>>15),1|value);
+      n^=n+Math.imul(n^(n>>>7),61|n);
+      return ((n^(n>>>14))>>>0)/4294967296;
+    };
+  }
+  function newCounters() { return {movementCalls:0,projectileCalls:0,movement:{},projectiles:{}}; }
+  var npcCounterNames=['decisions','candidates','sightTests','moves','actions','commits','invalidations'];
+  var npcStageNames=['npcPerception','npcDecision','npcActions','npcLocomotion'];
+  function npcCounters() {
+    if (typeof npcStats!=='object' || !npcStats) throw Error('Fixture v5 requires shared NPC work counters.');
+    var result={};
+    npcCounterNames.forEach(function (name) {
+      if (!Number.isFinite(npcStats[name]) || npcStats[name]<0) throw Error('Invalid NPC counter: '+name);
+      result[name]=npcStats[name];
+    });
+    return result;
+  }
+  function npcCounterDelta(before) {
+    if (!before) return null;
+    var current=npcCounters(), result={};
+    npcCounterNames.forEach(function (name) { result[name]=current[name]-before[name]; });
+    return result;
+  }
+  function npcWorkloadProblem(job,work) {
+    if (!work) return 'NPC counters were not sampled.';
+    for (var i=0;i<npcCounterNames.length;i++) {
+      var name=npcCounterNames[i];
+      if (!Number.isFinite(work[name]) || work[name]<0) return 'NPC counters reset or became invalid: '+name;
+    }
+    if (job.navigationWorkload) return work.moves>0 ? null : 'No measured NPC moves work.';
+    // Every mandatory phase must do actual work, not merely exist in a profile.
+    for (var j=0;j<6;j++) if (work[npcCounterNames[j]]===0) return 'No measured NPC '+npcCounterNames[j]+' work.';
+    if (!job.mixedNPCs) return null;
+    if (!job.workload.companions || job.workload.companions.min!==1 || job.workload.companions.max!==1 ||
+        !job.workload.allies || job.workload.allies.min!==2 || job.workload.allies.max!==2) {
+      return 'Required one-slime/two-soldier workload was not maintained.';
+    }
+    if (job.friendlyActivity.length!==3) return 'Mixed NPC fixture has missing subjects.';
+    for (var k=0;k<job.friendlyActivity.length;k++) {
+      var activity=job.friendlyActivity[k];
+      if (!activity.movementTicks || !activity.attackCommits) return 'No measured movement or committed attack for '+activity.kind+'.';
+    }
+    return null;
+  }
+  var navigationCounterNames=['requests','edges','expanded','completed','failed','deferred','invalidations','probeSteps'];
+  function navigationCounters() {
+    var result={};
+    navigationCounterNames.forEach(function (name) {
+      var value=npcNavigationStats[name];
+      if (!Number.isFinite(value) || value<0) throw Error('Invalid navigation counter: '+name);
+      result[name]=value;
+    });
+    return result;
+  }
+  function navigationCounterDelta(before) {
+    if (!before) return null;
+    var current=navigationCounters(), result={};
+    navigationCounterNames.forEach(function (name) { result[name]=current[name]-before[name]; });
+    return result;
+  }
+  function navigationWorkloadProblem(job,work) {
+    if (!work) return 'Navigation counters were not sampled.';
+    for (var i=0;i<navigationCounterNames.length;i++) {
+      var name=navigationCounterNames[i];
+      if (!Number.isFinite(work[name]) || work[name]<0) return 'Navigation counters reset or became invalid: '+name;
+    }
+    if (!job.navigationTickSamples || job.navigationMaxEdges>NPC_NAV_MAX_EDGES_PER_TICK)
+      return 'Navigation per-tick budget evidence is missing or exceeded.';
+    if (!job.navigationWorkload) return null;
+    if (!(work.edges>0 && work.expanded>0 && work.completed>0 && work.probeSteps>0))
+      return 'Authored navigation did not perform measured successful route work.';
+    if (!job.workload.enemies || job.workload.enemies.min!==20 || job.workload.enemies.max!==20 || job.navigationActivity.length!==20)
+      return 'Required twenty-actor navigation workload was not maintained.';
+    if (job.navigationOverlapTicks) return 'Authored navigation body overlapped a wall.';
+    for (var j=0;j<job.navigationActivity.length;j++) {
+      var row=job.navigationActivity[j];
+      if (!(row.movementTicks>0 && row.distanceMoved>0 && row.crossings>0 && row.completedRoutes>0))
+        return 'Missing measured movement, detour crossing or completed route for navigator-'+j+'.';
+    }
+    return null;
+  }
+  function interpolationCounters() {
+    return {captures:renderInterpolationStats.captures,entitiesCaptured:renderInterpolationStats.entitiesCaptured,
+      entitiesPresented:renderInterpolationStats.entitiesPresented,recordsCreated:renderInterpolationStats.recordsCreated};
+  }
+  function interpolationCounterDelta(before) {
+    var current=interpolationCounters(), result={};
+    Object.keys(current).forEach(function (name) { result[name]=current[name]-(before ? before[name] : current[name]); });
+    return result;
+  }
+  function installCounters(job) {
+    job.originalMove=spatialMoveBody;
+    job.originalProjectile=projectileFirstHit;
+    if (!job.detailedCounters) return;
+    spatialMoveBody=function (body,dx,dy,work) {
+      if (job.measuring) job.work.movementCalls++;
+      return job.originalMove(body,dx,dy,job.measuring ? job.work.movement : work);
+    };
+    projectileFirstHit=function (p,a,b,now,work,motionFraction) {
+      if (job.measuring) job.work.projectileCalls++;
+      return job.originalProjectile(p,a,b,now,job.measuring ? job.work.projectiles : work,motionFraction);
+    };
+  }
+  function recordWorkload(job) {
+    var counts={enemies:enemies.length,projectiles:projectiles.length,impacts:impacts.length,
+      companions:companions.length,allies:fortressAllies.length};
+    Object.keys(counts).forEach(function (name) {
+      var row=job.workload[name] || (job.workload[name]={min:Infinity,max:0,total:0,samples:0});
+      row.min=Math.min(row.min,counts[name]); row.max=Math.max(row.max,counts[name]);
+      row.total+=counts[name]; row.samples++;
+    });
+  }
+  function prepareFriendlyNPCs(job,enemyPositions,feetZ) {
+    job.friendlyActivity=[];
+    if (!job.mixedNPCs) return;
+    var occupied=enemyPositions.slice();
+    ['slime','soldier-1','soldier-2'].forEach(function (kind,index) {
+      var shortBody=kind==='slime', point=null;
+      // Setup-only bounded search. A live actor is never placed by trusting a
+      // cosmetic height or by bypassing the production footprint/headroom query.
+      for (var radius=shortBody?18:72;radius<=150 && !point;radius+=12) {
+        for (var sector=0;sector<32 && !point;sector++) {
+          var angle=(sector+index*11)*Math.PI/16;
+          var x=pos.x+Math.cos(angle)*radius, y=pos.y+Math.sin(angle)*radius;
+          if (occupied.some(function (p) { return Math.hypot(p.x-x,p.y-y)<(shortBody?14:30); })) continue;
+          var body={x:x,y:y,feetZ:feetZ,radius:shortBody?5:6,height:shortBody?25:70,
+            stepHeight:25,allowFall:false,trackFloor:true};
+          var support=spatialQuerySupport(body,x,y);
+          if (support.status!=='walk' || !Number.isFinite(support.feetZ)) continue;
+          body.feetZ=support.feetZ;
+          if (spatialBodyBlocked(body,x,y)) continue;
+          if (spatialRaycast({x:x,y:y,z:body.feetZ+body.height*.5},
+              {x:pos.x,y:pos.y,z:feetZ+35}).status!=='clear') continue;
+          point={x:x,y:y,feetZ:body.feetZ};
+        }
+      }
+      if (!point) throw Error('Fixture setup: no supported visible placement for '+kind+'.');
+      occupied.push(point);
+      var actor=shortBody ? {
+        type:'slime',x:point.x,y:point.y,z:0,feetZ:point.feetZ,renderFloorZ:point.feetZ,
+        bodyHeight:25,underground:true,phase:0,squash:1,lastAttackMs:0,wanderAng:0
+      } : {
+        x:point.x,y:point.y,z:0,feetZ:point.feetZ,bodyHeight:70,underground:true,
+        health:100000,maxHealth:100000,speed:42,attackRange:28,attackDamage:12,attackCooldown:1000,
+        lastAttackMs:0,vx:0,vy:0,followDist:90,followIdeal:55,teleportDist:400,
+        wanderAng:index*Math.PI,phase:0,damageFlash:0,targetEnemy:null,name:'Fixture '+kind
+      };
+      (shortBody?companions:fortressAllies).push(actor);
+      job.friendlyActivity.push({kind:kind,actor:actor,previousX:actor.x,previousY:actor.y,
+        previousCommits:0,movementTicks:0,distanceMoved:0,attackCommits:0,
+        fixtureResets:0,fixtureResetDistance:0,resetPosition:{x:point.x,y:point.y,feetZ:point.feetZ},
+        initialPosition:{x:point.x+windowOriginX,y:point.y+windowOriginY,feetZ:point.feetZ}});
+    });
+  }
+  function resetFriendlyMotion(job) {
+    if (!job.mixedNPCs || !job.ticks || job.ticks%300!==0) return;
+    job.friendlyActivity.forEach(function (row) {
+      if (row.kind==='slime') return;
+      var actor=row.actor, point=row.resetPosition;
+      if (fortressAllies.indexOf(actor)<0) throw Error('Cannot reset missing mixed NPC: '+row.kind);
+      var body={x:point.x,y:point.y,feetZ:point.feetZ,radius:6,height:70,
+        stepHeight:25,allowFall:false,trackFloor:true};
+      var support=spatialQuerySupport(body,point.x,point.y);
+      if (support.status!=='walk' || !Number.isFinite(support.feetZ) || Math.abs(support.feetZ-point.feetZ)>0.000001 || spatialBodyBlocked(body,point.x,point.y)) {
+        throw Error('Soldier reset placement is no longer supported and clear: '+row.kind);
+      }
+      if (job.measuring) {
+        row.fixtureResets++;
+        row.fixtureResetDistance+=Math.hypot(actor.x-point.x,actor.y-point.y);
+      }
+      actor.x=point.x; actor.y=point.y; actor.feetZ=point.feetZ; actor.supportId=support.supportId;
+      actor.vx=0; actor.vy=0;
+      // Fixture-only relocation preserves action cooldowns. Pending windups and
+      // remembered targets do not survive, and interpolation must not streak.
+      npcCancelAction(actor); npcForgetTarget(actor); actor.targetEnemy=null;
+      resetRenderInterpolation(actor);
+      // The relocation is not locomotion evidence. Only movement performed by
+      // the following real gameUpdate contributes to the measured distance.
+      row.previousX=actor.x; row.previousY=actor.y;
+    });
+  }
+  function sampleFriendlyActivity(job) {
+    job.friendlyActivity.forEach(function (row) {
+      var actor=row.actor, list=row.kind==='slime'?companions:fortressAllies;
+      if (list.indexOf(actor)<0 || (row.kind!=='slime' && actor.health<=0)) throw Error('Mixed NPC subject disappeared or died: '+row.kind);
+      if (!Number.isFinite(actor.x) || !Number.isFinite(actor.y) || !Number.isFinite(actor.feetZ)) throw Error('Invalid mixed NPC pose: '+row.kind);
+      if (!actor.npc || !Number.isFinite(actor.npc.commits)) throw Error('Mixed NPC never joined shared controller: '+row.kind);
+      var distance=Math.hypot(actor.x-row.previousX,actor.y-row.previousY);
+      if (job.measuring && distance>0.000001) { row.movementTicks++; row.distanceMoved+=distance; }
+      if (actor.npc.commits<row.previousCommits) throw Error('Mixed NPC action counter reset: '+row.kind);
+      if (job.measuring) row.attackCommits+=actor.npc.commits-row.previousCommits;
+      row.previousX=actor.x; row.previousY=actor.y; row.previousCommits=actor.npc.commits;
+    });
+  }
+  function prepareNavigation(job) {
+    prepareGameRun();
+    CAVE_TEST_MODE=false; ENDLESS_MODE=false; terrain='ground';
+    windowOriginX=windowOriginY=0; worldW=384; worldH=480; cell=12;
+    floorMesh=gridCave=meshCave=wallFaceBase=wallMaxTopZ=wallCapZ=null;
+    wallColorR=wallColorG=wallColorB=null;
+    ['walls','enemies','enemySpawners','projectiles','impacts','groundEffects','chainEffects','coneEffects','novaEffects',
+      'deathEffects','coinDrops','soulOrbs','arcaneTomes','statPickups','companions','fortressAllies','treasureChests',
+      'oreVeins','marketStalls','ambientParticles','shrines','floorScatter','wallDecorations','largeStructures',
+      'deepCaveRegions','deepCaveEntrances','ruins','platforms','borderVariations'].forEach(function (name) { window[name]=[]; });
+    shopMarker=shopNearby=nearestOpenChest=nearestShrine=nearestArenaAltar=arenaChallenge=goal=null;
+    goalSpawned=true; playerUnderground=false; equipment={}; health=HEALTH_MAX=100000;
+    pos.x=192; pos.y=270; pos.floorZ=60; vel.x=vel.y=0; jumpAirborne=false; jumpVelZ=0;
+    cam.x=pos.x; cam.y=pos.y; cam.z=pos.floorZ; cam.ang=0; cam.pitch=0;
+    MODE3D=job.view==='3d'; CAM_FOLLOW=true; overviewActive=false; NOCLIP=false; gameOverState=false;
+    hasBaseline=true; calibrating=false; CONTROL_MODE=MODE_STICK_AIM; gpLast.valid=false; gpLast.x=gpLast.y=0;
+    DEBUG_PERF=DEBUG_PERF_HUD=DEBUG_CAVE=DEBUG_SKELETON=false;
+    dayTime=.5; daySpeed=0; updateDayNight(0); viewDist=settings.viewDist;
+    job.navigationActivity=[]; job.friendlyActivity=[];
+    for (var i=0;i<20;i++) {
+      var cx=60+(i%4)*84,cy=60+Math.floor(i/4)*84;
+      var barrier={x:cx,y:cy-12,w:12,h:36}; walls.push(barrier);
+      var left={x:cx-24,y:cy,feetZ:0},right={x:cx+36,y:cy,feetZ:0};
+      var initial=i%2?right:left,other=i%2?left:right;
+      var type=enemyTypes.normal;
+      var actor={x:initial.x,y:initial.y,z:0,feetZ:0,bodyHeight:70,enemyType:type,
+        health:100000,maxHealth:100000,speed:130,chaseRange:0,vx:0,vy:0,
+        attackState:'idle',attackStateUntil:0,patrolWaypoints:[initial,other],patrolIdx:1,facing:0,
+        npcTraits:{pursue:false,melee:false,remember:false,patrol:true,navigation:true}};
+      enemies.push(actor); npcEnsure(actor,'enemy');
+      job.navigationActivity.push({actor:actor,wall:barrier,radius:8*type.size*.6,
+        priorX:actor.x,priorY:actor.y,priorPath:null,movementTicks:0,distanceMoved:0,crossings:0,completedRoutes:0});
+    }
+    buildGrid(); wallHeights.fill(1);
+    exploredCells=new Uint8Array(gridW*gridH); minimapDirty=true; buildPointLights();
+    // Setup proves each proposed direct leg hits its authored wall and both
+    // endpoints fit. The expected bypass is geometric, not the planner output.
+    job.navigationActivity.forEach(function (row) {
+      var actor=row.actor,target=actor.patrolWaypoints[1];
+      var body=spatialActorBody(actor,row.radius);
+      if (spatialBodyBlocked(body,actor.x,actor.y) || spatialBodyBlocked(body,target.x,target.y))
+        throw Error('Authored navigator endpoint is blocked.');
+      var direct=spatialMoveBody(body,target.x-actor.x,target.y-actor.y);
+      if (!(direct.hitX || direct.hitY) || Math.abs(body.x-target.x)<.00001)
+        throw Error('Authored direct leg does not cross a real blocking wall.');
+      var bypassY=row.wall.y-row.radius-6;
+      var probe=spatialActorBody(actor,row.radius);
+      [[actor.x,bypassY],[target.x,bypassY],[target.x,target.y]].forEach(function (point) {
+        var result=spatialMoveBody(probe,point[0]-probe.x,point[1]-probe.y);
+        if (result.hitX || result.hitY || result.status!=='walk' || Math.hypot(probe.x-point[0],probe.y-point[1])>.00001)
+          throw Error('Authored positive-control bypass is not traversable.');
+      });
+    });
+    job.subjects=enemies.slice(); job.spawnPositions=[];
+    running=true; gameSessionStarted=true;
+    job.mesh=floorMesh; job.worldSeed=WORLD_SEED; job.loopGeneration=_loopGen;
+    job.playerAnchor={x:pos.x,y:pos.y,floorZ:pos.floorZ};
+    job.initialWorld={fixtureVersion:5,workload:'authored-navigation',worldWidth:worldW,worldHeight:worldH,cellSize:cell,
+      player:{x:pos.x,y:pos.y,feetZ:0},enemyCount:20,stations:{columns:4,rows:5,spacing:84,wallWidth:12,wallLength:36,wallHeight:240},
+      actor:{profile:'enemy',archetype:'normal',speed:130,patrolSpeedScale:.38,bodyHeight:70,radius:job.navigationActivity[0].radius},
+      controls:'Production patrol/navigation, collision, separation and rendering; pursuit/melee/remember traits disabled. No teleports or missiles.',
+      goalPolicy:'Each actor repeatedly alternates two opposing supported waypoints. Initial sides alternate by station.',
+      navigationBudget:{maxEdgesPerTick:NPC_NAV_MAX_EDGES_PER_TICK,maxNodes:NPC_NAV_MAX_NODES,maxJobs:NPC_NAV_MAX_JOBS},
+      stationsGeometry:job.navigationActivity.map(function (row) { return {wall:row.wall,waypoints:row.actor.patrolWaypoints}; })};
+    npcCounters(); navigationCounters();
+    physicsProfileEnabled=job.stageProfiling; physicsStageSamples={};
+    installCounters(job); resetRenderInterpolation(); renderFrame();
+    assertNoRuntimeErrors(job,'Authored fixture preflight render'); canvas.scrollIntoView({block:'center',inline:'nearest'});
+  }
+  function sampleNavigationActivity(job,edgesBefore) {
+    var edges=npcNavigationStats.edges-edgesBefore;
+    if (!Number.isFinite(edges) || edges<0 || edges>NPC_NAV_MAX_EDGES_PER_TICK)
+      throw Error('Navigation exceeded its global per-tick edge budget or reset counters.');
+    if (job.measuring) {
+      job.navigationTickSamples++; job.navigationMaxEdges=Math.max(job.navigationMaxEdges,edges);
+    }
+    if (!job.navigationWorkload) return;
+    job.navigationActivity.forEach(function (row,index) {
+      var actor=row.actor;
+      if (enemies.indexOf(actor)<0 || !(actor.health>0)) throw Error('Authored navigator disappeared: '+index);
+      var body=spatialActorBody(actor,row.radius);
+      if (spatialBodyBlocked(body,actor.x,actor.y)) {
+        if (job.measuring) job.navigationOverlapTicks++;
+        throw Error('Authored navigator overlaps a wall: '+index);
+      }
+      var dx=actor.x-row.priorX,dy=actor.y-row.priorY,distance=Math.hypot(dx,dy);
+      var plane=row.wall.x+row.wall.w*.5;
+      if (dx && ((row.priorX<plane && actor.x>=plane) || (row.priorX>plane && actor.x<=plane))) {
+        var crossingY=row.priorY+dy*(plane-row.priorX)/dx;
+        if (crossingY>row.wall.y-row.radius+.00001 && crossingY<row.wall.y+row.wall.h+row.radius-.00001)
+          throw Error('Authored navigator crossed through the blocked wall interval: '+index);
+        if (job.measuring) row.crossings++;
+      }
+      var nav=actor.npc.navigation,path=nav && nav.path;
+      if (job.measuring && path && path!==row.priorPath) row.completedRoutes++;
+      if (job.measuring && distance>.000001) { row.movementTicks++; row.distanceMoved+=distance; }
+      row.priorX=actor.x; row.priorY=actor.y; row.priorPath=path;
+    });
+  }
+  function prepare(job) {
+    // This is a dedicated benchmark page. Invalidate pending production loops;
+    // never start a second RAF loop alongside the benchmark's own scheduler.
+    running=false; _loopGen++; clearGameplayInput();
+    renderInterpolationEnabled=job.interpolation;
+    if (typeof cancelPendingMissileCasts==='function') cancelPendingMissileCasts(false);
+    Math.random=randomSource(seed);
+    if (job.navigationWorkload) { prepareNavigation(job); return; }
+    window._caveTestSeedOverride=seed;
+    window._caveTestKindOverride='descending';
+    Object.keys(caveTestFlags).forEach(function (key) { caveTestFlags[key]=false; });
+    caveTestFlags.caveEnemies=true; caveTestFlags.caveChests=true;
+    CAVE_TEST_MODE=true; ENDLESS_MODE=true; gameOverState=false;
+    menuOpen=false; settingsOpen=false; inventoryOpen=false; shopOpen=false; forgeOpen=false;
+    resetEndlessMode();
+    var net=endlessCaveNetworks['0,0'];
+    if (!net || !net.chambers.length) throw Error('Fixture setup: seeded cave has no chamber.');
+    var chamber=net.chambers.slice().sort(function (a,b) { return b.radius-a.radius; })[0];
+    pos.x=chamber.cx-windowOriginX; pos.y=chamber.cy-windowOriginY;
+    updateChunks();
+    // A chamber centre can sit almost on a chunk boundary. Choose the closest
+    // supported interior anchor within 36 units, not a convenient empty world.
+    // This bounded search is setup work, outside all warm-up/measured samples.
+    var anchor=null, chunkLeft=Math.floor(chamber.cx/CHUNK_SIZE)*CHUNK_SIZE;
+    var chunkTop=Math.floor(chamber.cy/CHUNK_SIZE)*CHUNK_SIZE;
+    for (var offsetY=-36;offsetY<=36;offsetY+=6) for (var offsetX=-36;offsetX<=36;offsetX+=6) {
+      var distanceSq=offsetX*offsetX+offsetY*offsetY;
+      if (distanceSq>36*36 || (anchor && distanceSq>=anchor.distanceSq)) continue;
+      var worldX=chamber.cx+offsetX, worldY=chamber.cy+offsetY;
+      var margin=Math.min(worldX-chunkLeft,chunkLeft+CHUNK_SIZE-worldX,
+        worldY-chunkTop,chunkTop+CHUNK_SIZE-worldY);
+      if (margin<30) continue;
+      var anchorX=worldX-windowOriginX, anchorY=worldY-windowOriginY;
+      var anchorFloor=spatialLowestFloorH(anchorX,anchorY);
+      if (!Number.isFinite(anchorFloor) || !getCaveSpaceAt(anchorX,anchorY,anchorFloor).underground) continue;
+      var anchorBody=spatialPlayerBody();
+      anchorBody.x=anchorX; anchorBody.y=anchorY; anchorBody.feetZ=anchorFloor*25; anchorBody.airborne=false;
+      if (spatialQuerySupport(anchorBody,anchorX,anchorY).status!=='walk' || spatialBodyBlocked(anchorBody,anchorX,anchorY)) continue;
+      anchor={x:anchorX,y:anchorY,floor:anchorFloor,offsetX:offsetX,offsetY:offsetY,chunkMargin:margin,distanceSq:distanceSq};
+    }
+    if (!anchor) throw Error('Fixture setup: no supported cave anchor within 36 units and at least 30 units inside its chunk.');
+    pos.x=anchor.x; pos.y=anchor.y;
+    var floor=anchor.floor;
+    pos.floorZ=meshHeightToPlayerZ(floor);
+    jumpAirborne=false; jumpVelZ=0; vel.x=0; vel.y=0;
+    var playerBody=spatialPlayerBody();
+    if (spatialBodyBlocked(playerBody,pos.x,pos.y)) throw Error('Fixture setup: player does not fit inside chamber.');
+    cam.x=pos.x; cam.y=pos.y; cam.z=pos.floorZ; cam.pitch=0; cam.ang=0;
+    MODE3D=job.view==='3d'; CAM_FOLLOW=true; overviewActive=false; NOCLIP=false;
+    hasBaseline=true; calibrating=false; CONTROL_MODE=MODE_STICK_AIM;
+    gpLast.valid=false; gpLast.x=0; gpLast.y=0;
+    DEBUG_PERF=false; DEBUG_PERF_HUD=false; DEBUG_CAVE=false; DEBUG_SKELETON=false;
+    dayTime=.5; daySpeed=0; updateDayNight(0);
+    var positions=[], kinds=['normal','fast','tank','wolf'];
+    for (var radius=30; radius<=150 && positions.length<20; radius+=12) {
+      for (var sector=0; sector<32 && positions.length<20; sector++) {
+        var angle=sector*Math.PI/16, x=pos.x+Math.cos(angle)*radius, y=pos.y+Math.sin(angle)*radius;
+        if (positions.some(function (p) { return Math.hypot(p.x-x,p.y-y)<18; })) continue;
+        var feet=spatialLowestFloorH(x,y)*25;
+        var body={x:x,y:y,feetZ:feet,radius:6.72,height:70,stepHeight:25,allowFall:false,trackFloor:true};
+        var support=spatialQuerySupport(body,x,y);
+        if (support.status!=='walk' || spatialBodyBlocked(body,x,y)) continue;
+        if (spatialRaycast({x:x,y:y,z:feet+35},{x:pos.x,y:pos.y,z:floor*25+35}).status!=='clear') continue;
+        positions.push({x:x,y:y,z:support.feetZ});
+      }
+    }
+    if (positions.length!==20) throw Error('Fixture setup: only '+positions.length+' of 20 supported, visible enemy locations exist.');
+    enemies=positions.map(function (point,index) {
+      var type=enemyTypes[kinds[index%kinds.length]];
+      return {x:point.x,y:point.y,z:point.z,feetZ:point.z,underground:true,enemyType:type,
+        health:type.health,maxHealth:type.health,speed:type.speed,chaseRange:type.chaseRange,
+        lastUpdate:0,damageFlash:0,damageFlashColor:'#ffffff',slowUntil:0,burnUntil:0,burnDmgLast:0,
+        iceHits:0,fireHits:0,lightningHits:0,vx:0,vy:0,aggroAt:0,attackState:'idle',attackStateUntil:0,
+        patrolWaypoints:[{x:point.x,y:point.y},{x:pos.x,y:pos.y}],patrolIdx:0,facing:0};
+    });
+    job.subjects=enemies.slice(); job.spawnPositions=positions;
+    fortressAllies=[]; companions=[]; projectiles=[];
+    shopMarker=null;
+    prepareFriendlyNPCs(job,positions,floor*25);
+    npcCounters();
+    running=true; gameSessionStarted=true;
+    job.mesh=floorMesh; job.worldSeed=WORLD_SEED; job.loopGeneration=_loopGen;
+    job.playerAnchor={x:pos.x,y:pos.y,floorZ:pos.floorZ};
+    job.initialWorld={fixtureVersion:5,workload:'generated-cave-combat',playerControl:'Supported position and zero velocity restored before each real simulation tick',
+      seed:WORLD_SEED,originX:windowOriginX,originY:windowOriginY,
+      player:{x:pos.x+windowOriginX,y:pos.y+windowOriginY,feetZ:floor*25},
+      anchorSelection:{chamberWorldX:chamber.cx,chamberWorldY:chamber.cy,
+        offsetX:anchor.offsetX,offsetY:anchor.offsetY,minimumChunkEdgeDistance:anchor.chunkMargin,
+        maximumSearchDistance:36,requiredChunkEdgeDistance:30},
+      chamberRadius:chamber.radius,gridWidth:gridW,gridHeight:gridH,walls:walls.length,
+      floorVertices:floorMesh.w*floorMesh.h,chests:treasureChests.length,decorations:wallDecorations.length,
+      enemyKinds:kinds,enemyCount:enemies.length,mixedNPCs:job.mixedNPCs,
+      companions:companions.length,fortressAllies:fortressAllies.length,
+      soldierMotionPolicy:{resetIntervalTicks:300,resetIntervalSimulatedMs:300*FIXED_DT_MS,
+        minimumInitialPlayerDistance:72,minimumInitialEnemyDistance:30,
+        description:'Soldiers return to verified initial supported positions every five simulated seconds; real follow/pursue motion resumes, cooldowns persist, teleport travel is excluded.'},
+      friendlyPlacements:job.friendlyActivity.map(function (row) { return {kind:row.kind,position:row.initialPosition}; }),
+      tower:{included:false,reason:'A market marker changes safe-zone AI; elevated tower firing needs a separate validated fixture.'}};
+    physicsProfileEnabled=job.stageProfiling; physicsStageSamples={};
+    installCounters(job);
+    renderFrame();
+    assertNoRuntimeErrors(job,'Fixture preflight render');
+    canvas.scrollIntoView({block:'center',inline:'nearest'});
+  }
+  function fixtureTick(job) {
+    // Only workload maintenance is synthetic. Motion, hits, knockback and
+    // rendering all flow through the normal systems after these inputs.
+    if (job.measuring) job.playerPinResetDistance+=Math.hypot(pos.x-job.playerAnchor.x,pos.y-job.playerAnchor.y);
+    pos.x=job.playerAnchor.x; pos.y=job.playerAnchor.y; pos.floorZ=job.playerAnchor.floorZ;
+    vel.x=0; vel.y=0; jumpAirborne=false; jumpVelZ=0;
+    health=100000;
+    job.subjects.forEach(function (enemy) { enemy.health=enemy.maxHealth; });
+    job.friendlyActivity.forEach(function (row) {
+      if (row.kind!=='slime') row.actor.health=row.actor.maxHealth;
+    });
+    resetFriendlyMotion(job);
+    cam.ang=(job.ticks/60)*.22; cam.pitch=0;
+    if (!job.navigationWorkload && job.ticks%6===0) {
+      for (var shot=-1;shot<=1;shot++) spawnProjectile(spells.missile.speed,PROJ_RADIUS,spells.missile,shot*.12);
+      if (job.measuring) job.shotsReleased+=3;
+    }
+    if (job.measuring) recordWorkload(job);
+    job.ticks++;
+  }
+  function finish(job,state,reason) {
+    if (active!==job) return;
+    active=null; cancelAnimationFrame(job.raf); clearTimeout(job.watchdog);
+    running=false; _loopGen++;
+    physicsProfileEnabled=job.originalProfileEnabled;
+    renderInterpolationEnabled=job.originalInterpolationEnabled;
+    Math.random=job.originalRandom;
+    if (job.originalMove) spatialMoveBody=job.originalMove;
+    if (job.originalProjectile) projectileFirstHit=job.originalProjectile;
+    var elapsed=job.measurementStart===null?0:performance.now()-job.measurementStart;
+    var renderErrors=errorDelta(job.errorBaseline);
+    var npcWork=null, npcProblem=null, navigationWork=null;
+    try { npcWork=npcCounterDelta(job.npcBaseline); navigationWork=navigationCounterDelta(job.navigationBaseline); }
+    catch (error) { state='invalid'; reason=String(error.message||error); }
+    if (state==='complete' && (job.errors.length || Object.keys(renderErrors).length)) {
+      state='invalid'; reason='Game or browser errors occurred; inspect errors.';
+    }
+    if (state==='complete' && (!job.workload.enemies || job.workload.enemies.min!==20 || !job.simulationTicks ||
+        (!job.navigationWorkload && (!job.shotsReleased || !job.workload.projectiles || job.workload.projectiles.max===0)))) {
+      state='invalid'; reason='Required active enemy/projectile workload was not maintained.';
+    }
+    if (state==='complete' && elapsed<measurementMs) { state='invalid'; reason='Measurement ended before 30 seconds.'; }
+    if (state==='complete') {
+      npcProblem=npcWorkloadProblem(job,npcWork);
+      if (npcProblem) { state='invalid'; reason=npcProblem; }
+    }
+    if (state==='complete') {
+      var navigationProblem=navigationWorkloadProblem(job,navigationWork);
+      if (navigationProblem) { state='invalid'; reason=navigationProblem; }
+    }
+    var stages=job.stageProfiling?physicsProfileReport():null;
+    if (state==='complete' && job.stageProfiling) {
+      var requiredStages=job.navigationWorkload?['npcPerception','npcDecision','npcLocomotion','npcNavigation']:npcStageNames;
+      for (var si=0;si<requiredStages.length;si++) {
+        if (!stages[requiredStages[si]] || !stages[requiredStages[si]].samples) {
+          state='invalid'; reason='Missing measured NPC stage: '+requiredStages[si]; break;
+        }
+      }
+    }
+    var workload={};
+    Object.keys(job.workload).forEach(function (name) {
+      var row=job.workload[name]; workload[name]={min:row.min,max:row.max,mean:row.total/row.samples,samples:row.samples};
+    });
+    var report={status:state,reason:reason||null,fixtureVersion:5,workloadName:job.navigationWorkload?'authored-navigation':'generated-cave-combat',view:job.view,seed:seed,
+      timing:{setupMs:job.setupMs,warmupActualMs:job.warmupActualMs,requestedMeasurementMs:measurementMs,
+        measurementElapsedMs:elapsed,rafIntervals:summary(job.frameIntervals),callbackWorkMs:summary(job.frameWork),
+        gameUpdateMs:summary(job.updateTimes),canvasSubmissionMs:summary(job.renderTimes),
+        interpolationSnapshotMs:summary(job.snapshotTimes),interpolationAdapterMs:summary(job.adapterTimes),
+        fixtureMaintenanceMs:summary(job.fixtureTimes),rafIntervalsOver16_67Ms:job.frameIntervals.filter(function (v) { return v>1000/60+.5; }).length,
+        rafIntervalsOver33_33Ms:job.frameIntervals.filter(function (v) { return v>1000/30+.5; }).length,
+        simulationTicks:job.simulationTicks,simulatedMs:job.simulationTicks*FIXED_DT_MS,
+        discardedCatchupMs:job.discardedMs,maxStepsPerCallback:MAX_PHYSICS_STEPS},
+      coarseStageTimersEnabled:job.stageProfiling,physicsStages:stages,
+      npcWork:npcWork,mixedNPCWorkloadEnabled:job.mixedNPCs,
+      navigationWork:navigationWork,navigationBudget:{limitEdgesPerTick:NPC_NAV_MAX_EDGES_PER_TICK,
+        measuredMaxEdgesPerTick:job.navigationMaxEdges,measuredTickSamples:job.navigationTickSamples},
+      authoredNavigationWorkloadEnabled:job.navigationWorkload,navigationOverlapTicks:job.navigationOverlapTicks,
+      navigationActivity:job.navigationActivity.map(function (row,index) { return {subject:index,movementTicks:row.movementTicks,
+        distanceMoved:row.distanceMoved,detourCrossings:row.crossings,completedRoutes:row.completedRoutes}; }),
+      friendlyActivity:job.friendlyActivity.map(function (row) { return {kind:row.kind,movementTicks:row.movementTicks,
+        distanceMoved:row.distanceMoved,attackCommits:row.attackCommits,
+        fixtureResets:row.fixtureResets,fixtureResetDistance:row.fixtureResetDistance}; }),
+      renderInterpolationEnabled:job.interpolation,interpolationWork:interpolationCounterDelta(job.interpolationBaseline),
+      workload:workload,shotsReleased:job.shotsReleased,playerPinResetDistance:job.playerPinResetDistance,
+      detailedCountersEnabled:job.detailedCounters,queryWork:job.detailedCounters?job.work:null,
+      canvasStart:job.canvasStart,canvasEnd:canvasInfo(),visibilityEvents:job.visibility,
+      minimumCanvasVisibleFraction:job.minVisibleFraction,fixture:job.initialWorld,
+      errors:{browser:job.errors,renderStages:renderErrors},
+      environment:{userAgent:navigator.userAgent,hardwareConcurrency:navigator.hardwareConcurrency||null,
+        deviceMemoryGiB:navigator.deviceMemory||null,timeOrigin:performance.timeOrigin},
+      limitations:[job.navigationWorkload?'Twenty authored short-wall patrol stations maintain a route-only workload with no teleport resets or combat.':'Health refills and direct missile releases maintain a controlled combat workload.',
+        'Fixture v5 pins player position/feet/velocity before each real tick; player movement correctness and streaming are not measured.',
+        'Pinning and scripted camera heading precede capture; this moving-entity workload does not measure camera-translation smoothness.',
+        'Earlier fixture timings are not directly comparable with v5; compare this version with the same NPC workload and other options unchanged.',
+        'Authored navigation is a separate flat 20-station patrol workload, not the cave combat workload; it has no missiles, followers or combat commits.',
+        'Every authored navigator must physically cross its wall outside the blocked interval and have a measured completed route. It is never teleported; body-overlap checks invalidate the run.',
+        'Mixed NPC mode maintains one slime and two soldiers; soldiers receive large health pools/refills, but production invulnerability policy is unchanged.',
+        'Every 300 simulation ticks soldiers reset to verified supported outer-ring placements; fixture maintenance includes revalidation and reset, preserves cooldowns, and excludes teleport distance from locomotion evidence.',
+        'Each friendly must move and commit an attack during measurement; subject loss or a missing NPC work/stage category invalidates the run.',
+        'Tower is excluded to avoid changing enemy market-safe-zone rules; this benchmark makes no tower performance claim.',
+        'Gameplay clock advances only with fixed ticks; performance timing uses native performance.now.',
+        'Snapshot samples sum capture and finish for one tick; adapter samples subtract inner draw time from wrapper duration and include timer-call overhead.',
+        'Callback and Canvas submission timings do not measure GPU completion.',
+        'In cave combat mode production projectile console logging is enabled; its cost is included (up to 30 log calls per simulated second). Authored route mode releases no missiles.',
+        'Outer callback, update, render, fixture and interpolation timers remain active in the coarse-timers-off comparison.',
+        'Detailed query counters add optional instrumentation overhead; compare like-for-like.',
+        'NPC work counters and subject validity checks are always collected; detailed geometry counters are optional.',
+        'The selected steady scene is not streaming, every biome, dense doorway crowds, or calibrated minimum-device certification.']};
+    window.physicsBrowserProfileResult=report;
+    output.textContent=JSON.stringify(report,null,2);
+    status(state,(state==='complete'?'Complete':state==='cancelled'?'Cancelled':'Invalid run')+
+      ': '+(reason||'30-second results are below.'));
+    runButton.disabled=false; cancelButton.disabled=true; viewSelect.disabled=false; countersBox.disabled=false; stagesBox.disabled=false; interpolationBox.disabled=false; mixedNPCsBox.disabled=false; navigationBox.disabled=false;
+    output.scrollIntoView({block:'nearest'});
+  }
+  function frame(job,timestamp) {
+    if (active!==job) return;
+    try {
+      assertNoRuntimeErrors(job,'Before frame');
+      if (document.visibilityState!=='visible') throw Error('Tab became hidden; results are invalid.');
+      var info=canvasInfo(); job.minVisibleFraction=Math.min(job.minVisibleFraction,info.visibleFraction);
+      if (info.visibleFraction<=0) throw Error('Canvas is offscreen; results are invalid.');
+      if (job.canvasStart && (info.width!==job.canvasStart.width || info.height!==job.canvasStart.height)) throw Error('Canvas resolution changed during run.');
+      if (WORLD_SEED!==job.worldSeed || floorMesh!==job.mesh || _loopGen!==job.loopGeneration || MODE3D!==(job.view==='3d')) throw Error('World, view, or game loop changed during run.');
+      if (renderInterpolationEnabled!==job.interpolation) throw Error('Interpolation setting changed during run.');
+      if (overviewActive || menuOpen || settingsOpen || !running) throw Error('Game was paused during the benchmark.');
+      var now=performance.now();
+      if (job.warmupStart===null) { job.warmupStart=now; job.canvasStart=info; }
+      if (!job.measuring && now-job.warmupStart>=warmupMs) {
+        job.measuring=true; job.warmupActualMs=now-job.warmupStart; job.measurementStart=now;
+        physicsStageSamples={}; job.work=newCounters(); job.lastMeasuredRAF=null;
+        job.interpolationBaseline=interpolationCounters();
+        job.npcBaseline=npcCounters();
+        job.navigationBaseline=navigationCounters();
+        status('measuring','Measuring real gameplay and Canvas frames for 30 seconds…');
+      }
+      var collect=job.measuring, frameStart=performance.now();
+      if (collect && job.lastMeasuredRAF!==null) job.frameIntervals.push(timestamp-job.lastMeasuredRAF);
+      if (collect) job.lastMeasuredRAF=timestamp;
+      if (job.previousRAF!==null) job.accumulator+=Math.max(0,timestamp-job.previousRAF);
+      job.previousRAF=timestamp;
+      var steps=0;
+      while (job.accumulator+0.000001>=FIXED_DT_MS && steps<MAX_PHYSICS_STEPS) {
+        var fixtureStart=performance.now(); fixtureTick(job);
+        var fixtureTime=performance.now()-fixtureStart;
+        var snapshotStart=performance.now(); captureRenderInterpolation();
+        var snapshotTime=performance.now()-snapshotStart;
+        var edgesBefore=npcNavigationStats.edges;
+        var updateStart=performance.now(); advanceGameClock(FIXED_DT); gameUpdate(FIXED_DT);
+        if (collect) { job.updateTimes.push(performance.now()-updateStart); job.simulationTicks++; }
+        fixtureStart=performance.now(); sampleFriendlyActivity(job); sampleNavigationActivity(job,edgesBefore);
+        if (collect) job.fixtureTimes.push(fixtureTime+performance.now()-fixtureStart);
+        snapshotStart=performance.now(); finishRenderInterpolation();
+        if (collect) job.snapshotTimes.push(snapshotTime+performance.now()-snapshotStart);
+        job.accumulator=Math.max(0,job.accumulator-FIXED_DT_MS); steps++;
+      }
+      // Match the production loop's overload policy, but expose discarded time.
+      var droppedTicks=Math.floor((job.accumulator+0.000001)/FIXED_DT_MS);
+      if (droppedTicks>0) {
+        var droppedMs=droppedTicks*FIXED_DT_MS;
+        if (collect) job.discardedMs+=droppedMs;
+        job.accumulator=Math.max(0,job.accumulator-droppedMs);
+      }
+      _perfRingIdx=(_perfRingIdx+1)%PERF_HISTORY_LEN; _perfFrameTotals[_perfRingIdx]=0;
+      Object.keys(_perfStageHistory).forEach(function (key) { _perfStageHistory[key][_perfRingIdx]=0; });
+      var drawStart=performance.now();
+      renderInterpolatedFrame(job.accumulator/FIXED_DT_MS,job.drawMeasured);
+      var drawWithAdapterTime=performance.now()-drawStart;
+      if (collect) {
+        job.renderTimes.push(job.currentRenderTime);
+        job.adapterTimes.push(Math.max(0,drawWithAdapterTime-job.currentRenderTime));
+        job.frameWork.push(performance.now()-frameStart);
+      }
+      assertNoRuntimeErrors(job,'Runtime render');
+      var end=performance.now();
+      if (collect && end-job.measurementStart>=measurementMs) { finish(job,'complete'); return; }
+      if (end-job.lastStatus>1000) {
+        job.lastStatus=end;
+        var remain=collect?measurementMs-(end-job.measurementStart):warmupMs-(end-job.warmupStart);
+        status(collect?'measuring':'warming',(collect?'Measuring':'Warming up')+' · '+Math.max(0,Math.ceil(remain/1000))+' seconds left · keep canvas visible');
+      }
+      job.raf=requestAnimationFrame(function (ts) { frame(job,ts); });
+    } catch (error) { job.errors.push(String(error.message||error)); finish(job,'invalid',String(error.message||error)); }
+  }
+  runButton.addEventListener('click',function () {
+    if (active) return;
+    if (document.visibilityState!=='visible') { status('invalid','Cannot profile a hidden tab.'); return; }
+    var job={view:viewSelect.value,detailedCounters:countersBox.checked,stageProfiling:stagesBox.checked,interpolation:interpolationBox.checked,
+      navigationWorkload:navigationBox.checked,mixedNPCs:mixedNPCsBox.checked&&!navigationBox.checked,originalRandom:Math.random,
+      originalProfileEnabled:physicsProfileEnabled,errorBaseline:errorCounts(),errors:[],visibility:[],
+      originalInterpolationEnabled:renderInterpolationEnabled,interpolationBaseline:null,
+      npcBaseline:null,friendlyActivity:[],navigationBaseline:null,navigationActivity:[],navigationMaxEdges:0,navigationTickSamples:0,navigationOverlapTicks:0,
+      ticks:0,simulationTicks:0,shotsReleased:0,playerPinResetDistance:0,workload:{},work:newCounters(),frameIntervals:[],frameWork:[],
+      updateTimes:[],renderTimes:[],fixtureTimes:[],snapshotTimes:[],adapterTimes:[],currentRenderTime:0,accumulator:0,discardedMs:0,previousRAF:null,
+      lastMeasuredRAF:null,warmupStart:null,measurementStart:null,warmupActualMs:0,setupMs:0,
+      minVisibleFraction:1,measuring:false,lastStatus:0,raf:0,watchdog:0};
+    // Reuse the callback: per-frame adapter measurement creates no closures.
+    job.drawMeasured=function () {
+      var start=performance.now(); renderFrame(); job.currentRenderTime=performance.now()-start;
+    };
+    active=job; output.textContent=''; window.physicsBrowserProfileResult=null;
+    runButton.disabled=true; cancelButton.disabled=false; viewSelect.disabled=true; countersBox.disabled=true; stagesBox.disabled=true; interpolationBox.disabled=true; mixedNPCsBox.disabled=true; navigationBox.disabled=true;
+    status('preparing',job.navigationWorkload?'Building the authored navigation fixture (outside measured samples)…':'Generating the seeded fixture (outside measured samples)…');
+    var start=performance.now();
+    try {
+      prepare(job); job.setupMs=performance.now()-start;
+      job.visibility.push({phase:'start',state:document.visibilityState,elapsedMs:0});
+      job.watchdog=setTimeout(function () { finish(job,'invalid','RAF did not complete within the 60-second real-time watchdog.'); },60000);
+      job.raf=requestAnimationFrame(function (ts) { frame(job,ts); });
+    } catch (error) { job.setupMs=performance.now()-start; job.errors.push(String(error.message||error)); finish(job,'invalid',String(error.message||error)); }
+  });
+  cancelButton.addEventListener('click',function () { if (active) finish(active,'cancelled','Cancelled by user.'); });
+  document.addEventListener('visibilitychange',function () {
+    if (!active) return;
+    active.visibility.push({phase:active.measuring?'measurement':'warmup',state:document.visibilityState,
+      elapsedMs:active.measurementStart===null?0:performance.now()-active.measurementStart});
+    if (document.visibilityState!=='visible') finish(active,'invalid','Tab visibility changed to '+document.visibilityState+'.');
+  });
+  window.addEventListener('error',function (event) { if (active) active.errors.push(String(event.message||'Browser error')); });
+  window.addEventListener('unhandledrejection',function (event) {
+    if (active) active.errors.push(String(event.reason&&event.reason.message||event.reason||'Unhandled rejection'));
+  });
+}());
+</script>

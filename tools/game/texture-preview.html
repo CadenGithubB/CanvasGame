@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HardwareOne · Material study</title>
+<style>
+:root{color-scheme:dark;--paper:#111719;--panel:#192124;--line:#354246;--ink:#e6e5dc;--muted:#a5b3b4;--accent:#e3ba79}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 system-ui,sans-serif}
+main{max-width:1280px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;gap:24px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:18px}
+.eyebrow{font:11px ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}h1{font-size:30px;font-weight:550;letter-spacing:-.035em;margin:5px 0}p{margin:6px 0;color:var(--muted)}.badge{border:1px solid var(--line);border-radius:24px;padding:6px 12px;color:var(--muted);white-space:nowrap}
+.toolbar{display:flex;gap:14px;flex-wrap:wrap;align-items:end;padding:18px 0}label{display:inline-flex;flex-direction:column;gap:4px;color:var(--muted);font-size:12px}.check{flex-direction:row;align-items:center;padding-bottom:8px}select,button{font:inherit;background:#233034;color:var(--ink);border:1px solid #45565a;border-radius:5px;padding:8px 10px}button{cursor:pointer}button:hover{border-color:var(--accent)}button:disabled{opacity:.45;cursor:default}button.primary{color:#15191a;background:var(--accent);border-color:var(--accent)}input[type=range]{width:150px;accent-color:var(--accent)}input[type=checkbox]{accent-color:var(--accent)}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0a1012}figcaption{display:flex;justify-content:space-between;padding:10px 13px;color:var(--muted);font-size:12px}figcaption strong{font-weight:550;color:var(--ink)}.views canvas{display:block;width:100%;height:auto;image-rendering:pixelated;aspect-ratio:3/2}.metrics{font:11px/1.5 ui-monospace,monospace;padding:9px 12px;min-height:49px;border-top:1px solid var(--line);color:var(--muted)}
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:24px;padding-top:20px}.swatches{display:flex;gap:12px;margin-top:10px}.swatch canvas{width:68px;height:68px;border:1px solid var(--line);border-radius:3px;image-rendering:pixelated}.swatch span{display:block;font-size:11px;color:var(--muted);margin-top:3px}h2{font-size:15px;font-weight:550;margin:0 0 8px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.note{font-size:12px;max-width:620px}.status{color:var(--accent);min-height:24px}pre{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1012;border:1px solid var(--line);padding:16px;border-radius:6px;max-height:400px;overflow:auto}details{margin-top:20px;color:var(--muted);font-size:12px}summary{cursor:pointer;color:var(--ink)}kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);padding:1px 4px;border-radius:3px}
+@media(max-width:760px){main{padding:16px}.views,.bottom{grid-template-columns:1fr}header{align-items:start}.badge{display:none}h1{font-size:26px}}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">HardwareOne / render experiments / 01</div><h1>Material study</h1><p>The same geometry. The same camera. A different surface.</p></div><span class="badge">Developer scene · no game changes</span></header>
+<div class="toolbar" id="controls">
+<label>Viewpoint<select id="view"><option value="overview">Room overview</option><option value="chest">Chest close-up</option><option value="floor">Grazing floor</option><option value="near">Near-plane crossing</option><option value="wall">Wall & occlusion</option></select></label>
+<label>Tile resolution<select id="tile"><option value="64">64 × 64</option><option value="128" selected>128 × 128</option></select></label>
+<label>Surface<select id="surface"><option value="materials">Wood / stone / iron</option><option value="checker">Diagnostic checker</option></select></label>
+<label>Filtering<select id="filter"><option value="smooth">Smooth</option><option value="crisp">Crisp pixels</option></select></label>
+<label class="check"><input type="checkbox" id="stability" checked>Anti-shimmer</label>
+<label class="check"><input type="checkbox" id="planar">Directional long lines · experimental</label>
+<label>Chest size<select id="size"><option value="0.65">Small</option><option value="1" selected>Standard</option><option value="1.4">Large</option></select></label>
+<label>Orbit<input id="orbit" type="range" min="-150" max="150" value="0" aria-label="Camera orbit"></label>
+<label>Approach<input id="approach" type="range" min="-65" max="65" value="0" aria-label="Camera approach"></label>
+<label class="check"><input type="checkbox" id="lid">Open lid</label><label class="check"><input type="checkbox" id="occluder">Foreground pillar</label>
+<button id="motion" type="button">Start camera sweep</button><button id="reset" type="button">Reset view</button>
+</div>
+<div class="views">
+<figure><figcaption><strong>01 / Flat materials</strong><span>Control</span></figcaption><canvas id="flat" width="360" height="240" aria-label="Flat-color material scene"></canvas><div class="metrics" id="flat-stats"></div></figure>
+<figure><figcaption><strong>02 / Textured materials</strong><span>Canvas 2D · bounded mapping</span></figcaption><canvas id="textured" width="360" height="240" aria-label="Textured material scene"></canvas><div class="metrics" id="texture-stats"></div></figure>
+</div>
+<div class="bottom"><section><h2>Small tiles, shared across every face</h2><p class="note">Original procedural bitmap samples, prepared once. Broad grain and mortar are intentional: detail has to survive the game's small rendering resolution. These are engineering samples, not final art.</p><div class="swatches" id="swatches"></div><p class="note" id="memory"></p></section>
+<section><h2>Test the motion, then measure the cost</h2><p class="note">Use the sliders or camera sweep. Grain should stay attached to each surface and the opening lid. Large chests repeat the grain at the same physical size. Anti-shimmer filters distant detail; Crisp pixels still controls close-up magnification. Turn Anti-shimmer off to compare the old sampling.</p><div class="actions"><button class="primary" id="profile">Run paired benchmark</button><button id="verify">Verify pixels & occlusion</button><button id="temporal">Test texture shimmer</button><button id="cancel" disabled>Cancel</button></div><p class="status" id="status" role="status">Ready. Your live game is untouched.</p><p class="note">Shimmer test: fixed translation and zoom replays at 64/128px with crisp/smooth sampling. Always tests anti-shimmer plus a deliberately unfiltered negative control, independent of preview settings. Uses separate native canvases. Benchmark timing is Canvas submission, not GPU completion or whole-game FPS.</p></section></div>
+<details><summary>What this pilot proves — and what it does not</summary><p>Uses the actual game's camera helper, near-plane convention and opaque pixel-depth code. Scene geometry is an authored chest-shaped proxy and a room corner, not the production chest renderer or the future object system. Face lighting and distance fog are fixed study settings, not the complete game light pipeline. No physics, AI, saves, device APIs or gameplay randomness run here.</p><p>Opaque tiles only. Screen-clipped adaptive triangles approximate perspective with a 0.65-pixel target, maximum 256 triangles per face and 2,048 per view. Budget-limited faces are counted; exhausted faces retain their solid fallback. The error target is not guaranteed when the cap is reached. Texture triangles overlap inside an exact opaque depth mask. Anti-shimmer uses precomputed mip levels and at most two cached pattern fills per triangle. It can soften grazing surfaces; it does not solve every perspective or subdivision artifact.</p><p>Benchmark locks the controls and uses the selected tile size, filtering, anti-shimmer, surface, chest size, lid and pillar settings; it always replays the room camera. Each run has 30 warm-up frames and 180 measured frames. Results include per-stage percentiles, actual pattern fills, submitted work, cadence and 60/120 Hz submission-budget exceedances. Keep the page visible; hidden-page runs abort. Browser backing stores and pattern caches are not included in the stated raw texture byte count. This is not a low-end-device certification.</p></details>
+<pre id="report" aria-label="Texture experiment report">Choose a viewpoint to inspect the surfaces, or run a check.</pre>
+</main>
+<script>
+// Standalone developer harness. Material and temporal-test code stays outside
+// the shipping manifest; production camera and depth sources import verbatim.
+var canvas, ctx, cam={x:0,y:0,z:60,ang:0,pitch:0,fov:Math.PI/2.5}, projScale=240;
+/* @PRODUCTION_CAMERA@ */
+/* @PRODUCTION_DEPTH@ */
+/* @TEXTURE_MAPPING@ */
+/* @TEXTURE_TEMPORAL@ */
+(function () {
+  'use strict';
+  var byId=function (id) { return document.getElementById(id); };
+  var flat=byId('flat'), textured=byId('textured'), catalog, scene=[], moving=false, running=false, cancelled=false;
+  var sweep=0, lastTime=0, frameRequest=0, revision=3, sceneCap=2048;
+  var presets={overview:{angle:.65,distance:190,height:76,pitch:.17},chest:{angle:.5,distance:104,height:53,pitch:.12},
+    floor:{angle:.28,distance:140,height:9,pitch:-.06},near:{angle:0,distance:20,height:25,pitch:0},wall:{angle:-.45,distance:155,height:66,pitch:.10}};
+  function report(value) { byId('report').textContent=JSON.stringify(value,null,2); }
+  function status(value) { byId('status').textContent=value; }
+  function v(x,y,z,u,vv) { return {x:x,y:y,z:z,u:u,v:vv}; }
+  function face(vertices, material, light) { scene.push({vertices:vertices,material:material,light:light}); }
+  function box(x,y,z,sx,sy,sz,material,transform,openTop) {
+    var p=[[x,y,z],[x+sx,y,z],[x+sx,y+sy,z],[x,y+sy,z],[x,y,z+sz],[x+sx,y,z+sz],[x+sx,y+sy,z+sz],[x,y+sy,z+sz]];
+    [[0,3,7,4,sy,sz,.79],[1,5,6,2,sz,sy,.58],[0,4,5,1,sz,sx,.62],[3,2,6,7,sx,sz,.92],[4,7,6,5,sy,sx,1]].forEach(function (a) {
+      if (openTop && a[0]===4) return;
+      var uv=[[0,a[5]/24],[a[4]/24,a[5]/24],[a[4]/24,0],[0,0]];
+      face(a.slice(0,4).map(function (index,i) { var q=p[index]; var w=transform ? transform(q) : q; return v(w[0],w[1],w[2],uv[i][0],uv[i][1]); }),material,a[6]);
+    });
+  }
+  function makeScene() {
+    scene=[];
+    // UVs derive from authored world distances, independent of camera/rebase.
+    face([v(-140,-120,0,-140/32,-120/32),v(150,-120,0,150/32,-120/32),v(150,150,0,150/32,150/32),v(-140,150,0,-140/32,150/32)],'stone',.76);
+    face([v(118,-120,0,-120/32,3),v(118,150,0,150/32,3),v(118,150,96,150/32,0),v(118,-120,96,-120/32,0)],'stone',.59);
+    face([v(-140,-120,0,-140/32,3),v(118,-120,0,118/32,3),v(118,-120,96,118/32,0),v(-140,-120,96,-140/32,0)],'stone',.70);
+    // A short overhang also exercises a downward-facing textured surface.
+    face([v(80,-120,96,0,0),v(118,-120,96,38/32,0),v(118,150,96,38/32,270/32),v(80,150,96,0,270/32)],'wood',.43);
+    var s=+byId('size').value, z=4;
+    box(30-22*s,-30*s,0,44*s,60*s,4,'stone');
+    box(30-18*s,-26*s,z,36*s,52*s,24*s,'wood',null,true);
+    face([v(30-18*s,-26*s,z,0,0),v(30+18*s,-26*s,z,36*s/24,0),v(30+18*s,26*s,z,36*s/24,52*s/24),v(30-18*s,26*s,z,0,52*s/24)],'wood',.38);
+    // Raised rim and separate front/back straps leave a genuinely open cavity.
+    box(30-18*s,-26*s,z+23*s,36*s,2*s,s,'wood');
+    box(30-18*s,24*s,z+23*s,36*s,2*s,s,'wood');
+    box(30-18*s,-24*s,z+23*s,2*s,48*s,s,'wood');
+    box(30+16*s,-24*s,z+23*s,2*s,48*s,s,'wood');
+    // Narrow raised bands provide a separate iron material without coplanar faces.
+    [-18,15].forEach(function (yy) { box(30-18.3*s,yy*s,z,.6*s,3*s,24.2*s,'iron'); box(30+17.7*s,yy*s,z,.6*s,3*s,24.2*s,'iron'); });
+    var hingeX=30+18*s, hingeZ=z+24*s, angle=byId('lid').checked ? 1.05 : 0;
+    function hinge(p) { var dx=p[0]-hingeX,dz=p[2]-hingeZ; return [hingeX+dx*Math.cos(angle)+dz*Math.sin(angle),p[1],hingeZ-dx*Math.sin(angle)+dz*Math.cos(angle)]; }
+    box(30-18.5*s,-26.5*s,z+24.4*s,37*s,53*s,7*s,'wood',hinge);
+    [-18,15].forEach(function (yy) { box(30-18.8*s,yy*s,z+24.2*s,37.6*s,3*s,7.5*s,'iron',hinge); });
+    box(30-19*s,-3*s,z+18*s,1.5*s,6*s,11*s,'iron');
+    if (byId('occluder').checked) box(-12,14,0,10,11,82,'stone');
+  }
+  function prepareMaterials() {
+    catalog=TexturePilot.createCatalog(+byId('tile').value);
+    var swatches=byId('swatches'); swatches.replaceChildren();
+    Object.keys(catalog.materials).forEach(function (name) {
+      var item=document.createElement('div'), label=document.createElement('span'); item.className='swatch';
+      var copy=document.createElement('canvas'); copy.width=copy.height=catalog.materials[name].size;
+      copy.getContext('2d').drawImage(catalog.materials[name].source,0,0); label.textContent=name;
+      item.append(copy,label); swatches.append(item);
+    });
+    byId('memory').textContent=(catalog.baseBytes/1024)+' KiB base + '+(catalog.mipBytes/1024).toFixed(2)+' KiB mip pixels · '+catalog.buildMs.toFixed(2)+' ms one-time preparation · no per-frame tile generation';
+  }
+  function pose(sample, benchmark) {
+    var p=presets[benchmark ? 'overview' : byId('view').value];
+    var angle=p.angle+(benchmark ? Math.sin(sample*Math.PI*2)*.7 : (+byId('orbit').value*Math.PI/180+(moving ? Math.sin(sample)*.65 : 0)));
+    var distance=p.distance+(benchmark ? Math.sin(sample*Math.PI*4)*25 : +byId('approach').value);
+    distance=Math.max(3,distance);
+    return {x:30-Math.cos(angle)*distance,y:Math.sin(angle)*distance,z:60+(p.height-60)*40/25,ang:-angle,pitch:p.pitch,fov:Math.PI/2.5};
+  }
+  function newStats() { return {faces:0,visiblePixels:0,triangles:0,strips:0,planarFaces:0,planarAttempts:0,planarDeclines:{},textureDraws:0,patternFills:0,blendedTriangles:0,minifiedTriangles:0,blendedStrips:0,minifiedStrips:0,unpreparedMaterials:0,failedDraws:0,rejectedFaces:0,splits:0,cappedFaces:0,fallbackFaces:0,mappingMs:0,totalMs:0,depthAndOtherMs:0}; }
+  function paintProjected(points,material,textures,light,fog,stats) {
+    var visible=withSceneDepthClip(points,function () {
+      ctx.save();
+      try {
+        // Match opaque color and depth coverage exactly; no nested depth calls.
+        _traceSceneDepthPixelMask(_sceneDepthClipGeneration,_sceneDepthClipMinY,_sceneDepthClipMaxY);
+        ctx.clip(); ctx.fillStyle=material.color; ctx.fillRect(0,0,canvas.width,canvas.height);
+        if (textures) {
+          var remaining=sceneCap-stats.triangles-stats.strips, t=performance.now(), handled=false, failed=0;
+          var sampling={filter:byId('stability').checked ? 'stable' : 'legacy',stats:stats};
+          // Eligibility follows the plane, not a projected-size threshold that
+          // would switch mapping methods abruptly during camera movement.
+          if (byId('planar').checked && remaining>0) {
+            stats.planarAttempts++;
+            var planar=TexturePilot.drawPlanarFace(ctx,points,material,{width:canvas.width,height:canvas.height,maxStrips:Math.min(384,remaining),filter:sampling.filter,stats:stats,
+              visibleBounds:{minX:_sceneDepthClipMinX,maxX:_sceneDepthClipMaxX,minY:_sceneDepthClipMinY,maxY:_sceneDepthClipMaxY}});
+            if (planar.failed) stats.failedDraws++;
+            handled=planar.handled;
+            if (handled) {
+              stats.strips+=planar.strips;
+              if (planar.failed || !planar.strips) { failed++; if (!planar.failed) stats.failedDraws++; }
+              else stats.planarFaces++;
+            } else stats.planarDeclines[planar.reason]=(stats.planarDeclines[planar.reason]||0)+1;
+          }
+          if (!handled && remaining>=8) {
+            var drawn=0;
+            var work=TexturePilot.tessellate(points,{width:canvas.width,height:canvas.height,maxTriangles:Math.min(256,remaining),maxDepth:7,errorPixels:.65},function (a,b,c) {
+              if (TexturePilot.drawTriangle(ctx,a,b,c,material,sampling)) drawn++; else failed++;
+            });
+            stats.triangles+=work.triangles; stats.splits+=work.splits; if (work.capped) stats.cappedFaces++;
+            stats.failedDraws+=failed; if (work.rejected) stats.rejectedFaces++;
+            if (work.rejected || !drawn) failed++;
+            if (!failed) stats.textureDraws+=drawn;
+          } else if (!handled) failed++;
+          if (failed) {
+            // Partial work is not a textured success. Preserve the complete
+            // opaque face and report every solid fallback explicitly.
+            ctx.fillStyle=material.color; ctx.fillRect(0,0,canvas.width,canvas.height); stats.fallbackFaces++;
+          }
+          stats.mappingMs+=performance.now()-t;
+        }
+        if (light<1) { ctx.fillStyle='rgba(0,0,0,'+(1-light)+')'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+        if (fog>0) { ctx.fillStyle='rgba(39,49,54,'+fog+')'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+      } finally { ctx.restore(); }
+    },{writeDepth:true,depthBias:0,_paintsDepthPixels:true});
+    if (visible) { stats.faces++; stats.visiblePixels+=visible; }
+    return visible;
+  }
+  function render(target,textures,position,geometry) {
+    canvas=target; ctx=canvas.getContext('2d'); cam=position; projScale=canvas.width/(2*Math.tan(cam.fov/2));
+    var start=performance.now(), stats=newStats(), C=getCam3D();
+    ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1; ctx.imageSmoothingEnabled=byId('filter').value==='smooth'; ctx.imageSmoothingQuality='low';
+    ctx.fillStyle='#273136'; ctx.fillRect(0,0,canvas.width,canvas.height); beginSceneDepthFrame(canvas.width,canvas.height);
+    (geometry || scene).forEach(function (entry) {
+      var points=TexturePilot.clipNear(entry.vertices,cam,C,projScale); if (points.length<3) return;
+      var mat=catalog.materials[byId('surface').value==='checker' ? 'checker' : entry.material];
+      var depth=points.reduce(function (sum,p) { return sum+p.depth; },0)/points.length;
+      paintProjected(points,mat,textures,entry.light,Math.max(0,Math.min(.35,(depth-120)/650)),stats);
+    });
+    stats.totalMs=performance.now()-start; stats.depthAndOtherMs=Math.max(0,stats.totalMs-stats.mappingMs); return stats;
+  }
+  function describe(stats,textures) {
+    return stats.totalMs.toFixed(2)+' ms submission · '+stats.faces+' visible faces'+(textures ? '\n'+stats.triangles+' triangles + '+stats.strips+' strips · '+stats.patternFills+' fills · '+stats.cappedFaces+' capped faces · '+stats.fallbackFaces+' solid fallbacks' : '\n360 × 240 internal pixels · same geometry and depth mask');
+  }
+  function preview() {
+    var position=pose(sweep,false), a=render(flat,false,position), b=render(textured,true,position);
+    byId('flat-stats').textContent=describe(a,false); byId('texture-stats').textContent=describe(b,true);
+  }
+  function tick(time) {
+    frameRequest=0;
+    if (moving && !running) { sweep+=Math.min(.05,(time-lastTime)/1000)*.55; preview(); frameRequest=requestAnimationFrame(tick); }
+    lastTime=time;
+  }
+  function stopMotion() { moving=false; cancelAnimationFrame(frameRequest); frameRequest=0; byId('motion').textContent='Start camera sweep'; }
+  function changed(event) { stopMotion(); if (event && event.target.id==='tile') prepareMaterials(); makeScene(); preview(); }
+  byId('controls').addEventListener('input',function (event) { if (event.target.tagName!=='BUTTON') changed(event); });
+  byId('motion').addEventListener('click',function () { if (moving) stopMotion(); else { moving=true; lastTime=performance.now(); byId('motion').textContent='Pause camera sweep'; frameRequest=requestAnimationFrame(tick); } });
+  byId('reset').addEventListener('click',function () { byId('orbit').value=byId('approach').value=0; byId('view').value='overview'; changed(); });
+  function lock(value) { running=value; document.querySelectorAll('#controls input,#controls select,#controls button,#profile,#verify,#temporal,#compositing').forEach(function (node) { node.disabled=value; }); byId('cancel').disabled=!value; }
+  function nextFrame() { return new Promise(function (resolve) { requestAnimationFrame(resolve); }); }
+  function summary(values) {
+    var sorted=values.slice().sort(function (a,b) { return a-b; });
+    function percentile(p) { return sorted[Math.max(0,Math.ceil(p*sorted.length)-1)]; }
+    return {samples:sorted.length,p50Ms:percentile(.5),p95Ms:percentile(.95),p99Ms:percentile(.99),maxMs:sorted[sorted.length-1]};
+  }
+  async function profile() {
+    stopMotion(); lock(true); cancelled=false; var results=[], failed=null;
+    try {
+      for (var phase=0;phase<4;phase++) {
+        var enabled=phase===1 || phase===2, target=enabled ? textured : flat, totals=[],maps=[],other=[],cadence=[],triangles=[],strips=[],capped=0,fallbacks=0,pixels=0,draws=0,fills=0,blends=0,minified=0,planarFaces=0,planarAttempts=0,stripBlends=0,stripMinified=0,declines={},previous=0;
+        status('Benchmark '+(phase+1)+'/4 · '+(enabled ? 'textured' : 'flat')+' · keep this page visible');
+        for (var i=-30;i<180;i++) {
+          var stamp=await nextFrame(); if (cancelled) throw Error('Cancelled; incomplete measurements are not a result.');
+          if (document.hidden) throw Error('Page hidden; repeat with the test page visible.');
+          var bounds=target.getBoundingClientRect();
+          if (bounds.bottom<=0 || bounds.top>=innerHeight || bounds.right<=0 || bounds.left>=innerWidth) throw Error('Measured canvas is offscreen; scroll the scene into view and retry.');
+          var work=render(target,enabled,pose(Math.max(0,i)/180,true));
+          if (i>=0) {
+            totals.push(work.totalMs); maps.push(work.mappingMs); other.push(work.depthAndOtherMs); triangles.push(work.triangles); strips.push(work.strips);
+            if (i>0) cadence.push(stamp-previous); capped+=work.cappedFaces; fallbacks+=work.fallbackFaces; pixels+=work.visiblePixels; draws+=work.textureDraws;
+            fills+=work.patternFills; blends+=work.blendedTriangles; minified+=work.minifiedTriangles;
+            planarFaces+=work.planarFaces; planarAttempts+=work.planarAttempts; stripBlends+=work.blendedStrips; stripMinified+=work.minifiedStrips;
+            Object.keys(work.planarDeclines).forEach(function(reason){declines[reason]=(declines[reason]||0)+work.planarDeclines[reason];});
+            if (!work.faces || !work.visiblePixels || (enabled && !(work.textureDraws+work.strips))) throw Error('Measured scene has no rendered workload.');
+            if (work.failedDraws || work.rejectedFaces) throw Error('Texture mapping failed; this is not a valid textured benchmark.');
+            if (work.triangles+work.strips>sceneCap) throw Error('Combined mapping work exceeded the scene budget.');
+          }
+          previous=stamp;
+        }
+        results.push({mode:enabled ? 'textured' : 'flat',total:summary(totals),mapping:summary(maps),depthLightingAndOther:summary(other),rafInterval:summary(cadence),
+          submissionOver60Hz:totals.filter(function (t) { return t>1000/60; }).length,submissionOver120Hz:totals.filter(function (t) { return t>1000/120; }).length,
+          rafOver20ms:cadence.filter(function (t) { return t>20; }).length,triangles:{min:Math.min.apply(null,triangles),max:Math.max.apply(null,triangles)},strips:{min:Math.min.apply(null,strips),max:Math.max.apply(null,strips),total:strips.reduce(function(a,b){return a+b;},0)},
+          planarFaceFrames:planarFaces,planarAttemptFrames:planarAttempts,planarDeclines:declines,successfulTextureDraws:draws,patternFills:fills,blendedTriangles:blends,minifiedTriangles:minified,blendedStrips:stripBlends,minifiedStrips:stripMinified,cappedFaceFrames:capped,fallbackFaceFrames:fallbacks,visiblePixelSubmissions:pixels});
+      }
+    } catch (error) { failed=error.message; }
+    finally { lock(false); preview(); }
+    report({kind:'native-texture-pilot',fixtureVersion:revision,complete:!failed,error:failed,resolution:[360,240],tileSize:+byId('tile').value,filtering:byId('filter').value,surface:byId('surface').value,chestScale:+byId('size').value,lid:byId('lid').checked,occluder:byId('occluder').checked,
+      antiShimmer:byId('stability').checked,stableLongLines:byId('planar').checked,combinedPrimitiveBudget:sceneCap,sourcePixelBytes:catalog.baseBytes,mipPixelBytes:catalog.mipBytes,totalPreparedPixelBytes:catalog.bytes,tilePreparationMs:catalog.buildMs,devicePixelRatio:devicePixelRatio,browser:navigator.userAgent,warmupFrames:30,measuredFrames:180,order:'A/B/B/A',timer:'native performance.now; no pixel reads',results:results,
+      limitations:'Authored rendering workload, not game FPS. Mapping includes tessellation and Canvas calls; depth/lighting/other is whole submission minus mapping, not GPU work. Timers are included. Raw source bytes exclude browser copies and swatch canvases.'});
+    status(failed || 'Benchmark complete. Compare both repeats; results include any capped mapping.');
+  }
+  byId('profile').addEventListener('click',profile); byId('cancel').addEventListener('click',function () { cancelled=true; });
+  document.addEventListener('visibilitychange',function () { if (document.hidden) { stopMotion(); if (running) cancelled=true; } });
+  // Actual browser pixel tests use fresh canvases, never the benchmark canvases.
+  function verify() {
+    stopMotion(); var checks=[],savedCanvas=canvas,savedCtx=ctx,savedCam=cam,savedScale=projScale;
+    function check(name,pass,details) { checks.push({name:name,pass:!!pass,details:details}); }
+    function fresh(w,h) { var c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+    function quad(x0,y0,x1,y1,depth) { return [{x:x0,y:y0,depth:depth,u:0,v:0},{x:x1,y:y0,depth:depth,u:2,v:0},{x:x1,y:y1,depth:depth,u:2,v:2},{x:x0,y:y1,depth:depth,u:0,v:2}]; }
+    try {
+      canvas=fresh(96,96); ctx=canvas.getContext('2d',{willReadFrequently:true}); var material=catalog.materials.checker;
+      function testDraw(blocker,defect) {
+        ctx.clearRect(0,0,96,96); beginSceneDepthFrame(96,96);
+        if (blocker) writeSceneDepthPolygon(quad(0,48,96,96,5));
+        if (defect) _sceneDepthInv.fill(0); // local negative control: bypass depth.
+        var s=newStats(); paintProjected(quad(8,8,88,88,20),material,true,1,0,s);
+        var data=ctx.getImageData(0,0,96,96).data, upper=0,lower=0,holes=0,colors=new Set();
+        for (var y=8;y<88;y++) for (var x=8;x<88;x++) { var i=(y*96+x)*4; if (data[i+3]) { if (y<48) upper++; else lower++; colors.add(data[i]+','+data[i+1]+','+data[i+2]); } else if (!blocker) holes++; }
+        return {upper:upper,lower:lower,holes:holes,colors:colors.size,triangles:s.triangles};
+      }
+      var open=testDraw(false,false), blocked=testDraw(true,false), broken=testDraw(true,true);
+      check('Visible control contains actual texture, not a fallback',open.upper===3200 && open.lower===3200 && open.colors>=3 && open.triangles>0,open);
+      check('Foreground depth hides only the blocked half',blocked.upper===3200 && blocked.lower===0,blocked);
+      check('Removing depth testing is detected by the occlusion oracle',broken.lower>0,broken);
+      check('Opaque textured face has no alpha cracks',open.holes===0,{holes:open.holes});
+      ctx.clearRect(0,0,96,96); beginSceneDepthFrame(96,96);
+      var unavailable=Object.assign({},material,{size:0}), failedStats=newStats();
+      paintProjected(quad(8,8,88,88,20),unavailable,true,1,0,failedStats);
+      var fallbackPixel=ctx.getImageData(20,20,1,1).data;
+      check('Invalid texture drawing is counted and falls back to an opaque face',failedStats.triangles>0 && failedStats.failedDraws>0 && failedStats.textureDraws===0 && failedStats.fallbackFaces===1 && fallbackPixel[3]===255,failedStats);
+      // Receding face: no foreground blocker; check color coverage against the
+      // production pixel-center depth mask, rather than a Canvas path oracle.
+      ctx.clearRect(0,0,96,96); beginSceneDepthFrame(96,96);
+      var receding=[{x:4,y:8,depth:8,u:0,v:0},{x:92,y:35,depth:60,u:3,v:0},{x:83,y:78,depth:60,u:3,v:2},{x:8,y:91,depth:8,u:0,v:2}];
+      var stats=newStats(); paintProjected(receding,material,true,1,0,stats); var data=ctx.getImageData(0,0,96,96).data, covered=0,cracks=0,leaks=0;
+      for (var i=0;i<96*96;i++) { if (_sceneDepthInv[i]>0) { covered++; if (data[i*4+3]!==255) cracks++; } else if (data[i*4+3]) leaks++; }
+      check('Oblique subdivisions agree with opaque depth coverage',covered>2000 && cracks===0 && leaks===0 && stats.triangles>2,{covered:covered,cracks:cracks,leaks:leaks,triangles:stats.triangles});
+      // Exercise both strip orientations directly, regardless of the preview
+      // toggle. The production pixel-depth mask remains the coverage oracle.
+      var stripRows=[];
+      ['row','column'].forEach(function(axis){[false,true].forEach(function(blocker){
+        ctx.clearRect(0,0,96,96); beginSceneDepthFrame(96,96);
+        if(blocker) writeSceneDepthPolygon(quad(48,0,96,96,1));
+        var points=[[8,8],[88,8],[88,88],[8,88]].map(function(p){
+          var q=((axis==='row'?p[1]:p[0])+16)/512;
+          return {x:p[0],y:p[1],depth:1/q,u:(p[0]-8)/256/q,v:(p[1]-8)/256/q};
+        });
+        var planeWork=null,planeStats={};
+        withSceneDepthClip(points,function(){
+          ctx.save();
+          try {
+            _traceSceneDepthPixelMask(_sceneDepthClipGeneration,_sceneDepthClipMinY,_sceneDepthClipMaxY);
+            ctx.clip();ctx.fillStyle=material.color;ctx.fillRect(0,0,96,96);
+            planeWork=TexturePilot.drawPlanarFace(ctx,points,material,{width:96,height:96,maxStrips:96,stats:planeStats,
+              visibleBounds:{minX:_sceneDepthClipMinX,maxX:_sceneDepthClipMaxX,minY:_sceneDepthClipMinY,maxY:_sceneDepthClipMaxY}});
+          } finally {ctx.restore();}
+        },{writeDepth:true,depthBias:0,_paintsDepthPixels:true});
+        var image=ctx.getImageData(0,0,96,96).data,opaque=0,leaks=0,colors=new Set();
+        for(var y=0;y<96;y++)for(var x=0;x<96;x++){
+          var offset=(y*96+x)*4,inside=x>=8&&x<88&&y>=8&&y<88&&(!blocker||x<48);
+          if(inside&&image[offset+3]===255){opaque++;colors.add(image[offset]+','+image[offset+1]+','+image[offset+2]);}
+          if(!inside&&image[offset+3])leaks++;
+        }
+        stripRows.push({axis:axis,blocker:blocker,expectedOpaque:blocker?3200:6400,opaque:opaque,leaks:leaks,colors:colors.size,work:planeWork,fills:planeStats.patternFills||0});
+      });});
+      check('Planar rows and columns retain opaque texture and obey foreground depth',stripRows.every(function(row){return row.work&&row.work.handled&&!row.work.failed&&row.work.strips>0&&row.fills>0&&row.fills<=4*row.work.strips&&row.opaque===row.expectedOpaque&&row.leaks===0&&row.colors>=3;}),stripRows);
+      // Near-plane crossings must retain a real on-screen face at every step.
+      cam={x:0,y:0,z:60,ang:0,pitch:0,fov:Math.PI/2}; projScale=48;
+      var C={w:96,h:96,cosAng:1,sinAng:0,invTanHalf:1,horizonY:48,cameraZ:2}, nearRows=[];
+      [-.5,0,.5,1,1.5].forEach(function (offset) {
+        ctx.clearRect(0,0,96,96); beginSceneDepthFrame(96,96);
+        var vertices=[v(offset,-2,0,0,0),v(8,-2,0,2,0),v(8,2,0,2,2),v(offset,2,0,0,2)];
+        var projected=TexturePilot.clipNear(vertices,cam,C,projScale), s=newStats();
+        var visible=paintProjected(projected,material,true,1,0,s), image=ctx.getImageData(0,0,96,96).data, opaque=0;
+        for (var p=3;p<image.length;p+=4) if (image[p]===255) opaque++;
+        nearRows.push({offset:offset,vertices:projected.length,visible:visible,opaque:opaque,triangles:s.triangles,strips:s.strips});
+      });
+      check('Approaching the near plane never drops the clipped floor',nearRows.every(function (row) { return row.vertices>=3 && row.visible>100 && row.opaque===row.visible && row.triangles+row.strips>0; }),nearRows);
+      var a=TexturePilot.createCatalog(64), b=TexturePilot.createCatalog(64), identical=true, pixels=0;
+      Object.keys(a.materials).forEach(function (name) {
+        var x=a.materials[name].source.getContext('2d').getImageData(0,0,64,64).data, y=b.materials[name].source.getContext('2d').getImageData(0,0,64,64).data;
+        for (var i=0;i<x.length;i++) { pixels++; if (x[i]!==y[i]) identical=false; }
+      });
+      check('Regenerated samples are pixel-deterministic',identical && pixels===65536,{channelsCompared:pixels});
+    } catch (error) { check('Verification completed without an exception',false,error.message); }
+    finally { canvas=savedCanvas; ctx=savedCtx; cam=savedCam; projScale=savedScale; preview(); }
+    var passed=checks.length===9 && checks.every(function (row) { return row.pass; });
+    report({kind:'native-pixel-checks',fixtureVersion:revision,pass:passed,checks:checks,limitations:'These checks cover opaque coverage, occlusion, clipping and repeatability; mapping math and targeted mutants have a separate automated suite. Visual shimmer/art quality still need human review.'});
+    status(passed ? 'Pixel checks passed, including the broken-depth negative control.' : 'Pixel check failed — see the report.');
+  }
+  byId('verify').addEventListener('click',verify);
+  byId('temporal').addEventListener('click',async function () {
+    stopMotion(); lock(true); cancelled=false;
+    status('Running fixed texture-motion replay on isolated canvases…');
+    try {
+      var result=await TextureTemporal.run({cancelled:function () { return cancelled || document.hidden; },onProgress:status});
+      report(result);
+      if (!result.complete || result.setupFailures.length) status('Shimmer test incomplete or invalid — see setup failures. This is not a quality pass.');
+      else if (!result.pass) status('Texture shimmer detected — quality regression remains open. See measured failures.');
+      else status('Texture shimmer checks passed for the authored replay; see scope and controls.');
+    } catch (error) {
+      report({kind:'native-texture-temporal',complete:false,pass:false,status:'SETUP_FAILURE',setupFailures:[error.message]});
+      status('Shimmer test could not complete: '+error.message);
+    } finally { lock(false); preview(); }
+  });
+  // Native color-compositing diagnostic: fractional source-over can round
+  // differently from the exact weights verified by the recording test host.
+  var compositeButton=document.createElement('button');compositeButton.id='compositing';compositeButton.textContent='Test filter compatibility';byId('verify').parentNode.appendChild(compositeButton);
+  compositeButton.onclick=function(){stopMotion();
+    var planar=[];
+    for(var value of [48,128,208])for(var cpu of [false,true])for(var directional of [false,true]){
+      var source=document.createElement('canvas');source.width=source.height=128;var sc=source.getContext('2d');sc.fillStyle='rgb('+value+','+value+','+value+')';sc.fillRect(0,0,128,128);
+      var material={source:source,size:128,color:sc.fillStyle};TexturePilot.prepareMaterial(material);
+      var target=document.createElement('canvas');target.width=240;target.height=160;var tc=target.getContext('2d',{willReadFrequently:cpu});tc.fillStyle='#000000';tc.fillRect(0,0,240,160);
+      var points=[[-80,-200],[240,-200],[240,200],[-80,200]].map(function(p){return{x:p[0],y:p[1],z:0,u:p[0]/32,v:p[1]/32};});
+      var polygon=TexturePilot.clipNear(points,{x:-60,y:0},{w:240,h:160,cosAng:1,sinAng:0,invTanHalf:1,horizonY:36,cameraZ:18},120);
+      var result=TexturePilot.drawPlanarFace(tc,polygon,material,{width:240,height:160,maxStrips:256,directional:directional});
+      var data=tc.getImageData(56,64,96,32).data,min=255,max=0,holes=0;for(var i=0;i<data.length;i+=4){min=Math.min(min,data[i]);max=Math.max(max,data[i]);if(data[i+3]!==255)holes++;}
+      planar.push({value:value,willReadFrequently:cpu,directional:directional,min:min,max:max,holes:holes,result:result,pass:result.handled&&!result.failed&&result.strips>0&&holes===0&&Math.abs(min-value)<=1&&Math.abs(max-value)<=1});
+    }
+    report({kind:'native-filter-compositing',checks:planar,pass:planar.every(function(c){return c.pass;}),maximumByteError:1,limitations:'Native constant-color compatibility check on an authored visible floor. Context preferences can select different browser raster paths; no timing claim.'});status('Compatibility check complete; inspect constant-color drift by context preference.');
+  };
+  window.addEventListener('error',function (event) { status('Scene error: '+event.message); });
+  prepareMaterials(); makeScene(); preview();
+})();
+</script>
+</body></html>

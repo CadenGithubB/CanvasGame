@@ -1,0 +1,39 @@
+# Local runtimes, caches, and generated scratch outputs
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+venv/
+node_modules/
+.scratch/
+work/
+tmp/
+output/
+build/
+dist/
+coverage/
+.coverage
+.pytest_cache/
+.idea/
+.vscode/
+.codex/
+.claude/
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+
+# Raw captures are private; only reviewed, sanitized evidence belongs in docs.
+*.log
+*.jsonl
+*seriallog*
+*serial_log*
+*screenlog*
+*.hcidump
+*.btsnoop

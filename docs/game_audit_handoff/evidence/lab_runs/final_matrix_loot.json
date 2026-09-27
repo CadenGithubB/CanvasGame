@@ -1,0 +1,650 @@
+[
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#0",
+  "kind": "FIX",
+  "desc": "FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#1",
+  "kind": "FIX",
+  "desc": "N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, so the check detects the second cause on its own (compare the probe above)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#3",
+  "kind": "FIX",
+  "desc": "FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#4",
+  "kind": "FIX",
+  "desc": "FIX D22 where the player loots (the assembleWindow copy, L7040): an epic chest with no relic gets RELIC_KEYS[seed % n]. The epic check judges window copies, so it must PASS (review p9 showed the old chunk-data check stayed 0/51 under this fix).",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#5",
+  "kind": "FIX",
+  "desc": "FIX D22 inside collectChest only (a lazy relic roll the floating text never shows): epic chests now pay a relic, but the prompt still says '+N Gold', so the pay check -- which reads the drawn text -- must FAIL",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#6",
+  "kind": "FIX",
+  "desc": "FIX D22: cave chest gold applies the tier goldMult (L5971)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#7",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate: updateTreasureChests only opens chests within 3 h of the player's height (L19434)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#8",
+  "kind": "FIX",
+  "desc": "FIX no-Z-gate, independent of getFloorHeightAt (review p6): cave chests are tagged underground at generation, the tag survives assembleWindow, and a chest is in range only for a player on the same side of the roof (playerUnderground)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "browser",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "caves_geometry",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "caves_transition",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "enemies",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "perf",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "persistence",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "physics",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "render",
+  "flips": [],
+  "missing_expected": []
+ },
+ {
+  "probe": "loot#9",
+  "kind": "FIX",
+  "desc": "FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
+  "suite": "tools",
+  "flips": [],
+  "missing_expected": []
+ }
+]
