@@ -272,7 +272,7 @@ function buildPointLights() {
     // Glow and illumination originate at the visible flame, just OUTSIDE its
     // supporting face. The former half-cell offset pointed into solid rock.
     pointLights.push({x: attachment.x, y: attachment.y, z: attachment.flameZ,
-      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80});
+      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny});
   }
   // Warm amber glow at cave entrances — subtle light spilling from the archway
   // onto the approach. Offset slightly into the cave mouth so the opening reads
@@ -282,7 +282,7 @@ function buildPointLights() {
     var _ea = e.angle || 0;
     var _elx = e.x + Math.cos(_ea) * 10;
     var _ely = e.y + Math.sin(_ea) * 10;
-    pointLights.push({x: _elx, y: _ely, z: (e.floorH || 0) * 25 + 35, radius: 80, intensity: 0.45, r: 255, g: 200, b: 140});
+    pointLights.push({x: _elx, y: _ely, z: (e.floorH || 0) * 25 + 35, radius: 80, intensity: 0.45, r: 255, g: 200, b: 140, kind: 'entrance'});
   }
   // Allocate light grid if needed
   var gw = Math.ceil(worldW / _lightCellSize);

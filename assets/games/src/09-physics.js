@@ -406,11 +406,7 @@ function step(dt) {
       health = HEALTH_MAX;
       pushToast('Phoenix Feather revived you!', '#ff8844', 3000);
       // Burst of orange particles
-      for (var phi = 0; phi < 16; phi++) {
-        var pAng = (phi / 16) * Math.PI * 2;
-        impacts.push({x: pos.x, y: pos.y, z: 15, life: 0.8, maxLife: 0.8,
-          color: '#ff8020', size: 5, vx: Math.cos(pAng) * 60, vy: Math.sin(pAng) * 60, vz: 30 + Math.random() * 20});
-      }
+      if (typeof fxEvent === 'function') fxEvent('phoenix');
       console.log('[RELIC] Phoenix Feather triggered! Full HP restored.');
     } else {
       gameOverState = true;

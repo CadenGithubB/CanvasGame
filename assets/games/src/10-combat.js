@@ -601,6 +601,7 @@ function updateProjectiles(dt) {
     if (contact.status==='invalid' || contact.status==='unloaded') {expired++;continue;}
     if (contact.status==='blocked') {
       nx=contact.point.x;ny=contact.point.y;nz=contact.point.z;
+      if (typeof fxEvent === 'function') fxEvent('projectileContact', p, contact, nx, ny, nz);
       if (p.isLob) {
         var lobFloorZ=floorMesh ? sampleSpatialSupportZ(nx,ny,p.renderFloorZ,p.underground) : 0;
         if (Number.isFinite(lobFloorZ)) groundEffects.push({x:nx,y:ny,renderFloorZ:lobFloorZ,
@@ -628,12 +629,7 @@ function updateProjectiles(dt) {
           if (sp2.hp <= 0) {
             sp2.active = false;
             // Death burst
-            for (var sb = 0; sb < 5; sb++) {
-              var sba = Math.random() * Math.PI * 2, sbs = 40 + Math.random() * 80;
-              deathEffects.push({x:sp2.x, y:sp2.y, vx:Math.cos(sba)*sbs, vy:Math.sin(sba)*sbs,
-                rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*8,
-                len:8+Math.random()*10, spawnMs:now, lifeMs:600, color:'#3a1520'});
-            }
+            if (typeof fxEvent === 'function') fxEvent('spawnerDeath', sp2);
             // Drop gold
             for (var sd = 0; sd < 5; sd++) {
               var sda = Math.random() * Math.PI * 2;
@@ -773,6 +769,9 @@ function updateGroundEffects(dt) {
 function tickEffects(dt) {
   var now = gameTimeNow();
 
+  // Timed effect records (and legacy bone physics) prune in the effect
+  // registry; the else branch keeps partial test hosts on the old lists.
+  if (typeof effectRegistryPrune === 'function') effectRegistryPrune(now, dt); else {
   // Impacts — timer only
   if (impacts && impacts.length) {
     var ki = [];
@@ -799,6 +798,7 @@ function tickEffects(dt) {
       }
     }
     deathEffects = kd;
+  }
   }
 
   // Vacuum pull — boosted during dash (sweep effect)

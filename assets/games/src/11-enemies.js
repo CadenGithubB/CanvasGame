@@ -123,13 +123,7 @@ function updateEnemies(dt) {
     if (e.health <= 0) {
       console.log('[ENEMY] Enemy ' + i + ' defeated!');
       // Bone scatter — 7 tumbling segments fly outward
-      for (var b = 0; b < 7; b++) {
-        var bang = Math.random() * Math.PI * 2;
-        var bspd = 50 + Math.random() * 110;
-        deathEffects.push({x:e.x, y:e.y, vx:Math.cos(bang)*bspd, vy:Math.sin(bang)*bspd,
-          rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*10,
-          len:7+Math.random()*13, spawnMs:now, lifeMs:800, color:'#cfc8b8'});
-      }
+      if (typeof fxEvent === 'function') fxEvent('enemyDeath', e);
       // Soul orb — glowing mana pickup
       soulOrbs.push({x:e.x, y:e.y, renderFloorZ:getEntityRenderFloorZ(e), underground:!!e.underground,
         spawnMs:now, bob:Math.random()*Math.PI*2});

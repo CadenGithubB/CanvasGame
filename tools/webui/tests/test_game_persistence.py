@@ -157,10 +157,6 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "audit D19; fromSpawner (updateEnemySpawners 20275) is copied by neither saveEnemyStateToChunks (7369-7381) "
         "nor assembleWindow (7051-7063), so the spawner cap (20235-20241) stops counting it",
         r"fromSpawner=true before, fromSpawner=undefined after"),
-    STAT_PICKUPS: (
-        "audit D20; statPickups are built in the NEW origin's coordinates (7117-7119) and then shifted again with "
-        "everything else (7320-7322), so each shift misplaces them by exactly the shift",
-        r"off by \(-?(\d+)\.0,-?(\d+)\.0\) after shift \(-?\1,-?\2\)"),
     WINDOW_MATCHES_SETTINGS: (
         "audit D23; WINDOW_CHUNKS starts at GAME_CONFIG.world.windowChunks = 7 (293/965) while settings.chunkWindow "
         "and every quality preset below 'high' say 5 (1180-1186)",
@@ -253,10 +249,12 @@ PROBES = [
        "    if (deltas.explored) chunk.exploredCells = deltas.explored; if (deltas.enemies) chunk.enemies = deltas.enemies.slice();")],
      None,
      {KILLED_STAYS_DEAD: "PASS"}),
-    ("FIX [D20]: do not shift statPickups a second time",
-     "statPickups[sp].x -= shiftX; statPickups[sp].y -= shiftY;",
-     "/* statPickups are built in the new origin already */",
-     {STAT_PICKUPS: "PASS"}),
+    # D20's stat-pickup half was repaired by the effect registry (statPickups
+    # declare rebase:'rebuilt', so assembleWindow no longer shifts them again).
+    ("BREAK [D20]: the effect registry shifts the rebuilt statPickups a second time",
+     "statPickups:{storage:'array',prune:'owner',rebase:'rebuilt',",
+     "statPickups:{storage:'array',prune:'owner',rebase:'xy',",
+     {STAT_PICKUPS: "FAIL"}),
     ("BREAK [D20]: omit the repaired fortress ally rebase",
      "fortressAllies[ai4].x -= shiftX; fortressAllies[ai4].y -= shiftY;",
      "/* mutation: fortress allies remain in the previous window coordinates */",

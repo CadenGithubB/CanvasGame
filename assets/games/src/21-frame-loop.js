@@ -8,6 +8,7 @@ function renderFrame() {
   _pt('draw()', function(){ draw(); });
   if (MODE3D) {
     if (typeof beginSpellVisualFrame === 'function') beginSpellVisualFrame();
+    if (typeof beginEffectFrame === 'function') beginEffectFrame();
     _pt('groundFX3D', function(){ drawGroundEffects3D(); });
     _pt('coneFX3D', function(){ drawConeEffects3D(); drawFlameStream3D(); });
     _pt('chainFX3D', function(){ drawChainEffects3D(); });
@@ -28,8 +29,10 @@ function renderFrame() {
     _pt('shrines3D', function(){ drawShrines3D(); });
     _pt('ruins3D', function(){ drawRuins3D(); });
     _pt('structures3D', function(){ drawStructures3D(); });
-    _pt('torchGlow3D', function(){ drawTorchGlow3D(); });
-    _pt('ambientFX3D', function(){ drawAmbientParticles3D(); });
+    _pt('fxCombat3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(1); });
+    _pt('torchGlow3D', function(){ if (typeof drawTorchGlowStage3D === 'function') drawTorchGlowStage3D(); else drawTorchGlow3D(); });
+    _pt('ambientFX3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(0); else drawAmbientParticles3D(); });
+    _pt('fxOverlay', function(){ if (typeof drawEffectOverlay === 'function') drawEffectOverlay(); });
     _pt('fpsArms', function(){ drawFPSArms(); });
     _pt('arenaAltarPrompt', function(){ drawArenaAltarPrompt3D(); });
     _pt('arenaHUD', function(){ drawArenaHUD(); });
@@ -86,6 +89,7 @@ function renderFrame() {
     _pt('chainFX2D', function(){ drawChainEffects2D(); });
     _pt('novaFX2D', function(){ drawNovaEffects2D(); });
     _pt('impacts2D', function(){ drawImpacts2D(); });
+    _pt('fx2D', function(){ if (typeof drawEffectLayer2D === 'function') drawEffectLayer2D(); });
     _pt('coins2D', function(){ drawCoins2D(); });
     _pt('shopMarker2D', function(){ drawShopMarker2D(); });
     _pt('caveEntrance2D', function(){ drawCaveEntrance2D(); });

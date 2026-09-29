@@ -360,13 +360,18 @@ def physics_preview_html(assembly: Assembly) -> bytes:
     return preview_html(assembly).replace(b"</body>", controls + b"</body>")
 
 
+def fx_bench_js(tooling_root: Path = REPO_ROOT / "tools/game") -> bytes:
+    """The effects benchmark a developer injects into a separate preview tab; never in the manifest or header."""
+    return read_source(tooling_root, "fx-bench.js").encode("utf-8")
+
+
 def serve(port: int) -> None:
     check()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             route = urlsplit(self.path).path
-            if route not in ("/", "/game.html", "/artwork.html", "/textures.html", "/structures.html", "/physics-profile.html"):
+            if route not in ("/", "/game.html", "/artwork.html", "/textures.html", "/structures.html", "/physics-profile.html", "/fx-bench.js"):
                 self.send_error(404)
                 return
             try:
@@ -379,10 +384,12 @@ def serve(port: int) -> None:
                     payload = structure_preview_html()
                 elif route == "/physics-profile.html":
                     payload = physics_preview_html(assembly)
+                elif route == "/fx-bench.js":
+                    payload = fx_bench_js()
                 else:
                     payload = preview_html(assembly)
                 status = 200
-                content_type = "text/html; charset=utf-8"
+                content_type = "text/javascript; charset=utf-8" if route.endswith(".js") else "text/html; charset=utf-8"
             except (SourceError, OSError) as exc:
                 payload = (str(exc) + "\n").encode("utf-8")
                 status = 409
@@ -457,6 +464,11 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_browser_profile", "tools.game.tests.test_scene_depth_coalescing",
                            "tools.game.tests.test_floor_stitch_cache", "tools.game.tests.test_material_palette",
                            "tools.game.tests.test_sky_render",
+                           "tools.game.tests.test_effect_registry", "tools.game.tests.test_particle_engine",
+                           "tools.game.tests.test_particle_render", "tools.game.tests.test_effect_ambient",
+                           "tools.game.tests.test_effect_producers", "tools.game.tests.test_impact_debris",
+                           "tools.game.tests.test_locomotion_dust", "tools.game.tests.test_weather",
+                           "tools.game.tests.test_flame_embers", "tools.game.tests.test_fx_bench",
                            "tools.game.tests.test_terrain_facing", "tools.game.tests.test_cave_exit_transition",
                            "tools.game.tests.test_artwork_cache", "tools.game.tests.test_casting_presentation",
                            "tools.game.tests.test_firstperson_art", "tools.game.tests.test_casting_studio",

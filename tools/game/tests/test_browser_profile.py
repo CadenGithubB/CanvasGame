@@ -5,6 +5,8 @@ import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
+PASS_COUNT = 38
+
 
 class BrowserProfileTests(unittest.TestCase):
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
@@ -12,8 +14,13 @@ class BrowserProfileTests(unittest.TestCase):
         result = run_js(Path(__file__).with_name("browser_profile.js"), timeout=20)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         lines = result.stdout.splitlines()
-        self.assertIn("BROWSER_PROFILE_RESULT PASS 32", lines, result.stdout + result.stderr)
-        self.assertEqual(32, sum(line.startswith("PASS ") for line in lines))
+        # 32 before the unified effects; S3 added 4 fxState swap checks (the
+        # engine path primes and restores its own pinned pool, deterministic
+        # priming, cancel after regeneration) and 2 canonical-input checks
+        # (the Particles setting and live particle count, with and without
+        # the engine).
+        self.assertIn(f"BROWSER_PROFILE_RESULT PASS {PASS_COUNT}", lines, result.stdout + result.stderr)
+        self.assertEqual(PASS_COUNT, sum(line.startswith("PASS ") for line in lines))
 
 
 if __name__ == "__main__":

@@ -106,16 +106,21 @@ function findSpatialCeilingZ(mesh, ci, targetZ) {
   return bestDiff <= 0.8 ? bestZ : NaN;
 }
 
+// Constant layer key tables: no 'l' + li + 'Type' strings on per-call paths.
+var SPATIAL_LAYER_TYPE_KEYS = ['l0Type', 'l1Type', 'l2Type', 'l3Type', 'l4Type'];
+var SPATIAL_LAYER_TOP_KEYS = ['l0TopZ', 'l1TopZ', 'l2TopZ', 'l3TopZ', 'l4TopZ'];
+
 // Corner order is top-left, top-right, bottom-left, bottom-right. The quad is
 // split along 0->3, exactly as the floor and ceiling drawing passes split it.
 // A missing join is a missing triangle, not a bridge to another stratum.
-function spatialLayerCorners(mesh, ci, li) {
+// Writes the corners into out and returns true; false where no triangle exists.
+function spatialLayerCornersInto(mesh, ci, li, out) {
   if (!mesh || !mesh.layerCount || !Number.isInteger(ci) || ci < 0 ||
       ci >= mesh.w * mesh.h || !Number.isInteger(li) || li < 0 ||
       li >= mesh.layerCount[ci] || ci % mesh.w >= mesh.w - 1 ||
-      Math.floor(ci / mesh.w) >= mesh.h - 1) return null;
-  var type = mesh['l' + li + 'Type'][ci], z = mesh['l' + li + 'TopZ'][ci];
-  if ((type !== 1 && type !== 2 && type !== 3 && type !== 4) || !Number.isFinite(z)) return null;
+      Math.floor(ci / mesh.w) >= mesh.h - 1) return false;
+  var type = mesh[SPATIAL_LAYER_TYPE_KEYS[li]][ci], z = mesh[SPATIAL_LAYER_TOP_KEYS[li]][ci];
+  if ((type !== 1 && type !== 2 && type !== 3 && type !== 4) || !Number.isFinite(z)) return false;
   var z1, z2, z3;
   if (type === 2) {
     z1 = findSpatialCeilingZ(mesh, ci + 1, z);
@@ -127,11 +132,17 @@ function spatialLayerCorners(mesh, ci, li) {
     z2 = findSpatialRoleZ(mesh, ci + mesh.w, role, z, ci);
     z3 = findSpatialRoleZ(mesh, ci + mesh.w + 1, role, z, ci);
   }
-  if (!Number.isFinite(z1) || !Number.isFinite(z2) || !Number.isFinite(z3)) return null;
+  if (!Number.isFinite(z1) || !Number.isFinite(z2) || !Number.isFinite(z3)) return false;
   var tolerance = SPATIAL_CORNER_MAX_DELTA_H;
-  return [z, Math.max(z - tolerance, Math.min(z + tolerance, z1)),
-    Math.max(z - tolerance, Math.min(z + tolerance, z2)),
-    Math.max(z - tolerance, Math.min(z + tolerance, z3))];
+  out[0] = z; out[1] = Math.max(z - tolerance, Math.min(z + tolerance, z1));
+  out[2] = Math.max(z - tolerance, Math.min(z + tolerance, z2));
+  out[3] = Math.max(z - tolerance, Math.min(z + tolerance, z3));
+  return true;
+}
+var _spatialCornerScratch = [0, 0, 0, 0];
+function spatialLayerCorners(mesh, ci, li) {
+  var s = _spatialCornerScratch;
+  return spatialLayerCornersInto(mesh, ci, li, s) ? [s[0], s[1], s[2], s[3]] : null;
 }
 
 // referenceZ, when supplied, is spatial world Z; otherwise underground selects

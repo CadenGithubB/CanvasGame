@@ -14,6 +14,12 @@
   presentation-only; never pass visual views to simulation, mutate source poses,
   or retain a draw scope across an asynchronous boundary. Mark teleports explicitly
   and keep the on/off replay and allocation-reuse tests in the shipping gate.
+- Transient visual effects go through the unified effects system (README section
+  "Unified effects V1"). Add a new effect as a recipe in `11-fx-recipes.js`, fed
+  by `fxEvent`/`fxAttach`. Register a new transient array or painter state with
+  `registerEffectFamily`, never by adding it to the reset, rebase or studio lists
+  by hand. Cosmetic code never uses `Math.random`, `presentationRandom` or
+  `shadowBlur`; use `effectNoise`.
 - `AI.md` describes the shared NPC profiles, targeting/action contracts, identity
   lifecycle and measurement boundary. Extend these helpers for new NPC behaviors;
   do not create another height-blind attack loop or tie movement to thought rate.

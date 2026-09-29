@@ -5,12 +5,44 @@
   var end=host.indexOf('  function check(name, okay) {');
   if(end<0)throw Error('shipping game host boundary missing');
   var bootstrap=host.slice(0,end),listenerStub='G.addEventListener = G.removeEventListener = noop;';
+  // Mutations apply to slurped sources only (anchor must match exactly once):
+  //   --studio-shares-pool      the effect engine family loses its studio hook
+  //   --studio-integrate-throws every studio-pool integration throws (counted)
+  //   --studio-ambient-drift    the legacy motes copy is not restored per cycle
+  //   --governor-ignores-pinned the frame-time governor also thins pinned (studio) pools
+  //   --thin-ignores-pin        thinning reads the raw governor instead of the pinned frame's
+  //   --field-global-serial     the ambient field draws its columns from a session-wide serial
+  var load="manifest.parts.MAIN.forEach(function (path) { (0, eval)(slurp('assets/games/' + path)); });";
+  if(bootstrap.split(load).length!==2)throw Error('shipping manifest loader boundary missing');
+  bootstrap=bootstrap.replace(load,"manifest.parts.MAIN.forEach(function (path) { (0, eval)(G.__studioSource(path, slurp('assets/games/' + path))); });");
+  var MUTATIONS={'--studio-shares-pool':['src/11-fx-engine.js','hooks:{rebase:fxRebase, reset:fxReset, prime:fxPrime, studio:fxStudioInstall}','hooks:{rebase:fxRebase, reset:fxReset, prime:fxPrime}'],
+    '--studio-integrate-throws':['src/11-fx-engine.js','function fxIntegrate(S, dt) {\n','function fxIntegrate(S, dt) {\n  if (S.pinned) throw Error(\'studio integrate\');\n'],
+    '--studio-ambient-drift':['src/02-effect-registry.js','hooks:{prime:effectAmbientLegacyPrime,studio:effectAmbientLegacyStudio}','hooks:{prime:effectAmbientLegacyPrime}'],
+    '--governor-ignores-pinned':['src/14-fx-render.js','  F.g = !S || S.pinned ? 1 : G.governor;','  F.g = !S ? 1 : G.governor;'],
+    '--thin-ignores-pin':['src/14-fx-render.js','(S.seedA[i] & 1023) >= F.g * 1024)','(S.seedA[i] & 1023) >= _fxRender.governor * 1024)'],
+    '--field-global-serial':['src/11-fx-engine.js','  var base = S.fieldSerial, salt = F.salt ^ S.seed,','  var base = (window._fxSessionFieldSerial = (window._fxSessionFieldSerial || 0) + 1), salt = F.salt ^ S.seed,']};
+  G.__studioSource=function(path,src){
+    Object.keys(MUTATIONS).forEach(function(flag){
+      var m=MUTATIONS[flag];
+      if(path!==m[0]||__argv.indexOf(flag)<0)return;
+      if(src.split(m[1]).length!==2)throw Error('MUTATION_ANCHOR '+flag);
+      src=src.replace(m[1],m[2]);
+    });
+    return src;
+  };
   if(bootstrap.indexOf(listenerStub)<0)throw Error('shipping window event host boundary missing');
   bootstrap=bootstrap.replace(listenerStub,'G.__studioWindowEvents={}; G.addEventListener=function(type,listener){(G.__studioWindowEvents[type]||(G.__studioWindowEvents[type]=[])).push(listener);}; G.removeEventListener=noop;');
   (0,eval)(bootstrap+'G.__studioErrors=errors; }());');
   G.document.fullscreenElement=G.document.webkitFullscreenElement=G.document.mozFullScreenElement=G.document.msFullscreenElement=null;
   if(typeof G.startCastingStudio!=='function')(0,eval)(slurp('assets/games/src/20-casting-preview.js'));
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
+  // S3 migrated ambient and torch embers. The S2 studio checks keep their
+  // fixture (the live legacy motes copied into the studio; the 12-particle
+  // burst as the studio pool's only particles) with both families held on
+  // their legacy paths (a console override, never persisted; torch embers
+  // follow the ambient family); the New-mode studio field is checked on its
+  // own after them.
+  G.setEffectFamilyMode('ambient','legacy');
   G._caveTestSeedOverride=12345;G._caveTestKindOverride='descending';
   G.CAVE_TEST_MODE=G.ENDLESS_MODE=G.running=true;G.gameOverState=false;G.terrain='plains';
   Object.keys(G.caveTestFlags).forEach(function(key){G.caveTestFlags[key]=false;});
@@ -38,6 +70,46 @@
   check('actual projectile cylinder collision damages practice target',job.hitAt>720&&job.hitAt<1400&&job.live.stats.totalDamageDone===1&&job.live.enemies[0].health===999);
   check('real mana cost remains in isolated practice state',job.live.mana===G.MANA_MAX-G.spells.missile.manaCost&&G.mana===baseline.mana);
   check('cast and hit do not alter actual arrays or stats',G.projectiles===baseline.projectiles&&G.pendingMissileCasts===baseline.pending&&G.impacts===baseline.impacts&&G.enemies===baseline.enemies&&G.stats===baseline.stats);
+  // Unified effects (T21): each studio cycle gets a fresh pinned 512-slot pool
+  // ticked on the studio step; studio bursts never reach the live pool.
+  function fxBytes(S){return JSON.stringify([S.count,S.tick,S.serial,Array.prototype.slice.call(S.x,0,S.count),Array.prototype.slice.call(S.age,0,S.count)]);}
+  var liveFx=G.fxState,studioFx=job.live.fxState;
+  G.setEffectFamilyMode('pickupBursts','new');
+  G.fxEmit('feedbackBurst',G.pos.x+40,G.pos.y,G.playerFeetSpatialZ()+20,{count:12,color:'#bb66ff'});G.updateEffects(1/60);
+  var liveBytes=fxBytes(liveFx);
+  check('studio installs a fresh pinned effect pool ticked on the studio step',!!studioFx&&studioFx!==liveFx&&studioFx.pinned&&studioFx.cap===512&&studioFx.tick===Math.round(1400/G.CASTING_STUDIO_STEP_MS)&&liveFx.count>0);
+  G.castingStudioScoped(job,function(){G.fxEmit('feedbackBurst',job.target.x,job.target.y,job.target.z+20,{count:12,color:'#44ffff'});});
+  var studioTick0=studioFx.tick;
+  G.castingStudioAdvance(job,1450);G.setEffectFamilyMode('pickupBursts',null);
+  check('studio bursts spawn in the studio pool and never change the live pool',G.fxState===liveFx&&job.live.fxState===studioFx&&studioFx.count>=12&&fxBytes(liveFx)===liveBytes);
+  // Integration really runs on the studio step (not only the tick counter):
+  // every burst particle, spawned in the first step after the emit, has aged
+  // one studio step per step since.
+  var studioSteps=studioFx.tick-studioTick0,burstAges=[];
+  for(var fi=0;fi<studioFx.count;fi++)if(studioFx.rec[fi]===studioFx.C.ID.feedbackBurst)burstAges.push(studioFx.age[fi]);
+  if(!(burstAges.length>=12&&Math.min.apply(null,burstAges)>=(studioSteps-1)*G.CASTING_STUDIO_STEP_MS/1000-1e-9))
+    output('DETAIL studio ages '+JSON.stringify({steps:studioSteps,count:burstAges.length,minAge:Math.min.apply(null,burstAges),stepSeconds:G.CASTING_STUDIO_STEP_MS/1000}));
+  check('studio particles age on every studio step',studioSteps>=5&&burstAges.length>=12&&Math.min.apply(null,burstAges)>=(studioSteps-1)*G.CASTING_STUDIO_STEP_MS/1000-1e-9);
+  // T21, render side: a studio frame draws the studio pool through the real fx
+  // stages and the governor never thins it, so studio A/B frames never depend
+  // on machine timing; both pools stay untouched. The burst is relabelled as
+  // ambient class (the governor thins only weather, ambient and locomotion)
+  // with the governor forced to 0.35; the same frame with the studio pool
+  // unpinned thins it (negative control).
+  G.setEffectFamilyMode('pickupBursts','new');G._fxRender.governor=0.35;
+  var studioCls=Array.prototype.slice.call(studioFx.cls,0,studioFx.count);
+  for(var ci=0;ci<studioFx.count;ci++)studioFx.cls[ci]=1;
+  var liveDrawBytes=fxBytes(liveFx),studioDrawBytes=fxBytes(studioFx),studioFrame=G.castingStudioDraw(job),studioDrawn=G.getEffectStats().frame;
+  studioFx.pinned=false;G._fxRender.governor=0.35;G.castingStudioDraw(job);var unpinnedDrawn=G.getEffectStats().frame;studioFx.pinned=true;
+  for(ci=0;ci<studioCls.length;ci++)studioFx.cls[ci]=studioCls[ci];
+  // The unpinned control frame's pixels (S9: its passes feed the governor's
+  // raster input) are dropped with the governor state it leaves behind.
+  G._fxRender.governor=1;G._fxRender.ema=0;G._fxRender.rasterAcc=0;G.setEffectFamilyMode('pickupBursts',null);
+  var studioThin={drawn:studioDrawn.drawn,considered:studioDrawn.considered,thinned:studioDrawn.thinned,unpinnedThinned:unpinnedDrawn.thinned};
+  if(!(studioDrawn.drawn>=12&&studioDrawn.thinned===0&&unpinnedDrawn.thinned>0))output('DETAIL studio frame '+JSON.stringify({frame:studioThin,stages:Object.keys(studioFrame.stages).filter(function(k){return /^fx|ambientFX/.test(k);})}));
+  check('a studio frame draws the studio pool through the fx stages and the governor never thins it',
+    ['fxCombat3D','ambientFX3D','fxOverlay'].every(function(k){return k in studioFrame.stages;})&&studioDrawn.drawn>=12&&studioDrawn.considered>=12&&
+    studioDrawn.thinned===0&&unpinnedDrawn.thinned>0&&fxBytes(liveFx)===liveDrawBytes&&fxBytes(studioFx)===studioDrawBytes&&G.fxState===liveFx);
   var damage=job.live.stats.totalDamageDone, oldDate=Date.now, oldRandom=Math.random, caught=false;
   var oldGameClock=G.gameTimeNow, oldPresentationState=G._presentationRandomState;
   try{G.castingStudioScoped(job,function(){G.mana=7;G.projectiles=[];throw Error('deliberate draw failure');});}catch(e){caught=e.message==='deliberate draw failure';}
@@ -54,9 +126,31 @@
   try{G.castingStudioScoped(job,function(){G._surfaceFloorLightScale=77;throw Error('lighting scope failure');});}catch(e){caught=e.message==='lighting scope failure';}
   check('failed studio draw restores surface-light state immediately',caught&&G._surfaceFloorLightScale===baseline.surfaceScale&&G._surfaceFloorLightBake===baseline.surfaceBake&&G._surfaceFloorLightMesh===baseline.surfaceMesh&&G._surfaceFloorLightStats===baseline.surfaceStats);
   G.setCastingStudioArt(false);
+  check('each studio cycle gets a fresh effect pool',job.live.fxState!==studioFx&&job.live.fxState!==G.fxState&&job.live.fxState.count===0&&G.fxState===liveFx);
   check('A/B resets same pose and physics timeline',job.time===0&&!job.released&&!job.requested&&job.live.pendingMissileCasts.length===0&&job.live.CASTING_ART_ENABLED===false&&job.live.pos.x===baseline.pos.x&&job.live.pos.y===baseline.pos.y);
   G.castingStudioAdvance(job,1400);
   check('original visual path produces same real hit damage',job.live.stats.totalDamageDone===damage&&job.live.enemies[0].health===999);
+  // The legacy motes move on the studio step (updateEffects runs the legacy
+  // ambient update); every cycle restarts from the copy the studio opened
+  // with, so a reset or backwards scrub replays the same motes.
+  function motes(list){return JSON.stringify(list.map(function(p){return [p.x,p.y,p.z,p.life,p.alpha];}));}
+  var liveMotes=motes(G.ambientParticles);
+  G.castingStudioResetCycle(job);var motes0=motes(job.live.ambientParticles);G.castingStudioAdvance(job,1000);var motes1=motes(job.live.ambientParticles);
+  G.castingStudioResetCycle(job);var motes0b=motes(job.live.ambientParticles);G.castingStudioAdvance(job,1000);var motes1b=motes(job.live.ambientParticles);
+  if(!(motes0===motes0b&&motes1===motes1b))output('DETAIL studio motes '+JSON.stringify({count:job.live.ambientParticles.length,startSame:motes0===motes0b,endSame:motes1===motes1b,moved:motes0!==motes1}));
+  check('studio cycles replay the same legacy ambient motes',job.live.ambientParticles.length>=20&&motes0!==motes1&&motes0===motes0b&&motes1===motes1b&&motes(G.ambientParticles)===liveMotes);
+  // New mode (S3): each cycle's fresh pinned pool primes its own ambient field
+  // and torch embers around the studio camera from the job's seed, so a reset
+  // or a backwards scrub replays the same motes; the live pool is untouched.
+  G.setEffectFamilyMode('ambient',null);
+  var liveFieldBytes=fxBytes(G.fxState);
+  function fieldMembers(S){var n=0;for(var q=0;q<S.count;q++)if(S.flags[q]&64)n++;return n;}
+  G.castingStudioResetCycle(job);G.castingStudioAdvance(job,1000);
+  var field0=fxBytes(job.live.fxState),fieldPool0=job.live.fxState,members0=fieldMembers(fieldPool0);
+  G.castingStudioResetCycle(job);G.castingStudioAdvance(job,1000);var field1=fxBytes(job.live.fxState);
+  var fieldDetail={members:members0,fieldSame:field0===field1,fresh:job.live.fxState!==fieldPool0,liveSame:fxBytes(G.fxState)===liveFieldBytes};
+  if(!(members0>=20&&fieldDetail.fieldSame&&fieldDetail.fresh&&fieldDetail.liveSame))output('DETAIL studio field '+JSON.stringify(fieldDetail));
+  check('studio cycles replay the same New ambient field',members0>=20&&fieldDetail.fieldSame&&fieldDetail.fresh&&fieldDetail.liveSame&&G.fxState===liveFx);
   G.stopCastingStudio('test complete');
   check('stop restores original simulation and equipment',G._castingStudio===null&&G.running&&G.equipment===baseline.equipment&&G.spells===baseline.spells&&G.mana===baseline.mana);
   var cancelled=G.startCastingStudio(),resumes=0,cancels=0,oldCancel=G.cancelAnimationFrame;
@@ -249,6 +343,11 @@
   G.castingStudioRevokeVideo=oldRevoke;
   G.castingStudioDraw=oldStudioDraw;G.setSelectedCastingStyle(preferenceBefore);G.pendingSettings=pendingBefore;
   G.castCurrentSpell=savedCast;G.updateProjectiles=savedProjectiles;G.tickEffects=savedEffects;
+  // Runtime isolation (spec 2.3) hides engine failures from gameplay; the
+  // harness must not let it hide them from the test.
+  var fxFailures=G.getEffectStats().failures,fxFailed=Object.keys(fxFailures).filter(function(k){return fxFailures[k];});
+  if(fxFailed.length)output('DETAIL effect failures '+JSON.stringify(fxFailures));
+  check('no effect runtime failures were counted in the studio or the live game',!fxFailed.length);
   output('CASTING_STUDIO_RESULT PASS '+checked);
 }());
 undefined;

@@ -2394,12 +2394,19 @@ var _renderPoseFields = ['x','y','z','floorZ','feetZ','renderFloorZ','ang','faci
 var _renderPoseRecords = new WeakMap();
 var _renderPoseSerial = 0, _renderHistoryReady = false, _renderCapturePending = false;
 var _renderInterpolationActive = false;
+// Blend of the frame being drawn (1 outside a blended draw); particles
+// back-project on this timeline (unified effects, 11-fx-engine.js).
+var renderPresentationAlpha = 1;
 var _renderHistory = {};
 var _renderEndPos = [], _renderEndCam = [], _renderEndView = [];
-var _renderGroups = ['enemies','projectiles','companions','fortressAllies','impacts',
-  'deathEffects','soulOrbs','coinDrops','statPickups','arcaneTomes','ambientParticles'].map(function(name) {
+var _renderGroups = ['enemies','projectiles','companions','fortressAllies'].map(function(name) {
     return {name:name, source:null, view:[]};
   });
+// Effect families with interp:'pose' join at load (02-effect-registry.js).
+function registerRenderInterpolationGroup(name) {
+  for (var g=0;g<_renderGroups.length;g++) if (_renderGroups[g].name===name) return;
+  _renderGroups.push({name:name, source:null, view:[]});
+}
 
 function renderPoseRecord(body) {
   var record = _renderPoseRecords.get(body);
@@ -2520,6 +2527,7 @@ function renderInterpolatedFrame(alpha, drawFn) {
       !renderPoseUnchanged(viewCam,_renderEndView)) blend=1;
   var savedPos=pos, savedCam=cam, savedViewCam=viewCam;
   _renderInterpolationActive = true;
+  renderPresentationAlpha = blend;
   try {
     pos=renderPoseView(savedPos,blend); cam=renderPoseView(savedCam,blend); viewCam=renderPoseView(savedViewCam,blend);
     if (CAM_FOLLOW) {
@@ -2545,9 +2553,360 @@ function renderInterpolatedFrame(alpha, drawFn) {
       if (restore.source) window[restore.name]=restore.source;
       restore.source=null;
     }
+    renderPresentationAlpha = 1;
     _renderInterpolationActive = false;
   }
 }
+// Effect registry (unified effects V1, S1): one validated table drives every
+// effect lifecycle list. Only the compiler throws; runtime entries count, warn.
+// S2 adds the shared services: engine configuration, the live Particles
+// budget, in-game toggles, A/B family modes and the private legacy stream.
+var EFFECT_CONFIG = Object.freeze({
+  capacity: 3072, reserve: 256, studioCapacity: 512,
+  spawnPerTick: 384, budgetPerSetting: 48, eventRing: 256, anchors: 64, childQueue: 256,
+  dynamicPalette: 64, stealScan: 64, cullFadeSeconds: 0.25,
+  classCapShare: Object.freeze({combat: 0.35, locomotion: 0.10, ambientExtra: 0.05}),
+  maskBudgetPx: 60000, footprintBudgetPx: 50000, glowPerFrame: 256, mixedPerFrame: 256,
+  governor: Object.freeze({targetMs: 1.0, lowMs: 0.6, down: 0.97, up: 1.01, floor: 0.35, rasterMsPerMpx: 14})
+});
+var EFFECT_FAMILY_SOURCE = {
+impacts:{storage:'array',life:'lifeMs',prune:'sim',keep:'lt',rebase:'xy',reset:'level world',studio:'clear',owner:'spell-visuals',draw3D:'impacts3D',draw2D:'impacts2D'},
+coneEffects:{storage:'array',life:'lifeMs',prune:'sim',keep:'lt',rebase:'xy',reset:'level world',studio:'clear',owner:'spell-visuals',status:'dead',draw3D:'coneFX3D',draw2D:'coneFX2D'},
+groundEffects:{storage:'array',life:'duration',prune:'owner',rebase:'xy',reset:'level world',studio:'clear',owner:'spell-visuals',draw3D:'groundFX3D',draw2D:'groundFX2D'},
+chainEffects:{storage:'array',life:'lifeMs',prune:'sim',keep:'le',rebase:'chain',reset:'level world',studio:'clear',owner:'spell-visuals',draw3D:'chainFX3D',draw2D:'chainFX2D'},
+novaEffects:{storage:'array',life:'lifeMs',prune:'sim',keep:'le',rebase:'xy',reset:'level world',studio:'clear',owner:'spell-visuals',draw3D:'novaFX3D',draw2D:'novaFX2D'},
+deathEffects:{storage:'array',life:'lifeMs',prune:'sim',keep:'lt',step:'legacyBones',rebase:'xy',reset:'level world',interp:'pose',studio:'clear',family:'bones',status:'legacy',draw3D:{none:'legacy bones were 2D-only; New bones are particles in fxCombat3D'},draw2D:'draw()'},
+soulOrbs:{storage:'array',prune:'owner',rebase:'xy',reset:'level world',interp:'pose',studio:'clear',owner:'gameplay',draw3D:'soulOrbs3D',draw2D:'fx2D'},
+coinDrops:{storage:'array',prune:'owner',rebase:'xy',reset:'level world',interp:'pose',studio:'clear',owner:'gameplay',draw3D:'coins3D',draw2D:'coins2D'},
+statPickups:{storage:'array',prune:'owner',rebase:'rebuilt',reset:'level world',interp:'pose',studio:'clear',owner:'gameplay',draw3D:'statPickups3D',draw2D:{none:'pre-existing: no 2D stat art'}},
+arcaneTomes:{storage:'array',prune:'owner',rebase:'xy',reset:'level world',interp:'pose',studio:'clear',owner:'gameplay',draw3D:'arcaneTomes3D',draw2D:{none:'pre-existing: no 2D tome art'}},
+flameStream:{storage:'globals',globals:'flameStreamActive flameStreamLastTick flameStreamStartMs flameStreamAng flameStreamRange',resetValues:{flameStreamActive:false,flameStreamLastTick:0,flameStreamStartMs:0},reset:'run world',studio:'copy',owner:'spell-visuals',draw3D:'coneFX3D',draw2D:'coneFX2D'},
+ambientParticles:{storage:'array',prune:'owner',reset:'level world',interp:'pose',studio:'copy',family:'ambient',status:'legacy',hooks:{prime:effectAmbientLegacyPrime,studio:effectAmbientLegacyStudio},draw3D:'ambientFX3D',draw2D:{none:'pre-existing: no 2D ambient'}},
+torchGlow:{storage:'painter',family:'torchGlow',draw3D:'torchGlow3D',draw2D:{none:'3D light cue'}}
+};
+var _EFFECT_KEYS = 'storage life keep prune rebase reset interp studio status step family owner globals resetValues hooks draw3D draw2D'.split(' ');
+var _EFFECT_ENUMS = {storage:'array globals engine painter', life:'lifeMs duration none engine', keep:'lt le',
+  prune:'sim owner none', rebase:'xy chain rebuilt engine none', interp:'pose none', studio:'clear copy fresh none',
+  status:'dead legacy', step:'legacyBones'};
+
+// Pure. Absent enum keys mean 'none'.
+function compileEffectFamilies(source) {
+  var out = {list:[], byName:{}, rebase:[], reset:{run:[], level:[], world:[]},
+    prime:{run:[], level:[], world:[]}, prune:[], studio:[], pose:[]};
+  Object.keys(source).forEach(function(name) {
+    var s = source[name] || {}, d = {name:name};
+    function no(why) { throw new Error('Effect family ' + name + ': ' + why); }
+    Object.keys(s).forEach(function(k) {
+      var e = _EFFECT_ENUMS[k];
+      if (_EFFECT_KEYS.indexOf(k) < 0 || e && e.split(' ').indexOf(s[k]) < 0) no('unknown ' + k + ' ' + s[k]);
+    });
+    'storage life keep prune rebase interp studio status step family owner'.split(' ').forEach(function(k) {
+      d[k] = s[k] || (/none/.test(_EFFECT_ENUMS[k]) ? 'none' : null);
+    });
+    d.reset = String(s.reset || '').split(' ').filter(Boolean);
+    d.globals = String(s.globals || '').split(' ').filter(Boolean);
+    d.resetValues = Object.assign({}, s.resetValues);
+    d.hooks = Object.freeze(Object.assign({}, s.hooks));
+    if (!d.storage) no('no storage');
+    if (d.prune === 'sim' && !(/^(lifeMs|duration)$/.test(d.life) && d.keep)) no('sim prune needs life, keep');
+    if (d.step && d.prune !== 'sim') no('step needs sim prune');
+    if ((d.interp === 'pose' || d.rebase === 'chain') && d.storage !== 'array') no('pose/chain need arrays');
+    if (d.status === 'legacy' && !d.family) no('legacy needs family');
+    if ((d.storage === 'globals') !== !!d.globals.length) no('globals mismatch');
+    if (d.storage === 'engine' && !s.hooks) no('engine needs hooks');
+    for (var h in d.hooks) if ('rebase reset prime studio'.split(' ').indexOf(h) < 0 || typeof d.hooks[h] !== 'function') no('bad hook ' + h);
+    if (d.hooks.prime && d.rebase === 'rebuilt') no('prime hook on rebuilt');
+    Object.keys(d.resetValues).forEach(function(k) { if (d.globals.indexOf(k) < 0) no('resetValues ' + k); });
+    ['draw3D', 'draw2D'].forEach(function(v) {
+      var x = d[v] = s[v];
+      if (!(typeof x === 'string' && x || x && typeof x.none === 'string' && x.none)) no('missing ' + v + ' decision');
+    });
+    out.list.push(Object.freeze(d)); out.byName[name] = d;
+    if (/^(xy|chain|engine)$/.test(d.rebase) || d.hooks.rebase) out.rebase.push(d);
+    d.reset.forEach(function(r) {
+      if (!out.reset.hasOwnProperty(r)) no('unknown reset scope ' + r);
+      out.reset[r].push(d); if (d.hooks.prime) out.prime[r].push(d);
+    });
+    if (d.prune === 'sim') out.prune.push(d);
+    if (d.studio !== 'none') out.studio.push.apply(out.studio, d.globals.length ? d.globals : [name]);
+    if (d.interp === 'pose') out.pose.push(name);
+  });
+  return Object.freeze(out);
+}
+
+function registerEffectFamily(name, def) {
+  if (EFFECT_FAMILY_SOURCE.hasOwnProperty(name)) throw new Error('Effect family ' + name + ': already registered');
+  var next = Object.assign({}, EFFECT_FAMILY_SOURCE);
+  next[name] = def;
+  EFFECT_FAMILIES = compileEffectFamilies(next);
+  EFFECT_FAMILY_SOURCE = next;
+  _effectRegisterPose();
+  // A family registered after 20-casting-preview.js built its key list joins it here.
+  if (typeof _castingStudioKeys !== 'undefined') _castingStudioKeys = _castingStudioKeys.concat(effectRegistryStudioKeys(_castingStudioKeys));
+  return EFFECT_FAMILIES.byName[name];
+}
+function _effectRegisterPose() { EFFECT_FAMILIES.pose.forEach(function(n) { registerRenderInterpolationGroup(n); }); }
+
+var _effectCounts = {pruned:0, rebased:0, cleared:0, primed:0, malformed:{}};
+var effectStats = {registry:_effectCounts, failures:{prune:0, rebase:0, reset:0, prime:0, studio:0,
+  updateEffects:0, fxEvent:0, fxEmit:0, fxAttach:0, fxDetach:0, toggles:0, render:0, settings:0}};
+var _effectNone = {};
+function _effectWarn(text) { if (typeof console !== 'undefined' && console.warn) console.warn('[effects] ' + text); }
+// Counts never reset, so a key's first count is its one warning per session
+// (no string is built for later records).
+function effectFailure(entry, e) {
+  var f = effectStats.failures;
+  if ((f[entry] = (f[entry] || 0) + 1) === 1) _effectWarn(entry + ' failed: ' + (e && e.message));
+}
+function _effectMalformed(name, kept) {
+  var m = _effectCounts.malformed;
+  if ((m[name] = (m[name] || 0) + 1) === 1) _effectWarn('malformed ' + name + (kept ? ' left in place' : ' dropped'));
+}
+function getEffectStats() {
+  var out = JSON.parse(JSON.stringify(effectStats));
+  if (typeof fxEngineStats === 'function') fxEngineStats(out);
+  if (typeof fxRenderStats === 'function') fxRenderStats(out);
+  return out;
+}
+function effectLifetimeProgress(rec, now, life) {
+  return (now - rec.spawnMs) / rec[life || 'lifeMs'];
+}
+
+// tickEffects: legacy keep predicates, compacted in place.
+function effectRegistryPrune(now, dt) {
+  var L = EFFECT_FAMILIES.prune;
+  for (var f = 0; f < L.length; f++) {
+    try {
+      var d = L[f], a = window[d.name] || [], k = 0, le = d.keep === 'le', bones = d.step === 'legacyBones';
+      for (var i = 0; i < a.length; i++) {
+        var r = a[i] || _effectNone, age = now - r.spawnMs;
+        if (le ? age <= r[d.life] : age < r[d.life]) {
+          if (bones) { r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 60 * dt; r.vx *= 0.96; r.vy *= 0.96; }
+          a[k++] = r;
+        } else {
+          _effectCounts.pruned++;
+          if (isNaN(effectLifetimeProgress(r, now, d.life))) _effectMalformed(d.name);
+        }
+      }
+      a.length = k;
+    } catch (e) { effectFailure('prune', e); }
+  }
+}
+
+function _effectFinitePoint(p) { return !!p && Number.isFinite(p.x + p.y); }
+// assembleWindow; 'rebuilt' families hold new-window coordinates.
+function effectRegistryRebase(sx, sy) {
+  var L = EFFECT_FAMILIES.rebase;
+  for (var f = 0; f < L.length; f++) {
+    try {
+      var d = L[f], a = d.storage === 'array' && window[d.name] || [], chain = d.rebase === 'chain';
+      for (var i = 0; i < a.length; i++) {
+        var r = a[i];
+        if (!chain) { if (!r) continue; r.x -= sx; r.y -= sy; }
+        else if (r && Number.isFinite(r.fromX + r.fromY) && Array.isArray(r.targets) && r.targets.every(_effectFinitePoint)) {
+          r.fromX -= sx; r.fromY -= sy;
+          for (var t = 0; t < r.targets.length; t++) { r.targets[t].x -= sx; r.targets[t].y -= sy; }
+        } else { _effectMalformed(d.name, true); continue; }
+        _effectCounts.rebased++;
+      }
+      if (d.hooks.rebase) d.hooks.rebase(sx, sy);
+    } catch (e) { effectFailure('rebase', e); }
+  }
+}
+
+// Clear phase (before content is built); prime runs after placement.
+function effectRegistryReset(scope) {
+  var L = EFFECT_FAMILIES.reset[scope] || [];
+  for (var f = 0; f < L.length; f++) {
+    try {
+      var d = L[f];
+      if (d.storage === 'array') window[d.name] = [];
+      for (var k in d.resetValues) window[k] = d.resetValues[k];
+      if (d.hooks.reset) d.hooks.reset(scope);
+      _effectCounts.cleared++;
+    } catch (e) { effectFailure('reset', e); }
+  }
+}
+function effectRegistryPrime(scope) {
+  var L = EFFECT_FAMILIES.prime[scope] || [];
+  for (var f = 0; f < L.length; f++) {
+    try { L[f].hooks.prime(scope); _effectCounts.primed++; } catch (e) { effectFailure('prime', e); }
+  }
+}
+// While ambient is Legacy the old init runs at its old position, on the
+// private legacy stream (S2); in New mode the engine's own prime fills fields.
+function effectAmbientLegacyPrime() {
+  if (effectFamilyMode('ambient') === 'legacy') effectWithLegacyRandom(initAmbientParticles);
+}
+// Studio: the tick moves the copied motes, so every cycle (reset or backwards
+// scrub) restarts from the copy the studio opened with.
+function effectAmbientLegacyStudio(live, job) {
+  if (!job) return;
+  if (!job.fxAmbientStart) job.fxAmbientStart = (live.ambientParticles || []).map(_effectCopyRecord);
+  live.ambientParticles = job.fxAmbientStart.map(_effectCopyRecord);
+}
+function _effectCopyRecord(p) { return Object.assign({}, p); }
+
+function effectRegistryStudioKeys(existing) {
+  return EFFECT_FAMILIES.studio.filter(function(k) { return !(existing && existing.indexOf(k) >= 0); });
+}
+function effectRegistryStudioReset(live, job) {
+  var L = EFFECT_FAMILIES.list;
+  for (var f = 0; f < L.length; f++) {
+    try {
+      var d = L[f];
+      if (d.studio === 'clear' && d.storage === 'array') live[d.name] = [];
+      if (d.hooks.studio) d.hooks.studio(live, job);
+    } catch (e) { effectFailure('studio', e); }
+  }
+}
+function effectRegistryReport() {
+  return EFFECT_FAMILIES.list.map(function(d) {
+    var a = d.storage === 'array' ? window[d.name] : null;
+    return {name:d.name, storage:d.storage, count:a ? a.length : null, malformed:_effectCounts.malformed[d.name] || 0,
+      rebase:d.rebase, reset:d.reset.join(' '), interp:d.interp, studio:d.studio, draw3D:d.draw3D, draw2D:d.draw2D,
+      mode:d.family ? effectFamilyMode(d.family) : null};
+  });
+}
+// spellVisualNoise's mixer; the tick needs it before 14 loads.
+function effectNoise(a, b) {
+  var h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + 0x9e3779b9) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// ── Toggles: presets behind in-game switches, in the render-feature
+// definition shape (3d-int defineRenderFeature). In memory only, never saved.
+var EFFECT_TOGGLE_DEFS = [
+  {key:'fxUnified', label:'Unified effects', type:'bool', default:true, legacy:false,
+   title:'Migrated effects use the particle engine (off = pre-migration reference; lifecycle fixes stay on)'},
+  {key:'fxWeather', label:'Weather', type:'enum', values:['off', 'auto', 'rain', 'snow', 'ash'], default:'auto', legacy:'off',
+   title:'Rain, snow and ash by biome, elevation and cover'},
+  {key:'fxDebris', label:'Impact debris', type:'bool', default:true, legacy:false, title:'Sparks, chips and dust on projectile and melee hits'},
+  {key:'fxFootDust', label:'Footstep dust', type:'bool', default:true, legacy:false, title:'Ground puffs from steps, dashes and landings'}
+];
+var EFFECT_TOGGLES = {};                 // values while no render-feature registry exists
+var _effectToggleIndex = {}, _effectToggleShared = false, _effectToggleGen = 0;
+// Families migrate slice by slice (S3 ambient and torchEmbers, S4 bones and
+// pickupBursts, S8 torchGlow and flameEmbers); until then they stay Legacy.
+var EFFECT_FAMILY_MIGRATED = {ambient:true, torchEmbers:true, torchGlow:true, bones:true, pickupBursts:true, flameEmbers:true};
+// A family whose legacy code lives inside another family's legacy code has
+// that family's mode: legacy torch embers are respawns of the legacy ambient
+// array, so a split A/B would show both ember sources or neither.
+var EFFECT_FAMILY_FOLLOWS = {torchEmbers:'ambient'};
+var _effectFamilyOverride = {};
+function _effectToggleAllows(def, v) { return def.type === 'bool' ? v === true || v === false : def.values.indexOf(v) >= 0; }
+// The only read paths: once per tick (engine) and once per frame (renderer).
+function effectToggleValue(key) {
+  var def = _effectToggleIndex[key];
+  if (!def) return undefined;
+  return _effectToggleShared ? renderFeatureValue(key, def.default) : EFFECT_TOGGLES[key];
+}
+function effectToggleOn(key) {
+  var def = _effectToggleIndex[key], v = effectToggleValue(key);
+  return !!def && (def.type === 'bool' ? v === true : v !== def.legacy);
+}
+// A preset recipe (weather, debris, dust) spawns and draws only while its own
+// switch and Unified effects are both on: Unified off is the pre-migration
+// reference, which had no presets.
+function effectPresetOn(key) { return effectToggleOn(key) && effectToggleOn('fxUnified'); }
+// Console and in-game control; validates like setRenderFeatures.
+function setEffectToggle(key, value) {
+  var def = _effectToggleIndex[key];
+  if (!def) throw new Error('effect toggles: unknown toggle ' + key);
+  if (!_effectToggleAllows(def, value))
+    throw new Error('effect toggles: ' + key + ': ' + JSON.stringify(value) + ' is not one of ' + JSON.stringify(def.values || [false, true]));
+  if (_effectToggleShared) setRenderFeature(key, value);   // its change listener bumps the generation
+  else if (EFFECT_TOGGLES[key] !== value) { EFFECT_TOGGLES[key] = value; _effectToggleGen++; }
+  return effectTogglesSnapshot();
+}
+function effectTogglesSnapshot() {
+  var out = {};
+  EFFECT_TOGGLE_DEFS.forEach(function(d) { out[d.key] = effectToggleValue(d.key); });
+  return out;
+}
+// Bumped by every toggle and family-mode change; readers rebuild gates on it.
+function effectToggleGeneration() { return _effectToggleGen; }
+function effectFamilyMode(family) {
+  var o = _effectFamilyOverride[family], lead = EFFECT_FAMILY_FOLLOWS[family];
+  if (o) return o;                                        // console/test override, never persisted
+  if (!EFFECT_FAMILY_MIGRATED[family]) return 'legacy';
+  if (lead) return effectFamilyMode(lead);
+  return effectToggleOn('fxUnified') ? 'new' : 'legacy';
+}
+function setEffectFamilyMode(family, mode) {
+  if (!EFFECT_FAMILY_MIGRATED.hasOwnProperty(family)) throw new Error('effect families: unknown family ' + family);
+  if (mode !== 'new' && mode !== 'legacy' && mode !== null) throw new Error('effect families: mode must be new, legacy or null');
+  if (mode && EFFECT_FAMILY_FOLLOWS.hasOwnProperty(family))
+    throw new Error('effect families: ' + family + ' follows ' + EFFECT_FAMILY_FOLLOWS[family] + ' (its legacy code runs inside ' +
+      EFFECT_FAMILY_FOLLOWS[family] + '); set ' + EFFECT_FAMILY_FOLLOWS[family]);
+  if (mode) _effectFamilyOverride[family] = mode; else delete _effectFamilyOverride[family];
+  _effectToggleGen++;
+  return effectFamilyMode(family);
+}
+// At load: register with the render-feature registry when it exists (3d-int),
+// otherwise keep the values here. Both paths share the same read functions.
+// Safe to run again: keys the registry already holds are kept, local values
+// are never reset, and the listener joins each registry once.
+var _effectToggleListened = [];
+function _effectToggleChanged() { _effectToggleGen++; }
+function effectToggleInit() {
+  EFFECT_TOGGLE_DEFS.forEach(function(d) {
+    _effectToggleIndex[d.key] = d;
+    if (!EFFECT_TOGGLES.hasOwnProperty(d.key)) EFFECT_TOGGLES[d.key] = d.default;
+  });
+  var shared = typeof defineRenderFeature === 'function' && typeof renderFeatureValue === 'function' && typeof setRenderFeature === 'function';
+  if (shared) try {
+    EFFECT_TOGGLE_DEFS.forEach(function(d) {
+      try { defineRenderFeature(d); }
+      catch (e) { if (renderFeatureValue(d.key, _effectNone) === _effectNone) throw e; }   // registered earlier: keep it
+    });
+    if (typeof onRenderFeaturesChange === 'function' && _effectToggleListened.indexOf(onRenderFeaturesChange) < 0) {
+      onRenderFeaturesChange(_effectToggleChanged); _effectToggleListened.push(onRenderFeaturesChange);
+    }
+  } catch (e) { shared = false; effectFailure('toggles', e); }
+  if (shared !== _effectToggleShared) { _effectToggleShared = shared; _effectToggleGen++; }
+}
+effectToggleInit();
+
+// ── Live Particles budget (section 6.1): s = P / 25, B = min(capacity -
+// reserve, 48 P). Class caps by code weather 0, ambient 1, locomotion 2,
+// combat 3, feedback 4 (priority = code + 1); feedback may use the reserve.
+// One object, recomputed only when an input changes.
+var _effectQuality = {P:-1, capacity:-1, reserve:-1, s:0, B:0, gen:0, caps:new Int32Array(5), scale:new Float64Array(5)};
+function effectQuality(capacity, reserve) {
+  var q = _effectQuality, P = Number(settings && settings.particles);
+  var cap = capacity === undefined ? EFFECT_CONFIG.capacity : capacity | 0;
+  var res = reserve === undefined ? EFFECT_CONFIG.reserve : reserve | 0;
+  if (!(P >= 0)) P = 0;
+  if (P === q.P && cap === q.capacity && res === q.reserve) return q;
+  var s = P / 25, B = Math.max(0, Math.min(cap - res, EFFECT_CONFIG.budgetPerSetting * P)), share = EFFECT_CONFIG.classCapShare;
+  q.P = P; q.capacity = cap; q.reserve = res; q.s = s; q.B = B;
+  q.caps[0] = B; q.caps[1] = Math.min(B, Math.floor(P) + Math.floor(share.ambientExtra * B));
+  q.caps[2] = Math.floor(share.locomotion * B); q.caps[3] = Math.floor(share.combat * B); q.caps[4] = cap;
+  q.scale[0] = q.scale[1] = s; q.scale[2] = q.scale[3] = Math.min(s, 1.5); q.scale[4] = Math.max(0.5, Math.min(1.25, s));
+  q.gen++;
+  return q;
+}
+
+// ── Legacy A/B code runs on a persistent private LCG (fxState.legacyRng,
+// reseeded only by fxReset) installed as Math.random, so Legacy/New never
+// changes the gameplay stream. One static function; no per-call closure.
+var _effectLegacyHolder = {legacyRng: 0x5bd1e995}, _effectLegacyTarget = null;
+function _effectLegacyRandom() {
+  var S = _effectLegacyTarget;
+  S.legacyRng = (Math.imul(S.legacyRng, 1664525) + 1013904223) >>> 0;
+  return S.legacyRng / 4294967296;
+}
+function effectWithLegacyRandom(fn, a, b, c) {
+  var saved = Math.random, prev = _effectLegacyTarget;
+  _effectLegacyTarget = typeof fxState === 'object' && fxState ? fxState : _effectLegacyHolder;
+  Math.random = _effectLegacyRandom;
+  try { return fn(a, b, c); } finally { Math.random = saved; _effectLegacyTarget = prev; }
+}
+
+var EFFECT_FAMILIES = compileEffectFamilies(EFFECT_FAMILY_SOURCE);
+_effectRegisterPose();
 // =============================================
 // SECTION 1: UTILITIES
 // =============================================
@@ -4260,8 +4619,7 @@ function applyRelicOnHit(dmg, enemy, isBonusProc) {
         bestE.flashUntil = gameTimeNow() + 150;
         if (bestE.health <= 0) stats.totalEnemiesKilled++;
         // Visual spark
-        impacts.push({x: bestE.x, y: bestE.y, z: 10, life: 0.3, maxLife: 0.3,
-          color: '#ffff00', size: 6, vx: 0, vy: 0, vz: 20});
+        if (typeof fxEvent === 'function') fxEvent('thunderCore', bestE);
       }
     }
   }
@@ -7886,31 +8244,13 @@ function assembleWindow(centerCX, centerCY) {
     // Rebase projectiles, effects, etc
     for (var pi = 0; pi < projectiles.length; pi++) {
       projectiles[pi].x -= shiftX; projectiles[pi].y -= shiftY;
+      if (projectiles[pi].isLob) { projectiles[pi].targetX -= shiftX; projectiles[pi].targetY -= shiftY; }
     }
-    for (var ii = 0; ii < impacts.length; ii++) {
-      impacts[ii].x -= shiftX; impacts[ii].y -= shiftY;
-    }
-    for (var gi2 = 0; gi2 < groundEffects.length; gi2++) {
-      groundEffects[gi2].x -= shiftX; groundEffects[gi2].y -= shiftY;
-    }
-    for (var ci3 = 0; ci3 < coinDrops.length; ci3++) {
-      coinDrops[ci3].x -= shiftX; coinDrops[ci3].y -= shiftY;
-    }
-    for (var so = 0; so < soulOrbs.length; so++) {
-      soulOrbs[so].x -= shiftX; soulOrbs[so].y -= shiftY;
-    }
-    for (var de = 0; de < deathEffects.length; de++) {
-      deathEffects[de].x -= shiftX; deathEffects[de].y -= shiftY;
-    }
-    for (var at = 0; at < arcaneTomes.length; at++) {
-      arcaneTomes[at].x -= shiftX; arcaneTomes[at].y -= shiftY;
-    }
+    // Effect families (statPickups were rebuilt above in new coordinates).
+    if (typeof effectRegistryRebase === 'function') effectRegistryRebase(shiftX, shiftY);
     if (arenaChallenge) {
       arenaChallenge.centerX -= shiftX;
       arenaChallenge.centerY -= shiftY;
-    }
-    for (var sp = 0; sp < statPickups.length; sp++) {
-      statPickups[sp].x -= shiftX; statPickups[sp].y -= shiftY;
     }
     for (var ci4 = 0; ci4 < companions.length; ci4++) {
       companions[ci4].x -= shiftX; companions[ci4].y -= shiftY;
@@ -8206,6 +8546,7 @@ function resetEndlessMode() {
   phoenixFeatherUsed = false;
   goal = null;
   goalSpawned = false;
+  if (typeof effectRegistryReset === 'function') effectRegistryReset('world');
 
   // Set window at origin
   windowCX = -Math.floor(WINDOW_CHUNKS / 2);
@@ -8246,7 +8587,7 @@ function resetEndlessMode() {
 
   // Activate settings
   CAM_FOLLOW = true;
-  initAmbientParticles();
+  if (typeof effectRegistryPrime === 'function') effectRegistryPrime('world'); else initAmbientParticles();
   applyPreset();
 
   // Generation stats
@@ -8390,8 +8731,7 @@ function resetLevel(lv) {
   coinDrops = []; coins = 0; wardActive = false; dmgBoostUntil = 0; speedBoostUntil = 0;
   groundEffects = []; chainEffects = []; novaEffects = [];
   projectiles = []; impacts = []; coneEffects = [];
-  ambientParticles = [];
-  initAmbientParticles();
+  if (typeof effectRegistryReset === 'function') { effectRegistryReset('level'); effectRegistryPrime('level'); } else { ambientParticles = []; initAmbientParticles(); }
   initMinimap();
   spawnShop();
   medalGold = (cfg.medals && cfg.medals.gold) ? cfg.medals.gold : 10;
@@ -8698,16 +9038,21 @@ function findSpatialCeilingZ(mesh, ci, targetZ) {
   return bestDiff <= 0.8 ? bestZ : NaN;
 }
 
+// Constant layer key tables: no 'l' + li + 'Type' strings on per-call paths.
+var SPATIAL_LAYER_TYPE_KEYS = ['l0Type', 'l1Type', 'l2Type', 'l3Type', 'l4Type'];
+var SPATIAL_LAYER_TOP_KEYS = ['l0TopZ', 'l1TopZ', 'l2TopZ', 'l3TopZ', 'l4TopZ'];
+
 // Corner order is top-left, top-right, bottom-left, bottom-right. The quad is
 // split along 0->3, exactly as the floor and ceiling drawing passes split it.
 // A missing join is a missing triangle, not a bridge to another stratum.
-function spatialLayerCorners(mesh, ci, li) {
+// Writes the corners into out and returns true; false where no triangle exists.
+function spatialLayerCornersInto(mesh, ci, li, out) {
   if (!mesh || !mesh.layerCount || !Number.isInteger(ci) || ci < 0 ||
       ci >= mesh.w * mesh.h || !Number.isInteger(li) || li < 0 ||
       li >= mesh.layerCount[ci] || ci % mesh.w >= mesh.w - 1 ||
-      Math.floor(ci / mesh.w) >= mesh.h - 1) return null;
-  var type = mesh['l' + li + 'Type'][ci], z = mesh['l' + li + 'TopZ'][ci];
-  if ((type !== 1 && type !== 2 && type !== 3 && type !== 4) || !Number.isFinite(z)) return null;
+      Math.floor(ci / mesh.w) >= mesh.h - 1) return false;
+  var type = mesh[SPATIAL_LAYER_TYPE_KEYS[li]][ci], z = mesh[SPATIAL_LAYER_TOP_KEYS[li]][ci];
+  if ((type !== 1 && type !== 2 && type !== 3 && type !== 4) || !Number.isFinite(z)) return false;
   var z1, z2, z3;
   if (type === 2) {
     z1 = findSpatialCeilingZ(mesh, ci + 1, z);
@@ -8719,11 +9064,17 @@ function spatialLayerCorners(mesh, ci, li) {
     z2 = findSpatialRoleZ(mesh, ci + mesh.w, role, z, ci);
     z3 = findSpatialRoleZ(mesh, ci + mesh.w + 1, role, z, ci);
   }
-  if (!Number.isFinite(z1) || !Number.isFinite(z2) || !Number.isFinite(z3)) return null;
+  if (!Number.isFinite(z1) || !Number.isFinite(z2) || !Number.isFinite(z3)) return false;
   var tolerance = SPATIAL_CORNER_MAX_DELTA_H;
-  return [z, Math.max(z - tolerance, Math.min(z + tolerance, z1)),
-    Math.max(z - tolerance, Math.min(z + tolerance, z2)),
-    Math.max(z - tolerance, Math.min(z + tolerance, z3))];
+  out[0] = z; out[1] = Math.max(z - tolerance, Math.min(z + tolerance, z1));
+  out[2] = Math.max(z - tolerance, Math.min(z + tolerance, z2));
+  out[3] = Math.max(z - tolerance, Math.min(z + tolerance, z3));
+  return true;
+}
+var _spatialCornerScratch = [0, 0, 0, 0];
+function spatialLayerCorners(mesh, ci, li) {
+  var s = _spatialCornerScratch;
+  return spatialLayerCornersInto(mesh, ci, li, s) ? [s[0], s[1], s[2], s[3]] : null;
 }
 
 // referenceZ, when supplied, is spatial world Z; otherwise underground selects
@@ -9434,7 +9785,7 @@ function buildPointLights() {
     // Glow and illumination originate at the visible flame, just OUTSIDE its
     // supporting face. The former half-cell offset pointed into solid rock.
     pointLights.push({x: attachment.x, y: attachment.y, z: attachment.flameZ,
-      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80});
+      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny});
   }
   // Warm amber glow at cave entrances — subtle light spilling from the archway
   // onto the approach. Offset slightly into the cave mouth so the opening reads
@@ -9444,7 +9795,7 @@ function buildPointLights() {
     var _ea = e.angle || 0;
     var _elx = e.x + Math.cos(_ea) * 10;
     var _ely = e.y + Math.sin(_ea) * 10;
-    pointLights.push({x: _elx, y: _ely, z: (e.floorH || 0) * 25 + 35, radius: 80, intensity: 0.45, r: 255, g: 200, b: 140});
+    pointLights.push({x: _elx, y: _ely, z: (e.floorH || 0) * 25 + 35, radius: 80, intensity: 0.45, r: 255, g: 200, b: 140, kind: 'entrance'});
   }
   // Allocate light grid if needed
   var gw = Math.ceil(worldW / _lightCellSize);
@@ -12156,11 +12507,7 @@ function step(dt) {
       health = HEALTH_MAX;
       pushToast('Phoenix Feather revived you!', '#ff8844', 3000);
       // Burst of orange particles
-      for (var phi = 0; phi < 16; phi++) {
-        var pAng = (phi / 16) * Math.PI * 2;
-        impacts.push({x: pos.x, y: pos.y, z: 15, life: 0.8, maxLife: 0.8,
-          color: '#ff8020', size: 5, vx: Math.cos(pAng) * 60, vy: Math.sin(pAng) * 60, vz: 30 + Math.random() * 20});
-      }
+      if (typeof fxEvent === 'function') fxEvent('phoenix');
       console.log('[RELIC] Phoenix Feather triggered! Full HP restored.');
     } else {
       gameOverState = true;
@@ -12601,6 +12948,7 @@ function npcUpdateAction(actor,target,ability,now,commitFn) {
       if(!npcTargetValid(actor,recipient,ability.range,ability.melee)) {npcStats.invalidations++;return;}
       npcStats.commits++;n.commits++;actor.lastAttackMs=now;
       commitFn(actor,recipient,now);
+      if (ability.melee && typeof fxEvent === 'function') fxEvent('meleeCommit', actor, recipient);
       return;
     }
     if(!npcTargetValid(actor,target,ability.range,ability.melee))return;
@@ -12612,6 +12960,7 @@ function npcUpdateAction(actor,target,ability,now,commitFn) {
       n.attackTargetId=null;actor._attackTarget=null;
       npcStats.commits++;n.commits++;actor.lastAttackMs=now;
       commitFn(actor,target,now);
+      if (ability.melee && typeof fxEvent === 'function') fxEvent('meleeCommit', actor, target);
     }
   } finally {physicsStageEnd('npcActions',start);}
 }
@@ -13415,6 +13764,7 @@ function updateProjectiles(dt) {
     if (contact.status==='invalid' || contact.status==='unloaded') {expired++;continue;}
     if (contact.status==='blocked') {
       nx=contact.point.x;ny=contact.point.y;nz=contact.point.z;
+      if (typeof fxEvent === 'function') fxEvent('projectileContact', p, contact, nx, ny, nz);
       if (p.isLob) {
         var lobFloorZ=floorMesh ? sampleSpatialSupportZ(nx,ny,p.renderFloorZ,p.underground) : 0;
         if (Number.isFinite(lobFloorZ)) groundEffects.push({x:nx,y:ny,renderFloorZ:lobFloorZ,
@@ -13442,12 +13792,7 @@ function updateProjectiles(dt) {
           if (sp2.hp <= 0) {
             sp2.active = false;
             // Death burst
-            for (var sb = 0; sb < 5; sb++) {
-              var sba = Math.random() * Math.PI * 2, sbs = 40 + Math.random() * 80;
-              deathEffects.push({x:sp2.x, y:sp2.y, vx:Math.cos(sba)*sbs, vy:Math.sin(sba)*sbs,
-                rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*8,
-                len:8+Math.random()*10, spawnMs:now, lifeMs:600, color:'#3a1520'});
-            }
+            if (typeof fxEvent === 'function') fxEvent('spawnerDeath', sp2);
             // Drop gold
             for (var sd = 0; sd < 5; sd++) {
               var sda = Math.random() * Math.PI * 2;
@@ -13587,6 +13932,9 @@ function updateGroundEffects(dt) {
 function tickEffects(dt) {
   var now = gameTimeNow();
 
+  // Timed effect records (and legacy bone physics) prune in the effect
+  // registry; the else branch keeps partial test hosts on the old lists.
+  if (typeof effectRegistryPrune === 'function') effectRegistryPrune(now, dt); else {
   // Impacts — timer only
   if (impacts && impacts.length) {
     var ki = [];
@@ -13613,6 +13961,7 @@ function tickEffects(dt) {
       }
     }
     deathEffects = kd;
+  }
   }
 
   // Vacuum pull — boosted during dash (sweep effect)
@@ -13848,13 +14197,7 @@ function updateEnemies(dt) {
     if (e.health <= 0) {
       console.log('[ENEMY] Enemy ' + i + ' defeated!');
       // Bone scatter — 7 tumbling segments fly outward
-      for (var b = 0; b < 7; b++) {
-        var bang = Math.random() * Math.PI * 2;
-        var bspd = 50 + Math.random() * 110;
-        deathEffects.push({x:e.x, y:e.y, vx:Math.cos(bang)*bspd, vy:Math.sin(bang)*bspd,
-          rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*10,
-          len:7+Math.random()*13, spawnMs:now, lifeMs:800, color:'#cfc8b8'});
-      }
+      if (typeof fxEvent === 'function') fxEvent('enemyDeath', e);
       // Soul orb — glowing mana pickup
       soulOrbs.push({x:e.x, y:e.y, renderFloorZ:getEntityRenderFloorZ(e), underground:!!e.underground,
         spawnMs:now, bob:Math.random()*Math.PI*2});
@@ -13980,6 +14323,3152 @@ function updateEnemies(dt) {
     spawnGoal();
   }
 }
+// Particle recipes (unified effects V1): effect materials, the name tables the
+// recipe compiler validates against, the recipe table and its compiler.
+// Recipes are backend-neutral data (world units, material roles, primitive
+// names). compileFxRecipes validates every key, enum, range, role, event and
+// anchor at load and packs each recipe into typed columns; it is the only
+// code here that throws. Randomness is not a recipe flag: particles draw
+// stateless hash noise (effectNoise) and never Math.random.
+var FX_MATERIAL_COLORS = {
+  fxMote: {dust:'#b4a078', sand:'#c8b48c', firefly:'#96ff50', snow:'#d2e6ff', sparkle:'#b4dcff',
+    drip:'#5078c8', spore:'#78be50', shimmer:'#fff0c8', caveDust:'#8a8378'},
+  fxEmber: {e1:'#ff8c14', e2:'#ffa014', e3:'#ffb414', e4:'#ffc814'},
+  fxWeather: {rain:'#9fb4c8', rainLit:'#c9d6e4', splash:'#c8d8e8', snow:'#eef4fa', ash:'#6e6a66', ashLit:'#a39c94', cinder:'#ff8a3a'},
+  fxDebris: {spark:'#fff1c8', sparkHot:'#ffb347', dust:'#a89880', chip:'#6a6258', kickedUp:'#d8cfbd'},
+  fxBone: {enemy:'#cfc8b8', spawner:'#3a1520'},
+  fxOre: {gold:'#c8a000', goldLit:'#ffe066', teal:'#00a89a', tealLit:'#00ddc8'},
+  fxFeedback: {phoenix:'#ff8020', thunder:'#ffff66', garrison:'#c8a028', tome:'#bb66ff', heart:'#ff4444', mana:'#4488ff',
+    move:'#44dd55', shrineDamage:'#ff4444', shrineSpeed:'#44ffff', shrineRegen:'#44ff44', shrineArmor:'#ffaa44'}
+};
+var FX_MATERIALS = compileGameMaterials(FX_MATERIAL_COLORS);
+
+// Semantic events: the A/B family whose Legacy mode runs the verbatim legacy
+// adapter instead, and the where.kind vocabulary. Every name needs a reader
+// in 11-fx-engine.js (asserted at load). S5 adds projectile contacts and NPC
+// melee commits (no family: the fxDebris preset); S6 the locomotion
+// observers' events (no family: the fxFootDust preset): a footstep of the
+// player or an NPC, the player's dash and landing.
+var FX_EVENTS = {
+  enemyDeath: {family:'bones', kinds:[]},
+  spawnerDeath: {family:'bones', kinds:[]},
+  pickup: {family:'pickupBursts', kinds:['tome', 'stat']},
+  shrine: {family:'pickupBursts', kinds:[]},
+  phoenix: {family:'pickupBursts', kinds:[]},
+  thunderCore: {family:'pickupBursts', kinds:[]},
+  allyDeath: {family:'pickupBursts', kinds:[]},
+  projectileContact: {family:null, kinds:['wall', 'floor', 'cap', 'ceiling', 'enemy', 'spawner', 'ore', 'lob']},
+  meleeCommit: {family:null, kinds:[]},
+  footstep: {family:null, kinds:[]},
+  dashStart: {family:null, kinds:[]},
+  land: {family:null, kinds:[]}
+};
+var FX_EVENT_NAMES = Object.keys(FX_EVENTS);
+// Anchor resolvers live in the engine (PARTICLE_ANCHORS); dashTrail (S6:
+// the player's feet while a dash lasts), flameStream (S8: the flame stream's
+// segment from the casting hand while the beam is drawn).
+var FX_ANCHOR_NAMES = ['entity', 'point', 'torch', 'dashTrail', 'flameStream'];
+// Camera-relative fields (section 4.7): a box centred ahead of the camera
+// holds a target population that wraps at the box edge and fades there.
+// Ambient: the Particles setting; set choice: underground wins over any
+// biome, each other set names its biomes. Weather (S7, target 'weather'):
+// one set per weather kind, each kind's population x s x its level x the
+// cave-mouth visibility, over open-sky columns; in 2D (1 u a pixel, the box
+// on the view) it keeps twoDScale of that at the authored canvas (more on a
+// larger view, 11-fx-engine.js), and rain (mode2D splashOnly) spawns only
+// its splashes.
+var FX_FIELD_SOURCE = {
+  ambient: {box:{half:170, bias:100}, edgeFade:0.15, target:'setting',
+    sets:{meadow:['ground', 'plains'], forest:['forest'], frost:['ice'], dunes:['expanse'], caveSurface:['cave'],
+      underground:'playerUnderground'},
+    mode2D:'none'},
+  weather: {box:{half:200, bias:90}, edgeFade:0.1, target:'weather', twoDScale:0.35}
+};
+var FX_FIELD_NAMES = Object.keys(FX_FIELD_SOURCE);
+// Weather (section 9.1). Fronts of 2-5 minutes of sim time; a front is
+// active in the current biome when its roll is under the biome's chance, at
+// an intensity eased in and out over crossfadeSeconds (kinds crossfade when
+// the biome changes mid-front); wind per front, eased over windEaseSeconds.
+// Population per kind at Particles 25 and intensity 1. Rain columns whose
+// open sky (highest walkable surface, or a capless cave roof) is at least
+// snowLineH (mesh heights) snow instead, at snow's density, while rain keeps
+// its density over the rest: 1.5 H is the 84th percentile of the surface
+// heights of seed 424242's spawn window (80th of a 48k x 48k area; S7
+// histogram), so peaks snow while valleys rain (approved by the lead after
+// S8; Revision 3 Q3 had said 0.5 H). Visibility falls over renderCameraCaveBlend
+// 0.5-1 (smoothstep), so a cave mouth still shows the rain outside. Refill
+// runs at refillBoost x the turnover rate. The ambient coupling: drips
+// multiply while raining; fireflies hide in weather; while no weather wind
+// blows (the Weather switch off), spawn direction 'wind' takes the calm
+// direction, +x: the way legacy blown sand drifted.
+var FX_WEATHER_RULES = {
+  frontSeconds:[120, 300], crossfadeSeconds:8,
+  biomes:{ground:{kind:'rain', chance:0.45}, plains:{kind:'rain', chance:0.5}, forest:{kind:'rain', chance:0.6},
+    cave:{kind:'rain', chance:0.3}, ice:{kind:'snow', chance:0.65}, expanse:{kind:'ash', chance:0.35}},
+  intensity:[0.35, 1.0], windSpeed:[4, 30], windEaseSeconds:10,
+  population:{rain:600, snow:450, ash:360}, snowLineH:1.5, caveVisibility:[0.5, 1.0], refillBoost:1.25,
+  rainFedDrips:1.5, fireflySuppress:0.3, calmDirection:[1, 0]
+};
+
+// Strategy flags; a column stores the index in its list (defaults first).
+var FX_ENUMS = {
+  class: ['weather', 'ambient', 'locomotion', 'combat', 'feedback'],   // priority = index + 1
+  layer: ['world', 'combat', 'overlay'],
+  shape: ['point', 'sphere', 'disc', 'ring', 'column', 'segment', 'cone', 'screenCorners'],
+  support: ['event', 'viewer', 'openSky', 'ceiling'],
+  direction: ['none', 'random', 'up', 'radial', 'normal', 'reflect', 'along', 'wind', 'backward'],
+  model: ['drift', 'static', 'ballistic', 'fall', 'rise'],
+  mode: ['none', 'clamp', 'kill', 'rest', 'bounce'],
+  stratum: ['reference', 'surface', 'openSky'],
+  envelope: ['fade', 'flash', 'pulse', 'hold', 'quadOut', 'linear'],
+  primitive: ['dot', 'glowDot', 'streak', 'segment', 'chip', 'puff', 'ring'],
+  blend: ['normal', 'add'],
+  occlusion: ['auto', 'point', 'footprint', 'tiles', 'corona', 'segment', 'clip', 'none'],
+  lighting: ['ambient', 'lightGrid', 'emissive', 'sun', 'none'],
+  place: ['source', 'sourceOrFront', 'frontRing', 'frontSides', 'eye', 'screen'],
+  selfView: ['world', 'ifVisible', 'skip'],
+  view2D: ['none', 'dot', 'ring', 'segment', 'line', 'puff'],
+  mode2D: ['simulate', 'splashOnly', 'none'],
+  at: ['point', 'feet', 'torso', 'itemFloor', 'shrineCrystal', 'playerFeet'],
+  visible: ['always', 'day', 'night'],
+  colorSource: ['static', 'event', 'spell', 'ore', 'surfaceWall', 'surfaceFloor', 'surfaceDust', 'surfaceStep'],
+  weatherKind: ['rain', 'snow', 'ash']
+};
+
+// Ore vein types (oreVeins[].veinType), in the order of PAL.ore's pairs.
+var FX_ORE_TYPES = ['gold', 'teal'];
+// Contact and step surfaces per biome: wall base, floor band 5, dust (ice
+// snow, expanse sand); underground uses the cave stone. Step dust is that
+// dust kicked up into the air: 60% of the way to fxDebris.kickedUp, so it
+// reads lighter than the ground it rises from (the S6 browser check: a puff
+// in the floor band itself is lost against the lit floor); dust already
+// lighter than kickedUp (Rec. 709 luma: the snow on ice) stays as it is.
+var FX_SURFACE = (function () {
+  var out = {}, up = FX_MATERIALS.fxDebris.packed.kickedUp;
+  function packed(rgb) { return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]; }
+  function luma(c) { return 0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255); }
+  function kicked(c) {
+    if (luma(c) >= luma(up)) return c;
+    var v = 0;
+    for (var sh = 16; sh >= 0; sh -= 8) { var a = (c >> sh) & 255; v = v << 8 | Math.round(a + (((up >> sh) & 255) - a) * 0.6); }
+    return v;
+  }
+  function surface(wall, floor, dust) { return {wall:wall, floor:floor, dust:dust, step:kicked(dust)}; }
+  Object.keys(BIOME_PALETTE).forEach(function (b) {
+    var p = BIOME_PALETTE[b], floor = parseInt(p.floorBands[5].slice(1), 16);
+    out[b] = surface(packed(p.wallBaseRGB), floor,
+      b === 'ice' ? FX_MATERIALS.fxWeather.packed.snow : b === 'expanse' ? FX_MATERIALS.fxMote.packed.sand : floor);
+  });
+  var stone = GAME_MATERIALS.caveStone.packed;
+  out.underground = surface(stone.base, stone.worn, stone.damp);
+  return out;
+}());
+
+// Templates (trigger {api:true}: they spawn only through fxEmit/fxAttach or
+// as extends bases), then the family recipes of each slice: S3 the ambient
+// motes (field 'ambient') and torch embers (anchor 'torch'); S4 the death
+// bones (family 'bones') and the feedback bursts (family 'pickupBursts'),
+// placed where first person can see them; S5 the impact debris preset
+// (toggle fxDebris): sparks in the spell's colours, chips in the struck
+// surface's (wall, floor, ore vein, spawner; none from bodies; a ceiling's
+// fall, never up into the rock) and dust (a wall's in its rock colour, on
+// the struck side only, a small puff even next to the camera), from
+// projectile contacts and NPC melee commits. Melee sparks move in front of
+// the first-person camera only when the player is struck; strikes between
+// NPCs stay where they happen. S6 the footstep and dash dust preset
+// (toggle fxFootDust), from the movement observers: a puff per stride, a
+// ring of dust on landing, a larger burst and a trail on a dash, in the
+// stepped surface's dust kicked up (lighter, so it reads on its own ground)
+// and on its stratum (a dash needs ground within a step below the feet);
+// in 2D a puff or landing ring is at least minPx2D in radius (1 u = 1 px),
+// while in 3D a far puff shrinks with distance. The player's own step,
+// landing and dash puffs sit at the feet, never in first-person view, so
+// they are refused there (selfView ifVisible, counted); a dash shows puffs
+// in the lower third of the screen, beside the arms, instead. S7 the weather
+// preset (toggle fxWeather; field 'weather'): rain streaks that splash on
+// the floor they hit (a cap, a wall top, a slope), snow (also rain's swap
+// above the snow line) and ash with cinders that settle and fade; all start
+// at the wind's speed and follow it through drag. Rain's lod sets only its
+// far distance, where streaks draw as dots: the field keeps its population
+// over the whole box (no spawn keep), and its splash has its own. Snow
+// brightens a little at night (nightBoost), grey ash does not; cinders glow.
+// S8 the flame stream's embers (family flameEmbers, anchor flameStream):
+// glowing fire-palette dots spawned along the beam from the casting hand,
+// on its arc over the floor under each one, fanning out as the beam does
+// and carrying the player's motion, in place of the shadow-blurred
+// billboards (none at Particles 0: combat class); sized, counted (about 24
+// live) and haloed as the legacy ones read (S8 browser A/B at 360 x 240:
+// about 0.9 x the light and 0.96 x the pixels the shadow-blurred ones add).
+// Corona occlusion (five reads, alpha x the visible share) keeps their cost
+// flat at any canvas size; a 6 px 2D floor carries about the light of the
+// legacy 2D embers, as unblurred dots.
+// Radii are the legacy size x 0.15 before the size tier, which is applied
+// once, at draw. maxLive: population x 2.4 (Ultra) with a margin, above 2D's
+// largest share; a 2D splash lives 0.24 s at T / meanLife x 0.35 x the
+// view's area a second (up to 3 x the authored canvas).
+var FX_RECIPE_SOURCE = {
+  mote: {class:'ambient', family:'ambient', layer:'world', trigger:{api:true}, sizeTier:'particle',
+    spawn:{shape:'column', support:'viewer', direction:'random'}, motion:{model:'drift'},
+    collision:{mode:'clamp', stratum:'reference'}, life:{seconds:[3, 7], fade:[0.2, 0.3]},
+    render:{primitive:'dot', size:[0.15, 0.3], alpha:[0.18, 0.3], minPx:1, maxPx:4},
+    occlusion:'auto', lighting:'ambient', view2D:'none', mode2D:'none', lod:{near:60, far:220, farKeep:0.5, cull:260}},
+  feedbackBurst: {class:'feedback', family:'pickupBursts', layer:'world', trigger:{api:true},
+    place:'sourceOrFront', placeParams:{near:48, distance:34, drop:10},
+    spawn:{shape:'ring', radius:[1, 2], direction:'radial', speed:[22, 34], up:[8, 22], inherit:1},
+    motion:{model:'drift', gravity:-6, drag:1.8}, collision:{mode:'none'}, life:{seconds:[0.8, 1.0], fade:[0.05, 0.5]},
+    render:{primitive:'glowDot', size:[0.5, 0.8], alpha:[0.85, 1], glow:3, glowAlpha:0.35, blend:'add', minPx:2},
+    occlusion:'auto', lighting:'emissive', view2D:'dot', lod:{near:80, far:500, farKeep:1, cull:900}},
+  'ambient.dust': {extends:'mote', trigger:{field:'ambient', sets:{meadow:0.8, forest:0.7, caveSurface:0.5}},
+    color:{material:'fxMote', roles:['dust']}, spawn:{height:[5, 25], speed:[0, 3], up:[-1, 1]},
+    motion:{turbulence:1.5, turbHz:0.5}},
+  'ambient.firefly': {extends:'mote', trigger:{field:'ambient', sets:{meadow:0.2, forest:0.3}, visible:'night'},
+    color:{material:'fxMote', roles:['firefly']}, spawn:{height:[8, 28], speed:[0, 5], up:[-2.5, 2.5]},
+    motion:{turbulence:3, turbHz:0.6}, life:{seconds:[3, 8], envelope:'pulse', pulseHz:0.8, pulseDepth:1},
+    render:{primitive:'glowDot', size:[0.225, 0.225], alpha:[0.3, 0.6], glow:4, glowRole:'firefly', glowAlpha:0.15, blend:'add'},
+    lighting:'emissive', nightBoost:0.3, lod:{glowFar:180}},
+  'ambient.snowflake': {extends:'mote', trigger:{field:'ambient', sets:{frost:0.6}},
+    color:{material:'fxMote', roles:['snow']}, spawn:{height:[30, 70], speed:[0, 4], up:[-15, -5]},
+    motion:{model:'fall', turbulence:2, turbHz:0.7}, collision:{mode:'rest', restSeconds:[0.4, 0.8]},
+    life:{seconds:[4, 7]}, render:{size:[0.15, 0.45], alpha:[0.25, 0.45]}},
+  'ambient.sparkle': {extends:'mote', trigger:{field:'ambient', sets:{frost:0.4}, visible:'day'},
+    color:{material:'fxMote', roles:['sparkle']}, spawn:{height:[2, 17]}, motion:{model:'static'},
+    life:{seconds:[0.8, 2], envelope:'flash'}, render:{alpha:[0.4, 0.7]}, lighting:'sun'},
+  'ambient.sandDust': {extends:'mote', trigger:{field:'ambient', sets:{dunes:0.7}},
+    color:{material:'fxMote', roles:['sand']}, spawn:{height:[3, 23], direction:'wind', speed:[8, 20], up:[-1.5, 1.5]},
+    life:{seconds:[3, 6]}, render:{size:[0.15, 0.375], alpha:[0.15, 0.3]}},
+  'ambient.shimmer': {extends:'mote', trigger:{field:'ambient', sets:{dunes:0.3}, visible:'day'},
+    color:{material:'fxMote', roles:['shimmer']}, spawn:{height:[5, 20], up:[1, 4]}, motion:{model:'rise', gravity:-2.5},
+    collision:{mode:'none'}, life:{seconds:[2, 4]}, render:{primitive:'puff', size:[0.3, 0.6], alpha:[0.08, 0.16]}, lighting:'sun'},
+  'ambient.drip': {extends:'mote', trigger:{field:'ambient', sets:{underground:0.45}},
+    color:{material:'fxMote', roles:['drip']}, spawn:{support:'ceiling', height:[0, 0], up:[-35, -20]},
+    motion:{model:'fall', gravity:220}, collision:{mode:'kill', onFloor:'ambient.dripRipple', onFloorChance:0.5, childNear:90},
+    life:{seconds:[1.5, 3], untilGround:true, fade:[0.05, 0.05]},
+    render:{primitive:'streak', size:[0.16, 0.16], streakSeconds:0.05, alpha:[0.35, 0.5]}, occlusion:'segment', lighting:'lightGrid'},
+  'ambient.dripRipple': {class:'ambient', family:'ambient', trigger:{child:true}, color:{material:'fxMote', roles:['drip']},
+    motion:{model:'static'}, life:{seconds:[0.25, 0.35], fade:[0, 0.8], envelope:'flash'},
+    render:{primitive:'ring', size:[0.4, 0.6], grow:2.5, alpha:[0.35, 0.45]}, occlusion:'footprint', lighting:'lightGrid', view2D:'none'},
+  'ambient.spore': {extends:'mote', trigger:{field:'ambient', sets:{underground:0.35, caveSurface:0.5}},
+    color:{material:'fxMote', roles:['spore']}, spawn:{height:[3, 13], speed:[0, 2.5], up:[2, 6]},
+    motion:{model:'rise', gravity:-4, drag:0.6, turbulence:1.5, turbHz:0.4}, life:{seconds:[4, 8]},
+    render:{size:[0.15, 0.375], alpha:[0.2, 0.35]}, lighting:'lightGrid'},
+  'ambient.caveDust': {extends:'mote', trigger:{field:'ambient', sets:{underground:0.2}},
+    color:{material:'fxMote', roles:['caveDust']}, spawn:{height:[3, 20], speed:[0, 3]}, motion:{drag:0.6},
+    render:{size:[0.15, 0.27], alpha:[0.18, 0.28]}, lighting:'lightGrid'},
+  'torch.ember': {class:'ambient', family:'torchEmbers', layer:'world', trigger:{anchor:'torch', rate:6, maxAnchors:4, radius:220}, sizeTier:'particle',
+    color:{material:'fxEmber', roles:['e1', 'e2', 'e3', 'e4']}, spawn:{shape:'sphere', radius:[0, 2], direction:'normal', spread:0.9, speed:[2, 8], up:[8, 20]},
+    motion:{model:'rise', gravity:-14, drag:1.2, turbulence:4, turbHz:1.4}, collision:{mode:'none', wall:true},
+    life:{seconds:[0.8, 2], fade:[0.15, 0.4], envelope:'pulse', pulseHz:1.6, pulseDepth:0.8},
+    render:{primitive:'glowDot', size:[0.15, 0.3], alpha:[0.4, 0.7], glow:4, glowRole:'e2', glowAlpha:0.15, blend:'add'},
+    occlusion:'auto', lighting:'emissive', nightBoost:0.3, view2D:'none', lod:{near:40, far:220, farKeep:0.25, cull:260, glowFar:160}},
+  'bone.enemy': {class:'feedback', family:'bones', layer:'combat', trigger:{event:'enemyDeath', count:7, at:'feet', lift:24},
+    color:{material:'fxBone', roles:['enemy']}, jitter:1,
+    spawn:{shape:'disc', radius:[0, 3], direction:'radial', speed:[50, 160], up:[60, 120]},
+    motion:{model:'ballistic', gravity:420, drag:1.2, spin:[-5, 5]},
+    collision:{mode:'bounce', stratum:'reference', restitution:0.3, friction:0.55, bounces:2, restSeconds:[0.3, 0.5]},
+    life:{seconds:[1.4, 1.8], fade:[0, 0.35], envelope:'quadOut'},
+    render:{primitive:'segment', length:[7, 20], size:[0.5, 0.8], alpha:[1, 1], minPx:1.2, maxPx:3},
+    occlusion:'segment', lighting:'ambient', view2D:'segment', lod:{near:80, far:400, farKeep:0.6, cull:600}},
+  'bone.spawner': {extends:'bone.enemy', trigger:{event:'spawnerDeath', count:5, at:'feet', lift:30},
+    color:{material:'fxBone', roles:['spawner']}, spawn:{speed:[40, 120]}, life:{seconds:[1.0, 1.4]}, render:{length:[8, 18]}},
+  'burst.tome': {extends:'feedbackBurst', trigger:{event:'pickup', where:{kind:['tome']}, count:15, at:'itemFloor', lift:10},
+    color:{material:'fxFeedback', roles:['tome']}},
+  'burst.stat': {extends:'feedbackBurst', trigger:{event:'pickup', where:{kind:['stat']}, count:12, at:'itemFloor', lift:8},
+    color:'event', spawn:{speed:[22, 30]}},
+  'burst.shrine': {extends:'feedbackBurst', trigger:{event:'shrine', count:12, at:'shrineCrystal'}, color:'event',
+    spawn:{speed:[35, 45], up:[30, 50]}, motion:{model:'ballistic', gravity:60, drag:0.8}, life:{seconds:[0.8, 0.8]}},
+  'burst.phoenixRing': {extends:'feedbackBurst', layer:'overlay', place:'eye', trigger:{event:'phoenix', count:16},
+    color:{material:'fireMagic', roles:['core', 'light', 'mid']}, spawn:{shape:'ring', radius:[1, 2], direction:'radial', speed:[22, 30], up:[0, 0]},
+    life:{seconds:[0.7, 0.9]}, occlusion:'none', lighting:'none', view2D:'none'},
+  'burst.phoenixEmbers': {extends:'feedbackBurst', place:'source', trigger:{event:'phoenix', count:16, at:'playerFeet', lift:20},
+    color:{material:'fireMagic', roles:['light', 'mid']}, spawn:{shape:'ring', radius:[6, 14], speed:[10, 30], up:[10, 30]},
+    motion:{gravity:-70, drag:1, turbulence:6, turbHz:1.6}, life:{seconds:[0.8, 1.2], envelope:'pulse', pulseHz:2, pulseDepth:0.4}},
+  'burst.thunder': {extends:'feedbackBurst', place:'source', trigger:{event:'thunderCore', count:8, at:'torso'},
+    color:{material:'stormMagic', roles:['core', 'light']}, spawn:{shape:'sphere', radius:[0, 3], speed:[90, 170], up:[0, 20]},
+    motion:{model:'ballistic', gravity:150, drag:3}, life:{seconds:[0.2, 0.35], envelope:'flash'},
+    render:{primitive:'streak', size:[0.3, 0.3], streakSeconds:0.025, minPx:0}, occlusion:'segment', view2D:'line'},
+  'burst.allyDeath': {extends:'feedbackBurst', place:'source', trigger:{event:'allyDeath', count:8, at:'torso'},
+    color:{material:'fxFeedback', roles:['garrison']}, spawn:{shape:'sphere', radius:[0, 5], speed:[15, 40], up:[10, 30]},
+    motion:{gravity:-30, drag:1.5}, life:{seconds:[0.7, 1.0]}},
+  'impact.spark': {class:'combat', toggle:'fxDebris', layer:'combat',
+    trigger:[{event:'projectileContact', where:{kind:['wall', 'ceiling']}, count:6},
+      {event:'projectileContact', where:{kind:['floor', 'cap', 'lob']}, count:3},
+      {event:'projectileContact', where:{kind:['enemy']}, count:4},
+      {event:'projectileContact', where:{kind:['spawner']}, count:5},
+      {event:'projectileContact', where:{kind:['ore']}, count:8}],
+    color:'spell', spawn:{shape:'point', direction:'reflect', spread:0.7, speed:[80, 180], up:[10, 50]},
+    motion:{model:'ballistic', gravity:300, drag:2}, collision:{mode:'kill', stratum:'reference', wall:true},
+    life:{seconds:[0.15, 0.35], fade:[0, 0.6], envelope:'linear'},
+    render:{primitive:'streak', size:[0.35, 0.35], streakSeconds:0.02, alpha:[0.85, 1], minPx:0.8, maxPx:2, blend:'add'},
+    occlusion:'segment', lighting:'emissive', view2D:'line', lod:{near:20, far:260, farKeep:0.4, cull:420}},
+  'impact.chip': {class:'combat', toggle:'fxDebris', layer:'combat',
+    trigger:[{event:'projectileContact', where:{kind:['wall']}, count:5},
+      {event:'projectileContact', where:{kind:['floor', 'cap']}, count:3, color:'surfaceFloor'},
+      {event:'projectileContact', where:{kind:['ore']}, count:6, color:'ore'},
+      {event:'projectileContact', where:{kind:['spawner']}, count:4, color:{material:'fxBone', roles:['spawner']}}],
+    color:'surfaceWall', jitter:1, spawn:{shape:'point', direction:'normal', spread:0.95, speed:[40, 110], up:[20, 60]},
+    motion:{model:'ballistic', gravity:420, drag:0.4, spin:[-14, 14]},
+    collision:{mode:'bounce', stratum:'reference', restitution:0.35, friction:0.6, bounces:2, restSeconds:[0.4, 0.7], wall:true},
+    life:{seconds:[0.9, 1.4], fade:[0, 0.25], envelope:'hold'},
+    render:{primitive:'chip', size:[0.35, 0.7], alpha:[1, 1], minPx:1, maxPx:5},
+    occlusion:'auto', lighting:'lightGrid', view2D:'dot', lod:{near:20, far:200, farKeep:0.3, cull:360}},
+  'impact.chipFall': {extends:'impact.chip', trigger:{event:'projectileContact', where:{kind:['ceiling']}, count:2},
+    spawn:{spread:0.6, speed:[10, 40], up:[-20, 0]}},
+  'impact.dust': {class:'combat', toggle:'fxDebris', layer:'combat',
+    trigger:[{event:'projectileContact', where:{kind:['wall', 'ore', 'ceiling']}, count:1, color:'surfaceWall'},
+      {event:'projectileContact', where:{kind:['floor', 'cap', 'lob']}, count:2},
+      {event:'meleeCommit', count:1, at:'feet'}],
+    color:'surfaceDust', spawn:{shape:'sphere', radius:[0, 1.5], halfSpace:true, direction:'normal', spread:1.2, speed:[6, 18]},
+    motion:{model:'drift', gravity:-6, drag:3}, collision:{mode:'clamp', stratum:'reference'},
+    life:{seconds:[0.45, 0.8], fade:[0.1, 0.6]}, render:{primitive:'puff', size:[1.2, 2.2], grow:1.8, alpha:[0.22, 0.32], maxPx:16},
+    occlusion:'auto', lighting:'ambient', view2D:'puff', lod:{near:20, far:200, farKeep:0.3, cull:360}},
+  'impact.slimeSplat': {extends:'impact.dust',
+    trigger:{event:'projectileContact', where:{kind:['wall', 'floor', 'cap', 'ceiling'], companion:true}, count:3},
+    color:'spell', spawn:{speed:[10, 26], up:[4, 12]}, render:{primitive:'glowDot', size:[0.4, 0.7], glow:2, glowAlpha:0.2, blend:'normal'}},
+  'melee.spark': {extends:'impact.spark', trigger:[{event:'meleeCommit', where:{self:true}, count:4, at:'torso', place:'sourceOrFront'},
+      {event:'meleeCommit', where:{self:false}, count:4, at:'torso'}], color:'event',
+    placeParams:{near:20, distance:26, drop:6}, spawn:{spread:1.0, speed:[60, 140]}},
+  'step.dust': {class:'locomotion', toggle:'fxFootDust', layer:'world', trigger:{event:'footstep'}, selfView:'ifVisible',
+    color:'surfaceStep', spawn:{shape:'disc', radius:[0, 2], direction:'backward', spread:1.0, speed:[6, 14], up:[3, 9]},
+    motion:{model:'drift', gravity:-3, drag:4}, collision:{mode:'clamp', stratum:'reference'},
+    life:{seconds:[0.35, 0.6], fade:[0.1, 0.6]}, render:{primitive:'puff', size:[1.2, 2.2], grow:1.6, alpha:[0.35, 0.6], minPx2D:3},
+    occlusion:'auto', lighting:'ambient', view2D:'puff', lod:{near:15, far:160, farKeep:0.25, cull:240}},
+  'step.land': {extends:'step.dust', trigger:{event:'land', count:[8, 12]},
+    spawn:{shape:'ring', radius:[2, 4], direction:'radial', speed:[30, 80], up:[2, 8]},
+    render:{size:[1.4, 2.9], grow:1.8, alpha:[0.45, 0.8]}, view2D:'ring'},
+  'step.dash': {extends:'step.dust', trigger:{event:'dashStart', count:[8, 12]}, placeParams:{distance:160, arc:0.45},
+    spawn:{shape:'disc', radius:[0, 4], direction:'backward', spread:1.3, speed:[20, 60], up:[4, 14]},
+    render:{size:[2.2, 4.1], grow:2, alpha:[0.55, 0.9]}},
+  'step.dashTrail': {extends:'step.dash', trigger:{anchor:'dashTrail', rate:45},
+    spawn:{speed:[20, 50]}, render:{alpha:[0.35, 0.6]}},
+  'screen.dashDust': {class:'locomotion', toggle:'fxFootDust', layer:'overlay', place:'screen',
+    trigger:{event:'dashStart', where:{self:true}, count:6}, color:'surfaceStep',
+    spawn:{shape:'screenCorners', direction:'radial', speed:[0.2, 0.5]},
+    motion:{model:'drift', drag:2}, collision:{mode:'none'}, life:{seconds:[0.3, 0.45], fade:[0.1, 0.8]},
+    render:{primitive:'puff', size:[0.06, 0.12], grow:1.5, alpha:[0.25, 0.4]},
+    occlusion:'none', lighting:'ambient', view2D:'none'},
+  'weather.rain': {class:'weather', toggle:'fxWeather', layer:'world', trigger:{field:'weather', kind:'rain', aboveSnowLine:'weather.snow'},
+    color:{material:'fxWeather', roles:['rain', 'rainLit'], weights:[0.8, 0.2]},
+    spawn:{shape:'column', support:'openSky', height:[70, 150], direction:'wind', up:[-460, -380]},
+    motion:{model:'fall', drag:0.05, wind:0.35},
+    collision:{mode:'kill', stratum:'openSky', wall:true, onFloor:'weather.splash', onFloorChance:0.45, childNear:120},
+    life:{seconds:[1.4, 1.4], untilGround:true, fade:[0.03, 0.03], envelope:'hold'},
+    render:{primitive:'streak', size:[0.3, 0.3], streakSeconds:0.028, alpha:[0.25, 0.45], minPx:0.7, maxPx:1.6},
+    occlusion:'segment', lighting:'lightGrid', view2D:'none', mode2D:'splashOnly',
+    lod:{near:30, far:170}, budget:{maxLive:1600}},
+  'weather.splash': {class:'weather', toggle:'fxWeather', trigger:{child:true}, color:{material:'fxWeather', roles:['splash']},
+    motion:{model:'static'}, life:{seconds:[0.18, 0.3], fade:[0, 0.8], envelope:'flash'},
+    render:{primitive:'ring', size:[0.7, 1.3], grow:2.5, alpha:[0.35, 0.5]}, occlusion:'footprint', lighting:'lightGrid',
+    view2D:'ring', budget:{maxLive:720}},
+  'weather.snow': {class:'weather', toggle:'fxWeather', layer:'world', trigger:{field:'weather', kind:'snow'},
+    color:{material:'fxWeather', roles:['snow']},
+    spawn:{shape:'column', support:'openSky', height:[40, 110], direction:'wind', up:[-45, -25]},
+    motion:{model:'fall', drag:0.8, wind:0.8, turbulence:6, turbHz:1.1},
+    collision:{mode:'rest', stratum:'openSky', wall:true, restSeconds:[1, 1.6]}, life:{seconds:[6, 9], untilGround:true, fade:[0.1, 0.15]},
+    render:{primitive:'dot', size:[0.12, 0.3], alpha:[0.55, 0.85], minPx:1, maxPx:3}, occlusion:'auto',
+    lighting:'ambient', nightBoost:0.1, view2D:'dot', mode2D:'simulate', budget:{maxLive:1300}},
+  'weather.ash': {extends:'weather.snow', trigger:{field:'weather', kind:'ash', weight:0.92},
+    color:{material:'fxWeather', roles:['ash', 'ashLit'], weights:[0.65, 0.35]}, spawn:{up:[-20, -10]},
+    motion:{drag:0.9, wind:1, turbulence:5, turbHz:0.6}, collision:{restSeconds:[1.2, 1.8]}, life:{seconds:[6, 10]},
+    render:{size:[0.12, 0.25], alpha:[0.35, 0.6]}, nightBoost:0, budget:{maxLive:950}},
+  'weather.cinder': {extends:'weather.ash', trigger:{field:'weather', kind:'ash', weight:0.08},
+    color:{material:'fxWeather', roles:['cinder']}, collision:{mode:'kill'}, life:{seconds:[3, 6], envelope:'pulse', pulseHz:1.2, pulseDepth:0.5},
+    render:{primitive:'glowDot', size:[0.12, 0.2], alpha:[0.6, 0.9], glow:2.5, glowRole:'cinder', glowAlpha:0.3, blend:'add'},
+    lighting:'emissive', nightBoost:0.4, budget:{maxLive:80}},
+  'flame.ember': {class:'combat', family:'flameEmbers', layer:'combat', trigger:{anchor:'flameStream', rate:50},
+    color:{material:'fireMagic', roles:['core', 'light', 'mid'], weights:[0.3, 0.35, 0.35]},
+    spawn:{shape:'segment', direction:'along', spread:0.35, speed:[50, 100], up:[0, 12], inherit:1},
+    motion:{model:'ballistic', gravity:-20, drag:2, turbulence:10, turbHz:3}, collision:{mode:'kill', stratum:'reference', wall:true},
+    life:{seconds:[0.35, 0.6], fade:[0.05, 0.7]},
+    render:{primitive:'glowDot', size:[0.8, 1.2], grow:0.35, alpha:[0.6, 0.9], glow:3.2, glowRole:'mid', glowAlpha:0.4, blend:'add',
+      maxPx:16, minPx2D:6},
+    occlusion:'corona', lighting:'emissive', view2D:'dot', budget:{maxLive:96}}
+};
+
+// ── Compiler ──────────────────────────────────────────────────────────────
+// Leaf kinds: an enum (named by its key), a range, a number or a flag.
+var _FX_SCHEMA = {
+  extends:'id', class:'enum', toggle:'toggle', family:'family', layer:'enum', trigger:'trigger', color:'color',
+  sizeTier:'tier', jitter:'bit', occlusion:'enum', lighting:'enum', nightBoost:'unit', place:'enum',
+  placeParams:{near:'num0', distance:'num0', drop:'num', radius:'num0', arc:'num0'}, selfView:'enum',
+  view2D:'enum', mode2D:'enum', budget:{maxLive:'maxLive'},
+  spawn:{shape:'enum', radius:'range0', halfSpace:'bool', height:'range', lift:'range', support:'enum', direction:'enum',
+    spread:'num0', speed:'range0', up:'range', inherit:'unit'},
+  motion:{model:'enum', gravity:'num', drag:'num0', wind:'wind', turbulence:'num0', turbHz:'num0', spin:'range'},
+  collision:{mode:'enum', stratum:'enum', restitution:'unit', friction:'unit', bounces:'bounces',
+    restSeconds:'range0', wall:'bool', onFloor:'id', onFloorChance:'unit', childNear:'num0'},
+  life:{seconds:'rangeLife', untilGround:'bool', fade:'fade', envelope:'enum', pulseHz:'num0', pulseDepth:'unit'},
+  render:{primitive:'enum', size:'range0', grow:'num0', length:'range0', streakSeconds:'num0', alpha:'rangeUnit',
+    minPx:'num0', minPx2D:'num0', maxPx:'num0', glow:'num0', glowRole:'role', glowAlpha:'unit', blend:'enum'},
+  lod:{near:'num0', far:'num0', farKeep:'unit', cull:'num0', glowFar:'num0'}
+};
+var _FX_DEFAULTS = {toggle:null, family:null, layer:'world', color:'event', sizeTier:null, jitter:0, occlusion:'auto',
+  lighting:'ambient', nightBoost:0, place:'source', selfView:'world', mode2D:'simulate',
+  placeParams:{near:0, distance:30, drop:0, radius:0, arc:0.6}, budget:{},
+  spawn:{shape:'point', radius:[0, 0], halfSpace:false, height:[0, 0], lift:[0, 0], support:'event', direction:'none', spread:0,
+    speed:[0, 0], up:[0, 0], inherit:0},
+  motion:{model:'drift', wind:0, turbulence:0, turbHz:0.5, spin:[0, 0]},
+  collision:{mode:'none', stratum:'reference', restitution:0.3, friction:0.6, bounces:0, restSeconds:[0.5, 0.5],
+    wall:false, onFloor:null, onFloorChance:1, childNear:1e9},
+  life:{untilGround:false, fade:[0, 0], envelope:'fade', pulseHz:0, pulseDepth:0},
+  render:{grow:1, length:[0, 0], streakSeconds:0, alpha:[1, 1], minPx:0, minPx2D:null, maxPx:64, glow:0, glowRole:null,
+    glowAlpha:0, blend:'normal'},
+  lod:{near:1e6, far:2e6, farKeep:1, cull:4e6, glowFar:4e6}
+};
+// Motion models are compile-time sugar over the gravity and drag columns:
+// fall and rise keep their authored mean vertical speed as terminal speed.
+var _FX_MODELS = {drift:{gravity:0, drag:0}, static:{gravity:0, drag:0}, ballistic:{gravity:300, drag:0},
+  fall:{drag:0.5}, rise:{drag:0.5}};
+var _FX_TRIGGER_KEYS = {event:'event where count at lift place color', field:'field sets visible kind weight aboveSnowLine',
+  anchor:'anchor rate maxAnchors radius', child:'child', api:'api count'};
+var _FX_MERGED = ['spawn', 'motion', 'collision', 'life', 'render', 'lod', 'placeParams', 'budget'];
+function _fxHas(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }   // materials are null-prototype
+
+function compileFxRecipes(source, materials, fieldSource) {
+  var ids = Object.keys(source), fields = fieldSource || FX_FIELD_SOURCE, merged = {};
+  var toggles = EFFECT_TOGGLE_DEFS.map(function (d) { return d.key; }).filter(function (k) { return k !== 'fxUnified'; });
+  var families = Object.keys(EFFECT_FAMILY_MIGRATED), tiers = Object.keys(SIZE_TIERS);
+  function fail(id, why) { throw new Error('Particle recipe ' + id + ': ' + why); }
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function material(name) { return name && (materials && materials[name] || GAME_MATERIALS[name]) || null; }
+  function checkKeys(id, obj, allowed, path) {
+    Object.keys(obj).forEach(function (k) {
+      if (k === 'random') fail(id, path + 'random is not a flag (particles use hash noise)');
+      if (allowed.indexOf(k) < 0) fail(id, 'unknown key ' + path + k);
+    });
+  }
+  // Keys at every level of a raw entry, before merging.
+  function checkRaw(id, raw) {
+    if (!isObj(raw)) fail(id, 'not an object');
+    checkKeys(id, raw, Object.keys(_FX_SCHEMA), '');
+    Object.keys(raw).forEach(function (k) {
+      if (isObj(_FX_SCHEMA[k])) {
+        if (!isObj(raw[k])) fail(id, k + ' must be an object');
+        checkKeys(id, raw[k], Object.keys(_FX_SCHEMA[k]), k + '.');
+      }
+    });
+  }
+  function resolve(id, stack) {
+    if (merged[id]) return merged[id];
+    if (!source.hasOwnProperty(id)) fail(stack[stack.length - 1] || id, 'unknown recipe ' + id);
+    if (stack.indexOf(id) >= 0) fail(id, 'extends cycle ' + stack.concat(id).join(' > '));
+    var raw = source[id], base = raw.extends ? resolve(raw.extends, stack.concat(id)) : null, out = {};
+    if (base) Object.keys(base).forEach(function (k) { out[k] = base[k]; });
+    Object.keys(raw).forEach(function (k) {
+      if (k === 'extends') return;
+      // Plain objects merge key by key; trigger and color replace whole.
+      out[k] = _FX_MERGED.indexOf(k) >= 0 && out[k] ? Object.assign({}, out[k], raw[k]) : raw[k];
+    });
+    return (merged[id] = out);
+  }
+  ids.forEach(function (id) { checkRaw(id, source[id]); });
+  ids.forEach(function (id) { resolve(id, []); });
+
+  var n = ids.length, ID = {}, LIST = [];
+  ids.forEach(function (id, r) { ID[id] = r; });
+  // Static palette: packed RGB, interned; entry 0 is the dynamic fallback.
+  var palRGB = [0xfff1c8], palIndex = {0xfff1c8:0}, specSrc = [], specStart = [], specCount = [], cand = [], cum = [];
+  function intern(rgb) {
+    if (!palIndex.hasOwnProperty(rgb)) { palIndex[rgb] = palRGB.length; palRGB.push(rgb); }
+    return palIndex[rgb];
+  }
+  var surfBiomes = Object.keys(FX_SURFACE), surf = [];
+  surfBiomes.forEach(function (b) { var f = FX_SURFACE[b]; surf.push(intern(f.wall), intern(f.floor), intern(f.dust), intern(f.step)); });
+  // Ore veins (colour source 'ore'): base and lit entries per vein type.
+  var ore = FX_ORE_TYPES.map(function (t) { return [intern(FX_MATERIALS.fxOre.packed[t]), intern(FX_MATERIALS.fxOre.packed[t + 'Lit'])]; });
+  function colorSpec(id, c) {
+    var at = specSrc.length;
+    if (typeof c === 'string') {
+      var src = FX_ENUMS.colorSource.indexOf(c);
+      if (src < 1) fail(id, 'unknown color source ' + c);
+      specSrc.push(src); specStart.push(0); specCount.push(0);
+      return at;
+    }
+    if (!isObj(c)) fail(id, 'color must be a source name or {material, roles}');
+    checkKeys(id, c, ['material', 'roles', 'weights'], 'color.');
+    var m = material(c.material);
+    if (!m) fail(id, 'unknown material ' + c.material);
+    if (!Array.isArray(c.roles) || !c.roles.length) fail(id, 'color.roles must list roles');
+    if (c.weights !== undefined && (!Array.isArray(c.weights) || c.weights.length !== c.roles.length))
+      fail(id, 'color.weights must match roles');
+    var total = 0, start = cand.length;
+    c.roles.forEach(function (role, k) {
+      if (!_fxHas(m.packed, role)) fail(id, 'material ' + c.material + ' has no role ' + role);
+      var w = c.weights ? c.weights[k] : 1;
+      if (!(Number.isFinite(w) && w > 0)) fail(id, 'color.weights must be positive');
+      total += w; cand.push(intern(m.packed[role])); cum.push(total);
+    });
+    for (var k = start; k < cand.length; k++) cum[k] /= total;
+    specSrc.push(0); specStart.push(start); specCount.push(c.roles.length);
+    return at;
+  }
+  function enumCode(id, list, v, path) {
+    var i = FX_ENUMS[list].indexOf(v);
+    if (i < 0) fail(id, path + ' ' + v + ' is not one of ' + FX_ENUMS[list].join(' '));
+    return i;
+  }
+  function range(id, v, path, lo, hi, positive) {
+    if (!Array.isArray(v) || v.length !== 2 || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) fail(id, path + ' must be [min,max]');
+    if (v[0] > v[1]) fail(id, path + ' is inverted');
+    if (v[0] < lo || v[1] > hi || positive && v[0] <= 0) fail(id, path + ' is out of range');
+    return v;
+  }
+  function leaf(id, kind, v, path, key) {
+    switch (kind) {
+      case 'enum': return enumCode(id, key, v, path);
+      case 'range': return range(id, v, path, -Infinity, Infinity);
+      case 'range0': return range(id, v, path, 0, Infinity);
+      case 'rangeLife': return range(id, v, path, 0, Infinity, true);
+      case 'rangeUnit': return range(id, v, path, 0, 1);
+      case 'fade': range(id, v, path, 0, 1); if (v[0] + v[1] > 1) fail(id, path + ' in + out exceeds 1'); return v;
+      case 'num': case 'num0': case 'unit': case 'wind':
+        if (!Number.isFinite(v) || kind !== 'num' && v < 0 || kind === 'unit' && v > 1 || kind === 'wind' && v > 2)
+          fail(id, path + ' ' + v + ' is out of range');
+        return v;
+      case 'bool': if (v !== true && v !== false) fail(id, path + ' must be true or false'); return v;
+      case 'bit': if (v !== 0 && v !== 1) fail(id, path + ' must be 0 or 1'); return v;
+      case 'bounces': if (!Number.isInteger(v) || v < 0 || v > 7) fail(id, path + ' must be 0..7'); return v;
+      case 'maxLive': if (!Number.isInteger(v) || v < 1 || v > EFFECT_CONFIG.capacity) fail(id, path + ' is out of range'); return v;
+      case 'id': if (v !== null && !source.hasOwnProperty(v)) fail(id, path + ' names unknown recipe ' + v); return v;
+      case 'toggle': if (v !== null && toggles.indexOf(v) < 0) fail(id, 'unknown toggle ' + v); return v;
+      case 'family': if (v !== null && families.indexOf(v) < 0) fail(id, 'unknown family ' + v); return v;
+      case 'tier': if (v !== null && tiers.indexOf(v) < 0) fail(id, 'unknown sizeTier ' + v); return v;
+      case 'role': if (v !== null && typeof v !== 'string') fail(id, path + ' must be a role name'); return v;
+    }
+    return v;
+  }
+  function count(id, v, path) {
+    if (Number.isInteger(v) && v >= 0) return [v, v];
+    if (Array.isArray(v) && v.length === 2 && Number.isInteger(v[0]) && Number.isInteger(v[1]) && v[0] >= 0 && v[0] <= v[1]) return v;
+    fail(id, path + ' must be a count or [min,max]');
+  }
+  // Full recipe with defaults, every leaf validated; enums become codes.
+  function complete(id) {
+    var m = merged[id], d = {};
+    Object.keys(_FX_SCHEMA).forEach(function (k) {
+      var spec = _FX_SCHEMA[k];
+      if (isObj(spec)) {
+        var o = Object.assign({}, _FX_DEFAULTS[k], m[k]);
+        Object.keys(o).forEach(function (s) { if (o[s] !== null && o[s] !== undefined) o[s] = leaf(id, spec[s], o[s], k + '.' + s, s); });
+        d[k] = o;
+      } else {
+        var v = m.hasOwnProperty(k) ? m[k] : _FX_DEFAULTS[k];
+        if (v === undefined) return;
+        d[k] = spec !== 'trigger' && spec !== 'color' && v !== null ? leaf(id, spec, v, k, k) : v;
+      }
+    });
+    if (d.class === undefined) fail(id, 'missing class');
+    if (d.trigger === undefined) fail(id, 'missing trigger');
+    if (d.view2D === undefined) fail(id, 'missing view2D');
+    if (!d.life.seconds) fail(id, 'missing life.seconds');
+    if (d.render.primitive === undefined) fail(id, 'missing render.primitive');
+    if (!d.render.size) fail(id, 'missing render.size');
+    return d;
+  }
+
+  var recipes = ids.map(complete), eventCodes = {}, anchorCodes = {}, spellBits = {}, spellCount = 0;
+  FX_EVENT_NAMES.forEach(function (e, i) { eventCodes[e] = i; });
+  FX_ANCHOR_NAMES.forEach(function (a, i) { anchorCodes[a] = i; });
+  var bindings = FX_EVENT_NAMES.map(function () { return []; }), anchorRecipes = FX_ANCHOR_NAMES.map(function () { return []; });
+  var fieldMembers = {};
+  function tri(id, v, path) {
+    if (v === undefined) return 0;
+    if (v !== true && v !== false) fail(id, path + ' must be true or false');
+    return v ? 1 : 2;
+  }
+  function triggerOf(id, r, t, d, cols) {
+    if (!isObj(t)) fail(id, 'trigger must be an object or an array of objects');
+    var forms = Object.keys(_FX_TRIGGER_KEYS).filter(function (f) { return t.hasOwnProperty(f); });
+    if (forms.length !== 1) fail(id, 'trigger needs exactly one of event, field, anchor, child, api');
+    var form = forms[0];
+    checkKeys(id, t, _FX_TRIGGER_KEYS[form].split(' '), 'trigger.');
+    if (form === 'api') {
+      if (t.api !== true) fail(id, 'trigger.api must be true');
+      var c = count(id, t.count === undefined ? 1 : t.count, 'trigger.count');
+      cols.api0[r] = c[0]; cols.api1[r] = c[1]; cols.trig[r] |= 1;
+    } else if (form === 'child') {
+      if (t.child !== true) fail(id, 'trigger.child must be true');
+      cols.trig[r] |= 2;
+    } else if (form === 'event') {
+      if (!FX_EVENTS.hasOwnProperty(t.event)) fail(id, 'unknown event ' + t.event);
+      var w = t.where || {}, kinds = FX_EVENTS[t.event].kinds, kindMask = 0x7fffffff, spellMask = 0;
+      if (!isObj(w)) fail(id, 'trigger.where must be an object');
+      checkKeys(id, w, ['kind', 'spell', 'self', 'companion', 'underground'], 'trigger.where.');
+      if (w.kind !== undefined) {
+        if (!Array.isArray(w.kind) || !w.kind.length) fail(id, 'trigger.where.kind must list kinds');
+        kindMask = 0;
+        w.kind.forEach(function (k) {
+          var i = kinds.indexOf(k);
+          if (i < 0) fail(id, 'event ' + t.event + ' has no kind ' + k);
+          kindMask |= 1 << i;
+        });
+      }
+      if (w.spell !== undefined) {
+        if (!Array.isArray(w.spell) || !w.spell.length) fail(id, 'trigger.where.spell must list spell ids');
+        w.spell.forEach(function (s) {
+          if (typeof s !== 'string' || !s) fail(id, 'trigger.where.spell must list spell ids');
+          if (!spellBits.hasOwnProperty(s)) {
+            if (spellCount >= 31) fail(id, 'more than 31 distinct where.spell ids');
+            spellBits[s] = 1 << spellCount++;
+          }
+          spellMask |= spellBits[s];
+        });
+      }
+      var bc = count(id, t.count === undefined ? 1 : t.count, 'trigger.count');
+      var lift = t.lift === undefined ? 0 : t.lift;
+      if (!Number.isFinite(lift)) fail(id, 'trigger.lift must be a number');
+      bindings[eventCodes[t.event]].push(Object.freeze({r:r, kindMask:kindMask, spellMask:spellMask,
+        self:tri(id, w.self, 'where.self'), companion:w.companion === true ? 1 : 2, under:tri(id, w.underground, 'where.underground'),
+        c0:bc[0], c1:bc[1], at:enumCode(id, 'at', t.at === undefined ? 'point' : t.at, 'trigger.at'), lift:lift,
+        place:t.place === undefined ? -1 : enumCode(id, 'place', t.place, 'trigger.place'),
+        spec:t.color === undefined ? -1 : colorSpec(id, t.color)}));
+      cols.trig[r] |= 4;
+    } else if (form === 'anchor') {
+      if (!anchorCodes.hasOwnProperty(t.anchor)) fail(id, 'unknown anchor ' + t.anchor);
+      leaf(id, 'num0', t.rate, 'trigger.rate');
+      if (t.radius !== undefined) leaf(id, 'num0', t.radius, 'trigger.radius');
+      if (t.maxAnchors !== undefined && !(Number.isInteger(t.maxAnchors) && t.maxAnchors > 0)) fail(id, 'trigger.maxAnchors must be a positive integer');
+      cols.anchorRate[r] = t.rate; cols.anchorMax[r] = t.maxAnchors || 0; cols.anchorRadius[r] = t.radius || 0;
+      anchorRecipes[anchorCodes[t.anchor]].push(r); cols.trig[r] |= 8;
+    } else {
+      var f = fields[t.field], wf = !!f && f.target === 'weather';
+      if (!f) fail(id, 'unknown field ' + t.field);
+      if (t.visible !== undefined) enumCode(id, 'visible', t.visible, 'trigger.visible');
+      if (t.kind !== undefined) {
+        if (!wf) fail(id, 'trigger.kind is only for a weather field');
+        enumCode(id, 'weatherKind', t.kind, 'trigger.kind');
+      } else if (wf) fail(id, 'a weather field trigger needs kind');
+      if (wf && t.sets !== undefined) fail(id, 'a weather field trigger takes kind, not sets');
+      if (t.aboveSnowLine !== undefined) {
+        if (!wf) fail(id, 'trigger.aboveSnowLine is only for a weather field');
+        if (!source.hasOwnProperty(t.aboveSnowLine)) fail(id, 'trigger.aboveSnowLine names unknown recipe ' + t.aboveSnowLine);
+        cols.snowAlt[r] = ID[t.aboveSnowLine];
+      }
+      var fm = fieldMembers[t.field] || (fieldMembers[t.field] = {});
+      var sets = t.sets || (t.kind ? {} : null);
+      if (!sets) fail(id, 'field trigger needs sets or kind');
+      if (t.kind) sets = Object.assign({}, sets), sets[t.kind] = t.weight === undefined ? 1 : t.weight;
+      Object.keys(sets).forEach(function (s) {
+        if (t.sets && !(f.sets && f.sets.hasOwnProperty(s))) fail(id, 'field ' + t.field + ' has no set ' + s);
+        if (!(Number.isFinite(sets[s]) && sets[s] >= 0)) fail(id, 'field weight for ' + s + ' must be >= 0');
+        (fm[s] || (fm[s] = [])).push({r:r, weight:sets[s], visible:t.visible || 'always'});
+      });
+      cols.trig[r] |= 16;
+    }
+  }
+
+  var U8 = 'cls layer prim motion collision stratum occ light view2D mode2D blend place selfView envelope toggle family sizeTier ' +
+    'shape support direction wall untilGround jitter trig halfSpace';
+  var F64 = 'gravity dragCoef wind turbAmp turbW restitution friction restMin restMax fadeIn fadeOut pulseW pulseD grow streakS ' +
+    'glowMul glowA size0 size1 len0 len1 alpha0 alpha1 life0 life1 minPx minPx2D maxPx near far farKeep cull glowFar nightBoost ' +
+    'onFloorChance childNear meanLife rad0 rad1 hgt0 hgt1 lift0 lift1 spread spd0 spd1 up0 up1 inherit spin0 spin1 ' +
+    'anchorRate anchorRadius pNear pDist pDrop pRadius pArc';
+  var R = {};
+  U8.split(' ').forEach(function (k) { R[k] = new Uint8Array(n); });
+  F64.split(' ').forEach(function (k) { R[k] = new Float64Array(n); });
+  R.child = new Int16Array(n); R.maxLive = new Uint16Array(n); R.bounces = new Uint16Array(n); R.salt = new Uint32Array(n);
+  R.colorSpec = new Int32Array(n); R.glowPal = new Int32Array(n);
+  R.api0 = new Uint16Array(n).fill(1); R.api1 = new Uint16Array(n).fill(1);      // fxEmit count unless the call gives one
+  R.anchorMax = new Uint16Array(n);
+  R.snowAlt = new Int16Array(n).fill(-1);                                     // a weather member's swap above the snow line
+  var TOGGLES = [null].concat(toggles), FAMILIES = [null].concat(families), TIERS = [null].concat(tiers);
+  function mean(v) { return (v[0] + v[1]) / 2; }
+
+  recipes.forEach(function (d, r) {
+    var id = ids[r], sp = d.spawn, mo = d.motion, co = d.collision, li = d.life, re = d.render, lod = d.lod, pp = d.placeParams;
+    var place = FX_ENUMS.place[d.place], screenSpace = place === 'eye' || place === 'screen';
+    var noOcclusion = FX_ENUMS.occlusion[d.occlusion] === 'none';
+    if (screenSpace && (!noOcclusion || co.mode !== 0 || co.wall || d.view2D !== 0))
+      fail(id, 'place ' + place + ' needs occlusion none, collision none and view2D none');
+    if (noOcclusion && !screenSpace) fail(id, 'occlusion none is only for eye and screen');
+    if (lod.near >= lod.far) fail(id, 'lod.near must be below lod.far');
+    var prim = FX_ENUMS.primitive[d.render.primitive];
+    if (prim === 'streak' && !(re.streakSeconds > 0)) fail(id, 'streak needs render.streakSeconds');
+    if (prim === 'segment' && !(re.length[1] > 0)) fail(id, 'segment needs render.length');
+    if (prim === 'glowDot' && !(re.glow > 0)) fail(id, 'glowDot needs render.glow');
+    if (FX_ENUMS.mode2D[d.mode2D] === 'splashOnly' && co.onFloor === null) fail(id, 'mode2D splashOnly needs collision.onFloor (its 2D splash)');
+    R.colorSpec[r] = colorSpec(id, d.color);
+    R.glowPal[r] = -1;
+    if (re.glowRole !== null) {
+      if (typeof d.color === 'string') fail(id, 'glowRole needs a fixed color material (dynamic source ' + d.color + ')');
+      var gm = material(d.color.material);
+      if (!_fxHas(gm.packed, re.glowRole)) fail(id, 'material ' + d.color.material + ' has no glowRole ' + re.glowRole);
+      R.glowPal[r] = intern(gm.packed[re.glowRole]);
+    }
+    if (Array.isArray(d.trigger) && !d.trigger.length) fail(id, 'trigger list is empty');
+    (Array.isArray(d.trigger) ? d.trigger : [d.trigger]).forEach(function (t) { triggerOf(id, r, t, d, R); });
+    var model = FX_ENUMS.model[mo.model], md = _FX_MODELS[model], staticModel = model === 'static';
+    var drag = mo.drag === undefined ? md.drag : mo.drag, up = staticModel ? [0, 0] : sp.up, speed = staticModel ? [0, 0] : sp.speed;
+    var gravity = staticModel ? 0 : mo.gravity !== undefined ? mo.gravity :
+      model === 'fall' ? drag * Math.max(0, -mean(up)) : model === 'rise' ? -drag * Math.max(0, mean(up)) : md.gravity;
+    // The integrator couples wind through drag (v relaxes to wind x W), so a
+    // wind coefficient without drag would do nothing.
+    if (!staticModel && mo.wind > 0 && !(drag > 0)) fail(id, 'motion.wind needs drag > 0 (wind acts through drag)');
+    R.cls[r] = d.class; R.layer[r] = screenSpace ? 2 : d.layer; R.prim[r] = d.render.primitive; R.motion[r] = mo.model;
+    R.collision[r] = co.mode; R.stratum[r] = co.stratum; R.occ[r] = d.occlusion; R.light[r] = d.lighting;
+    R.view2D[r] = d.view2D; R.mode2D[r] = d.mode2D; R.blend[r] = re.blend; R.place[r] = d.place; R.selfView[r] = d.selfView;
+    R.envelope[r] = li.envelope; R.toggle[r] = TOGGLES.indexOf(d.toggle); R.family[r] = FAMILIES.indexOf(d.family);
+    R.sizeTier[r] = TIERS.indexOf(d.sizeTier); R.shape[r] = sp.shape; R.support[r] = sp.support; R.direction[r] = sp.direction;
+    R.wall[r] = co.wall ? 1 : 0; R.untilGround[r] = li.untilGround ? 1 : 0; R.jitter[r] = d.jitter; R.halfSpace[r] = sp.halfSpace ? 1 : 0;
+    R.gravity[r] = gravity; R.dragCoef[r] = drag; R.wind[r] = staticModel ? 0 : mo.wind;
+    R.turbAmp[r] = mo.turbulence; R.turbW[r] = 2 * Math.PI * mo.turbHz; R.spin0[r] = mo.spin[0]; R.spin1[r] = mo.spin[1];
+    R.restitution[r] = co.restitution; R.friction[r] = co.friction; R.bounces[r] = co.bounces;
+    R.restMin[r] = co.restSeconds[0]; R.restMax[r] = co.restSeconds[1]; R.onFloorChance[r] = co.onFloorChance; R.childNear[r] = co.childNear;
+    R.fadeIn[r] = li.fade[0]; R.fadeOut[r] = li.fade[1]; R.pulseW[r] = 2 * Math.PI * li.pulseHz; R.pulseD[r] = li.pulseDepth;
+    R.life0[r] = li.seconds[0]; R.life1[r] = li.seconds[1];
+    R.grow[r] = re.grow; R.streakS[r] = re.streakSeconds; R.glowMul[r] = re.glow; R.glowA[r] = re.glowAlpha;
+    R.size0[r] = re.size[0]; R.size1[r] = re.size[1]; R.len0[r] = re.length[0]; R.len1[r] = re.length[1];
+    R.alpha0[r] = re.alpha[0]; R.alpha1[r] = re.alpha[1]; R.minPx[r] = re.minPx; R.maxPx[r] = re.maxPx;
+    R.minPx2D[r] = re.minPx2D === null ? re.minPx : re.minPx2D;          // the 2D floor (1 u = 1 px): minPx unless set
+    R.near[r] = lod.near; R.far[r] = lod.far; R.farKeep[r] = lod.farKeep; R.cull[r] = lod.cull; R.glowFar[r] = lod.glowFar;
+    R.nightBoost[r] = d.nightBoost; R.maxLive[r] = d.budget.maxLive || EFFECT_CONFIG.capacity;
+    R.rad0[r] = sp.radius[0]; R.rad1[r] = sp.radius[1]; R.hgt0[r] = sp.height[0]; R.hgt1[r] = sp.height[1];
+    R.lift0[r] = sp.lift[0]; R.lift1[r] = sp.lift[1]; R.spread[r] = sp.spread; R.spd0[r] = speed[0]; R.spd1[r] = speed[1];
+    R.up0[r] = up[0]; R.up1[r] = up[1]; R.inherit[r] = staticModel ? 0 : sp.inherit;
+    R.pNear[r] = pp.near; R.pDist[r] = pp.distance; R.pDrop[r] = pp.drop; R.pRadius[r] = pp.radius; R.pArc[r] = pp.arc;
+    var salt = 0x811c9dc5;
+    for (var k = 0; k < id.length; k++) salt = Math.imul(salt ^ id.charCodeAt(k), 16777619);
+    R.salt[r] = salt >>> 0;
+    // Turnover (section 4.7): a ground-ended life is the fall time.
+    var life = mean(li.seconds), support = FX_ENUMS.support[sp.support], meanLife = life;
+    if (li.untilGround && support === 'ceiling') {
+      var v0 = Math.max(0, -mean(up)), g = gravity;
+      meanLife = Math.min(life, g > 0 ? (Math.sqrt(v0 * v0 + 200 * g) - v0) / g : v0 > 0 ? 100 / v0 : life);
+    } else if (li.untilGround && (support === 'openSky' || support === 'viewer') && Math.abs(mean(up)) > 0) {
+      meanLife = Math.min(life, mean(sp.height) / Math.abs(mean(up)));
+    }
+    if (!(meanLife > 0)) fail(id, 'mean life ' + meanLife + ' is not positive');
+    R.meanLife[r] = meanLife;
+    LIST.push(Object.freeze(Object.assign({id:id}, merged[id])));
+  });
+  // Children: onFloor targets must be child-triggered and acyclic.
+  recipes.forEach(function (d, r) {
+    var seen = [ids[r]], at = d.collision.onFloor;
+    R.child[r] = at === null ? -1 : ID[at];
+    while (at !== null) {
+      if (!(R.trig[ID[at]] & 2)) fail(ids[r], 'onFloor target ' + at + ' needs trigger {child:true}');
+      if (seen.indexOf(at) >= 0) fail(ids[r], 'onFloor cycle ' + seen.concat(at).join(' > '));
+      seen.push(at); at = recipes[ID[at]].collision.onFloor;
+    }
+  });
+  Object.keys(fieldMembers).forEach(function (f) {
+    Object.keys(fieldMembers[f]).forEach(function (s) {
+      if (!fieldMembers[f][s].some(function (m) { return m.weight > 0; })) fail(f, 'every weight of set ' + s + ' is zero');
+    });
+  });
+  // Fields in source order (code = index): the box, the set of each biome
+  // (or of an underground player; a weather field: of each weather kind) and
+  // each set's members as typed columns. A set's refill life is
+  // turnover-weighted: sum w / sum (w / mean life). A weather set's members
+  // share one 2D policy; a splashOnly set spawns its splash (the members'
+  // collision.onFloor) in 2D.
+  var FIELDS = [], FIELD_ID = {};
+  Object.keys(fields).forEach(function (name, code) {
+    var f = fields[name], out = {name:name, code:code, biomeSet:{}, underSet:-1, sets:[], setNames:[], weather:false, twoDScale:1};
+    function no(why) { throw new Error('Particle field ' + name + ': ' + why); }
+    if (!isObj(f)) no('not an object');
+    Object.keys(f).forEach(function (k) { if ('box edgeFade target sets mode2D twoDScale'.split(' ').indexOf(k) < 0) no('unknown key ' + k); });
+    if (!isObj(f.box) || Object.keys(f.box).some(function (k) { return k !== 'half' && k !== 'bias'; }) ||
+        !(f.box.half > 0) || !(Number.isFinite(f.box.bias) && f.box.bias >= 0)) no('box needs half > 0 and bias >= 0');
+    if (!(f.edgeFade >= 0 && f.edgeFade <= 0.5)) no('edgeFade must be 0..0.5');
+    if (f.target !== undefined && f.target !== 'setting' && f.target !== 'weather') no('target must be setting or weather');
+    if (f.twoDScale !== undefined && !(f.twoDScale >= 0 && f.twoDScale <= 1)) no('twoDScale must be 0..1');
+    out.weather = f.target === 'weather'; out.twoDScale = f.twoDScale === undefined ? 1 : f.twoDScale;
+    if (out.weather && (f.sets !== undefined || f.mode2D !== undefined)) no('a weather field takes its sets from the weather kinds and its 2D policy from its members');
+    out.half = f.box.half; out.bias = f.box.bias; out.edgeFade = f.edgeFade;
+    out.mode2D = FX_ENUMS.mode2D.indexOf(f.mode2D === undefined ? 'simulate' : f.mode2D);
+    if (out.mode2D < 0) no('mode2D ' + f.mode2D + ' is not one of ' + FX_ENUMS.mode2D.join(' '));
+    out.salt = 0x811c9dc5;
+    for (var k = 0; k < name.length; k++) out.salt = Math.imul(out.salt ^ name.charCodeAt(k), 16777619);
+    out.salt >>>= 0;
+    (out.weather ? FX_ENUMS.weatherKind : Object.keys(f.sets || {})).forEach(function (set, si) {
+      var v = out.weather ? null : f.sets[set], m = (fieldMembers[name] || {})[set] || [], sw = 0, sl = 0;
+      if (!out.weather) {                                                    // (weather set si is kind si)
+        if (v === 'playerUnderground') { if (out.underSet >= 0) no('two underground sets'); out.underSet = si; }
+        else if (Array.isArray(v) && v.length) v.forEach(function (b) {
+          if (typeof b !== 'string' || out.biomeSet.hasOwnProperty(b)) no('set ' + set + ' repeats or misnames biome ' + b);
+          out.biomeSet[b] = si;
+        });
+        else no('set ' + set + ' must list biomes or be playerUnderground');
+      }
+      var col = {name:set, r:new Int32Array(m.length), w:new Float64Array(m.length), steady:new Float64Array(m.length),
+        vis:new Uint8Array(m.length), ceiling:new Uint8Array(m.length), life:0, mode2D:m.length ? R.mode2D[m[0].r] : 0, splash:-1};
+      m.forEach(function (mem, j) {
+        col.r[j] = mem.r; col.w[j] = mem.weight; col.steady[j] = mem.weight * R.meanLife[mem.r];   // live share
+        col.vis[j] = FX_ENUMS.visible.indexOf(mem.visible);
+        col.ceiling[j] = FX_ENUMS.support[R.support[mem.r]] === 'ceiling' ? 1 : 0;
+        if (mem.weight > 0) { sw += mem.weight; sl += mem.weight / R.meanLife[mem.r]; }
+        if (out.weather && R.mode2D[mem.r] !== col.mode2D) no('the ' + set + ' members disagree on mode2D');
+      });
+      if (out.weather && FX_ENUMS.mode2D[col.mode2D] === 'splashOnly') col.splash = R.child[m[0].r];
+      col.life = sl > 0 ? sw / sl : 1;
+      out.sets.push(Object.freeze(col)); out.setNames.push(set);
+    });
+    FIELD_ID[name] = code; FIELDS.push(Object.freeze(out));
+  });
+  var PAL = {count:palRGB.length, rgb:Int32Array.from(palRGB), specSrc:Uint8Array.from(specSrc),
+    specStart:Int32Array.from(specStart), specCount:Int32Array.from(specCount), cand:Int32Array.from(cand),
+    cum:Float64Array.from(cum), surf:Int32Array.from(surf), surfBiomes:Object.freeze(surfBiomes),
+    ore:Int32Array.from([].concat.apply([], ore))};
+  return Object.freeze({count:n, LIST:Object.freeze(LIST), ID:Object.freeze(ID), R:Object.freeze(R), PAL:Object.freeze(PAL),
+    bindings:Object.freeze(bindings.map(Object.freeze)), anchorRecipes:Object.freeze(anchorRecipes.map(Object.freeze)),
+    fieldMembers:fieldMembers, FIELDS:Object.freeze(FIELDS), FIELD_ID:Object.freeze(FIELD_ID),
+    SPELLS:Object.freeze(spellBits), TOGGLES:Object.freeze(TOGGLES),
+    FAMILIES:Object.freeze(FAMILIES), TIERS:Object.freeze(TIERS)});
+}
+var FX_COMPILED = compileFxRecipes(FX_RECIPE_SOURCE, FX_MATERIALS);
+// Weather rules, validated at load (the only other throw here): each
+// biome's kind code and chance, the population by kind code, and the ranges.
+function compileFxWeatherRules(rules) {
+  function no(why) { throw new Error('Weather rules: ' + why); }
+  function pair(k, lo) {
+    var v = rules[k];
+    if (!Array.isArray(v) || v.length !== 2 || !(v[0] >= lo && v[1] >= v[0])) no(k + ' must be [min,max] from ' + lo);
+    return v;
+  }
+  var out = {biomeKind:{}, biomeChance:{}, population:new Float64Array(3)};
+  pair('frontSeconds', 1); pair('intensity', 0); pair('windSpeed', 0); pair('caveVisibility', 0);
+  if (!(rules.caveVisibility[1] > rules.caveVisibility[0])) no('caveVisibility must rise');
+  if (!(rules.crossfadeSeconds > 0) || !(rules.windEaseSeconds > 0) || !(rules.refillBoost >= 1)) no('crossfade, wind ease and refill boost must be positive');
+  if (!Number.isFinite(rules.snowLineH)) no('snowLineH must be a number');
+  Object.keys(rules.biomes).forEach(function (b) {
+    var r = rules.biomes[b], kind = FX_ENUMS.weatherKind.indexOf(r && r.kind);
+    if (kind < 0 || !(r.chance >= 0 && r.chance <= 1)) no('biome ' + b + ' needs a weather kind and a chance 0..1');
+    out.biomeKind[b] = kind; out.biomeChance[b] = r.chance;
+  });
+  FX_ENUMS.weatherKind.forEach(function (kind, k) {
+    if (!(rules.population[kind] >= 0)) no('population ' + kind + ' must be >= 0');
+    out.population[k] = rules.population[kind];
+  });
+  return Object.freeze(out);
+}
+var FX_WEATHER = compileFxWeatherRules(FX_WEATHER_RULES);
+// Particle engine (unified effects V1): one fixed-capacity typed pool with
+// dense swap-remove, stepped once per fixed tick by updateEffects. Every path
+// reads the compiled recipe table installed in its own state (S.C, S.R), so
+// tests and the studio can run their own tables. Cosmetic only: no gameplay
+// code reads fxState, particles draw stateless hash noise (never Math.random
+// or presentationRandom), and producers only queue work that the next tick
+// spawns. Runtime entry points catch, count and warn once; the only throw is
+// the load-time check that every event and anchor name has code here.
+var FX_CLASS_MAX_SCALE = [2.4, 2.4, 1.5, 1.5, 1.25];   // class scale at the top of the Particles slider
+// Particle flags.
+var FX_REST = 1, FX_SNAP = 2, FX_EYE = 4, FX_SCREEN = 8, FX_DYING = 16, FX_UNDER = 32, FX_FIELD = 64, FX_SELF = 128;
+// Event flags.
+var FX_EV_SELF = 1, FX_EV_UNDER = 2, FX_EV_LOB = 4, FX_EV_COMPANION = 8;
+var FX_EMIT = -1;                                        // ring type of a direct fxEmit burst
+var FX_CONTACTS_PER_TICK = 24;                            // projectile contacts per tick that become debris
+var FX_EVENT_CODE = {};
+FX_EVENT_NAMES.forEach(function (name, i) { FX_EVENT_CODE[name] = i; });
+// Movement observers (section 9.3), here because the load-time fxState below
+// sizes its observer tables with them: a stride, a teleport, the step's side
+// offset, a step's reach (1 H: the walk step-up), a landing's airborne ticks
+// and speed; the NPC radius (3D), body and burst caps, the 2D view margin.
+var FX_STEP_STRIDE = 22, FX_STEP_JUMP = 64, FX_STEP_SIDE = 3, FX_STEP_REACH = 25, FX_LAND_TICKS = 6, FX_LAND_VZ = 200;
+var FX_NPC_RADIUS = 240, FX_NPC_BODIES = 24, FX_NPC_BURSTS = 12, FX_VIEW2D_MARGIN = 16;
+var FX_CODE_FOOTSTEP = FX_EVENT_CODE.footstep, FX_CODE_DASH = FX_EVENT_CODE.dashStart, FX_CODE_LAND = FX_EVENT_CODE.land;
+function _fxCode(list, name) {
+  var i = FX_ENUMS[list].indexOf(name);
+  if (i < 0) throw new Error('Particle engine: ' + list + ' has no ' + name);
+  return i;
+}
+var FX_MODE_NONE = _fxCode('mode', 'none'), FX_MODE_CLAMP = _fxCode('mode', 'clamp'), FX_MODE_KILL = _fxCode('mode', 'kill'),
+  FX_MODE_BOUNCE = _fxCode('mode', 'bounce'), FX_STRATUM_REFERENCE = _fxCode('stratum', 'reference');
+var FX_SHAPE_SPHERE = _fxCode('shape', 'sphere'), FX_SHAPE_DISC = _fxCode('shape', 'disc'), FX_SHAPE_RING = _fxCode('shape', 'ring'),
+  FX_SHAPE_COLUMN = _fxCode('shape', 'column'), FX_SHAPE_SEGMENT = _fxCode('shape', 'segment'),
+  FX_SHAPE_CONE = _fxCode('shape', 'cone'), FX_SHAPE_CORNERS = _fxCode('shape', 'screenCorners');
+var FX_SUPPORT_OPENSKY = _fxCode('support', 'openSky'), FX_SUPPORT_CEILING = _fxCode('support', 'ceiling');
+var FX_DIR_RANDOM = _fxCode('direction', 'random'), FX_DIR_UP = _fxCode('direction', 'up'), FX_DIR_RADIAL = _fxCode('direction', 'radial'),
+  FX_DIR_NORMAL = _fxCode('direction', 'normal'), FX_DIR_REFLECT = _fxCode('direction', 'reflect'),
+  FX_DIR_ALONG = _fxCode('direction', 'along'), FX_DIR_WIND = _fxCode('direction', 'wind'), FX_DIR_BACKWARD = _fxCode('direction', 'backward');
+var FX_PLACE_SOURCE = _fxCode('place', 'source'), FX_PLACE_FRONT = _fxCode('place', 'sourceOrFront'),
+  FX_PLACE_RING = _fxCode('place', 'frontRing'), FX_PLACE_SIDES = _fxCode('place', 'frontSides'),
+  FX_PLACE_EYE = _fxCode('place', 'eye'), FX_PLACE_SCREEN = _fxCode('place', 'screen');
+var FX_SELF_SKIP = _fxCode('selfView', 'skip'), FX_SELF_IFVISIBLE = _fxCode('selfView', 'ifVisible');
+var FX_AT_TORSO = _fxCode('at', 'torso'), FX_AT_SHRINE = _fxCode('at', 'shrineCrystal'), FX_AT_PLAYER = _fxCode('at', 'playerFeet');
+var FX_COLOR_ORE = _fxCode('colorSource', 'ore');
+var FX_ANCHOR_ENTITY = FX_ANCHOR_NAMES.indexOf('entity'), FX_ANCHOR_POINT = FX_ANCHOR_NAMES.indexOf('point'),
+  FX_ANCHOR_TORCH = FX_ANCHOR_NAMES.indexOf('torch');
+var FX_ANCHOR_DASH = FX_ANCHOR_NAMES.indexOf('dashTrail'), FX_ANCHOR_FLAME = FX_ANCHOR_NAMES.indexOf('flameStream');
+var FX_VIS_DAY = _fxCode('visible', 'day'), FX_VIS_NIGHT = _fxCode('visible', 'night'), FX_MODE2D_NONE = _fxCode('mode2D', 'none'),
+  FX_VIEW2D_NONE = _fxCode('view2D', 'none');
+var FX_WEATHER_RAIN = _fxCode('weatherKind', 'rain'), FX_TORCH_SLOTS = 8, FX_PRIM_SEGMENT = _fxCode('primitive', 'segment');
+var FX_CLASS_LOCO = _fxCode('class', 'locomotion');
+var FX_MODE_REST = _fxCode('mode', 'rest'), FX_STRATUM_OPENSKY = _fxCode('stratum', 'openSky'), FX_MODE2D_SIM = _fxCode('mode2D', 'simulate');
+// Weather modes (section 9.1): the Weather switch or Unified effects off,
+// forced clear, the auto schedule, a forced kind (kind code + 1: rain 1,
+// snow 2, ash 3) and the dev 'biome' force (the biome's kind, active); a
+// state with no dev force holds FX_WF_NONE. The salt keys the front draws.
+var FX_WM_OFF = -2, FX_WM_CLEAR = -1, FX_WM_AUTO = 0, FX_WM_BIOME = 4, FX_WF_NONE = -9, FX_WEATHER_SALT = 0x3c6ef372;
+// A weather member's owner is field code | set << 8: sets 0-2 are the kinds,
+// set 3 holds rain's snow-line swaps (snow over columns above the line),
+// whose chance draws use their own salt. In 2D the weather box is the view
+// plus the 2D margin, and its population grows with the view's area over
+// the authored canvas (360 x 240) up to FX_VIEW2D_AREA_CAP times.
+var FX_WEATHER_SWAP = 3, FX_WEATHER_SWAP_SALT = 0x2545f491, FX_VIEW2D_AREA_CAP = 3;
+
+function fxCreateEventRing(n) {
+  function F() { return new Float64Array(n); }
+  function I() { return new Int32Array(n); }
+  return {n:n, head:0, count:0, type:I(), rec:I(), x:F(), y:F(), z:F(), h:F(), dx:F(), dy:F(), dz:F(),
+    nx:F(), ny:F(), nz:F(), vx:F(), vy:F(), vz:F(), scale:F(), num:F(), kind:I(), spell:I(), rgb:I(), rgb2:I(), ore:I(), surf:I(),
+    flags:new Uint8Array(n)};
+}
+// The per-event columns, for moving one queued event onto another's slot.
+var _fxRingProbe = fxCreateEventRing(1), FX_RING_COLUMNS = Object.keys(_fxRingProbe).filter(function (c) { return ArrayBuffer.isView(_fxRingProbe[c]); });
+function fxRingCopy(ev, from, to) {
+  for (var c = 0; c < FX_RING_COLUMNS.length; c++) { var col = ev[FX_RING_COLUMNS[c]]; col[to] = col[from]; }
+}
+function fxCreateAnchorTable(n) {
+  function F() { return new Float64Array(n); }
+  return {n:n, live:0, used:new Uint8Array(n), seg:new Uint8Array(n), kind:new Uint8Array(n), gen:new Uint32Array(n),
+    rec:new Int32Array(n), ref:new Array(n), x:F(), y:F(), z:F(), x2:F(), y2:F(), z2:F(), until:F(), rate:F(), acc:F()};
+}
+function fxCreateStats() {
+  return {spawned:0, killed:0, stolen:0, children:0, eventsIn:0, eventsDropped:0, eventsGated:0, groundMiss:0, fieldWraps:0,
+    fieldSpawned:0, fieldDropped:0, torchSpawned:0,
+    unknownEvents:0, unknownRecipes:0, badEvents:0, palOverflow:0, anchorsRefused:0,
+    refusedToggle:0, refusedFamily:0, refusedCap:0, refusedBudget:0, refusedLod:0, refusedSpawnCap:0,
+    refusedOffscreenSelf:0, refusedView:0, refusedNoSupport:0, refusedChildQueue:0, contactsDropped:0,
+    obsSteps:0, obsNpcSteps:0, obsNpcCapped:0, obsDashes:0, obsLands:0, weatherSpawned:0, weatherSnowLine:0, weatherSplashes2D:0};
+}
+// Weather state (section 9.1), sim-owned: the per-kind levels (rain, snow,
+// ash), their goals, the goal each level's crossfade aims at and its rate,
+// the current front (index, start and end in sim seconds, its roll,
+// intensity and wind; the previous front's wind for the ease), the sim time
+// the levels were last advanced to, the mode they were advanced under, and a
+// dev force (kept across world resets). kind and intensity summarise the
+// strongest kind; windX/Y blow for every front.
+function fxCreateWeather() {
+  return {kind:0, intensity:0, windX:0, windY:0, visibility:1, level:new Float64Array(3), goal:new Float64Array(3),
+    aim:new Float64Array(3), rate:new Float64Array(3),
+    front:-1, start:0, end:0, roll:1, frontI:0, wx0:0, wy0:0, wx1:0, wy1:0, t:0, mode:-9, modeI:-1, fresh:true, snapped:false,
+    force:FX_WF_NONE, forceI:1};
+}
+// Per field: the box of this tick (centre, half size; a weather box's half
+// extents in x and y and the width of its edge fade), its set and stratum,
+// its target and live members, and a pending prewarm (after 2D, for
+// example); members of each set that died since the field counted them
+// (fxKill). A weather field also keeps each set's target, live members and
+// refill allowance (sets 0-2 the kinds, 3 rain's snow-line swaps), rain's
+// virtual slots above the snow line, whether any kind is open, and the view
+// it last ran in (2 or 3).
+function fxCreateField() {
+  return {cx:0, cy:0, half:0, hx:0, hy:0, fade:0, set:-1, under:false, target:0, live:0, prewarm:false,
+    targets:new Int32Array(4), lives:new Int32Array(4), acc:new Float64Array(3), gone:new Int32Array(4), swapV:0, open:false, view:0};
+}
+// The nearest torch lights of the viewer's floor, reselected every 0.25 s of
+// sim time; rate accumulators follow their light across reselections.
+function fxCreateTorchTable(recipes) {
+  var n = FX_TORCH_SLOTS, m = n * Math.max(1, recipes);
+  return {n:0, lights:null, ref:new Array(n), d:new Float64Array(n), acc:new Float64Array(m),
+    oldRef:new Array(n), oldAcc:new Float64Array(m), oldN:0};
+}
+
+function createFxState(capacity, seed, opts) {
+  var n = capacity | 0, C = (opts && opts.compiled) || FX_COMPILED;
+  function F() { return new Float64Array(n); }
+  var reserve = opts && Number.isFinite(opts.reserve) ? opts.reserve | 0 : EFFECT_CONFIG.reserve;
+  return {
+    cap:n, reserve:reserve, count:0, tick:0, simTime:0, serial:0, seed:seed | 0, lastDt:1 / 60, prewarm:true,
+    pinned:!!(opts && opts.pinned), mesh:null, R:C.R, C:C,
+    legacyRng:((seed | 0) ^ 0x5bd1e995) >>> 0,           // private LCG for Legacy A/B code; reseeded only by fxReset
+    dynPal:new Int32Array(EFFECT_CONFIG.dynamicPalette), dynCount:0,   // event colours, per state
+    childQ:new Float64Array(EFFECT_CONFIG.childQueue * 5), childCount:0,
+    torchRefreshAt:0, torch:fxCreateTorchTable(C.anchorRecipes[FX_ANCHOR_TORCH].length),
+    fields:C.FIELDS.map(fxCreateField), fieldSerial:0, feetH:0, viewUnder:false,
+    // Live particles occupy [0, count); the tail is the free list.
+    x:F(), y:F(), z:F(), vx:F(), vy:F(), vz:F(),          // window-local world units; z = spatial Z (mesh H x 25)
+    age:F(), life:F(), size:F(), alpha:F(), rot:F(), spin:F(), phase:F(),
+    g0:F(), g1:F(), g2:F(), g3:F(),                       // cached support-triangle corners x 25
+    gcell:new Int32Array(n), owner:new Int32Array(n), seedA:new Uint32Array(n),
+    rec:new Uint16Array(n), pal:new Uint16Array(n), flags:new Uint8Array(n), bounces:new Uint8Array(n), cls:new Uint8Array(n),
+    classLive:new Int32Array(5), classDying:new Int32Array(5), recipeLive:new Int32Array(C.count), stolenByClass:new Int32Array(5),
+    ev:fxCreateEventRing(EFFECT_CONFIG.eventRing), anchors:fxCreateAnchorTable(EFFECT_CONFIG.anchors),
+    contactN:0, contactSlot:new Int32Array(FX_CONTACTS_PER_TICK), contactD:new Float64Array(FX_CONTACTS_PER_TICK),   // this tick's contacts
+    obs:fxCreateObservers(), obsEv:fxCreateEventRing(1),  // movement observers and their one-slot event
+    weather:fxCreateWeather(), stats:fxCreateStats(),
+    // Tick-local state: live budget, spawn gates, drag factors, scratch.
+    B:0, P:0, caps:new Int32Array(5), scale:new Float64Array(5), qGen:-1, spawnLeft:0, noSteal:false, stealCursor:0, eyeCount:0,
+    gate:new Uint8Array(C.count), gateWhy:new Uint8Array(C.count), placeOver:new Int8Array(C.count).fill(-1), toggleGen:-1, ambientMode:null,
+    weatherToggle:FX_WM_OFF,                              // the Weather switch as a mode, read with the other toggles
+    evGen:-1, evOpen:new Uint8Array(C.bindings.length),   // per event code: any bound recipe can spawn (fxEventOpen)
+    KDdt:-1, KD:new Float64Array(C.count), KF:new Float64Array(C.count), KGV:new Float64Array(C.count), KGX:new Float64Array(C.count),
+    sortIdx:new Int32Array(n), sortKey:new Float64Array(n)
+  };
+}
+// flags: 1 REST, 2 SNAP (no back-projection this frame), 4 EYE, 8 SCREEN, 16 DYING, 32 UNDER, 64 FIELD, 128 SELF
+var fxState = createFxState(EFFECT_CONFIG.capacity, WORLD_SEED);
+
+// ── The one tick entry point: live game after every producer of the tick
+// (17-input-lighting-update.js), studio after tickEffects (20-casting-preview.js).
+// A step that is not in (0, 1] s (a console call without one, NaN) is a
+// counted failure that changes nothing: sim time stays finite.
+function updateEffects(dt) {
+  var t0 = physicsStageStart(), S = fxState;
+  try {
+    if (!(dt > 0 && dt <= 1)) throw new Error('updateEffects needs a step of (0, 1] s, got ' + dt);
+    effectSyncToggles(S);
+    if (effectFamilyMode('ambient') === 'legacy' && typeof updateAmbientParticles === 'function')
+      effectWithLegacyRandom(updateAmbientParticles, dt);
+    S.tick++; S.simTime += dt; S.lastDt = dt;
+    if (S.mesh !== floorMesh) { S.gcell.fill(-1, 0, S.count); S.mesh = floorMesh; }
+    S.feetH = playerFeetSpatialZ() / 25; S.viewUnder = !!playerUnderground;   // the viewer's stratum, for anchors and fields
+    fxClearSnap(S);
+    S.spawnLeft = Math.ceil(EFFECT_CONFIG.spawnPerTick * dt * 60 - 1e-9);
+    fxUpdateQuality(S);
+    fxUpdateWeather(S);
+    fxViewTick(S);
+    S.contactN = 0;                       // contacts since the last tick are queued: a new tick's cap starts
+    fxDrainEvents(S);
+    fxRunObservers(S);
+    fxWatchFlame(S);
+    fxRunAnchors(S, dt);
+    fxRunTorches(S, dt);
+    fxRunFields(S, dt);
+    fxIntegrate(S, dt);
+    fxAdmitChildren(S);
+    fxRefillFields(S, dt);                // weather refills after its landings, so the tick ends at its population
+    S.prewarm = false;                    // the fields consumed the prewarm request
+  } catch (e) { effectFailure('updateEffects', e); }
+  physicsStageEnd('effectsSim', t0);
+}
+
+// Toggle and family-mode changes: rebuild the per-recipe spawn gate and apply
+// the diff inside the tick (particles of a switched-off recipe fade out).
+function effectSyncToggles(S) {
+  var gen = effectToggleGeneration(), mode = effectFamilyMode('ambient');
+  if (S.toggleGen !== gen) {
+    var R = S.R, C = S.C, off = false;
+    S.toggleGen = gen;
+    for (var r = 0; r < C.count; r++) {
+      var why = fxRecipeGateWhy(C, R, r), id = C.LIST[r].id;
+      if (S.gate[r] && why) off = true;
+      S.gate[r] = why ? 0 : 1; S.gateWhy[r] = why;
+      S.placeOver[r] = _fxPlaceOverride.hasOwnProperty(id) ? _fxPlaceOverride[id] : -1;
+    }
+    if (off) for (var i = 0; i < S.count; i++) if (!S.gate[S.rec[i]]) fxMarkDying(S, i);
+    var wv = effectToggleValue('fxWeather');
+    S.weatherToggle = !effectPresetOn('fxWeather') ? FX_WM_OFF : wv === 'auto' ? FX_WM_AUTO : FX_ENUMS.weatherKind.indexOf(wv) + 1;
+  }
+  // The legacy ambient array follows its family: re-initialised when it
+  // returns to Legacy, emptied when New takes over.
+  if (S.ambientMode !== null && mode !== S.ambientMode && typeof initAmbientParticles === 'function') {
+    if (mode === 'legacy') effectWithLegacyRandom(initAmbientParticles);
+    else { ambientParticles = []; S.prewarm = true; }
+  }
+  S.ambientMode = mode;
+}
+// 0 spawns, 1 its preset (or Unified effects) is off, 2 its family is Legacy.
+function fxRecipeGateWhy(C, R, r) {
+  var t = R.toggle[r], f = R.family[r];
+  return t && !effectPresetOn(C.TOGGLES[t]) ? 1 : f && effectFamilyMode(C.FAMILIES[f]) !== 'new' ? 2 : 0;
+}
+// Whether any recipe bound to event code e can spawn under the current
+// toggles and family modes, rebuilt when their generation changes: while
+// every binding is off the producer's call is skipped before the reader runs
+// (counted), so a switched-off preset adds no work to the gameplay tick.
+function fxEventOpen(S, e) {
+  var gen = effectToggleGeneration();
+  if (S.evGen !== gen) {
+    var C = S.C, list;
+    S.evGen = gen;
+    for (var t = 0; t < C.bindings.length; t++) {
+      list = C.bindings[t]; S.evOpen[t] = 0;
+      for (var b = 0; b < list.length; b++) if (!fxRecipeGateWhy(C, S.R, list[b].r)) { S.evOpen[t] = 1; break; }
+    }
+  }
+  return S.evOpen[e] === 1;
+}
+
+// settings.particles is live: class caps follow it on the next tick and the
+// excess fades out (oldest first).
+function fxUpdateQuality(S) {
+  var q = effectQuality(S.cap, S.reserve);
+  if (q.gen !== S.qGen) {
+    S.qGen = q.gen; S.B = q.B; S.P = q.P;
+    for (var c = 0; c < 5; c++) { S.caps[c] = q.caps[c]; S.scale[c] = q.scale[c]; }
+  }
+  for (var k = 0; k < 5; k++) {
+    var excess = S.classLive[k] - S.classDying[k] - S.caps[k];
+    if (excess > 0) fxDyingOldest(S, k, excess, -1);
+  }
+}
+// The k oldest (normalized age) live particles of class c, or of field
+// `field` when it is >= 0, fade out. One pass keeps the k oldest in a
+// bounded min-heap (typed scratch, no allocation), O(n log k): a cave mouth
+// fading the rain a few members a tick no longer sorts the whole pool.
+// Ties go to the lower slot, as a full sort by (age desc, slot asc) would.
+function fxDyingOldest(S, c, k, field) {
+  var h = S.sortIdx, key = S.sortKey, m = 0;
+  if (!(k > 0)) return;
+  for (var i = 0; i < S.count; i++) {
+    if ((S.flags[i] & FX_DYING) || (field >= 0 ? !(S.flags[i] & FX_FIELD) || S.owner[i] !== field : S.cls[i] !== c)) continue;
+    key[i] = S.age[i] / S.life[i];
+    if (m < k) { h[m] = i; fxHeapUp(h, key, m++); }
+    else if (fxYounger(key, h[0], i)) { h[0] = i; fxHeapDown(h, key, m); }
+  }
+  for (var j = 0; j < m; j++) fxMarkDying(S, h[j]);
+}
+// a ranks after b among the oldest: younger, or as old in a higher slot.
+function fxYounger(key, a, b) { return key[a] < key[b] || key[a] === key[b] && a > b; }
+function fxHeapUp(h, key, j) {
+  var v = h[j];
+  while (j > 0) {
+    var p = (j - 1) >> 1;
+    if (!fxYounger(key, v, h[p])) break;
+    h[j] = h[p]; j = p;
+  }
+  h[j] = v;
+}
+function fxHeapDown(h, key, m) {
+  var j = 0, v = h[0];
+  for (;;) {
+    var l = 2 * j + 1, s = l;
+    if (l >= m) break;
+    if (l + 1 < m && fxYounger(key, h[l + 1], h[l])) s = l + 1;
+    if (!fxYounger(key, h[s], v)) break;
+    h[j] = h[s]; j = s;
+  }
+  h[j] = v;
+}
+function fxMarkDying(S, i) {
+  if (S.flags[i] & FX_DYING) return;
+  S.flags[i] |= FX_DYING; S.classDying[S.cls[i]]++;
+  var end = S.age[i] + EFFECT_CONFIG.cullFadeSeconds;
+  if (S.life[i] > end) S.life[i] = end;
+}
+// Eye and screen particles hold camera-local coordinates: outside the
+// first-person view they fade instead of being drawn as world positions.
+function fxViewTick(S) {
+  if (!S.eyeCount || (MODE3D && CAM_FOLLOW)) return;
+  for (var i = 0; i < S.count; i++) if (S.flags[i] & (FX_EYE | FX_SCREEN)) fxMarkDying(S, i);
+  S.eyeCount = 0;
+}
+
+// ── Producers: queue only; the next tick spawns ─────────────────────────
+function fxParseColor(c) {
+  if (typeof c === 'number' && c >= 0 && c <= 0xffffff) return c | 0;
+  if (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) return parseInt(c.slice(1), 16);
+  return -1;
+}
+function fxRingSlot(S) {
+  var ev = S.ev;
+  if (ev.count >= ev.n) { S.stats.eventsDropped++; return -1; }  // a full ring drops the newest
+  var k = (ev.head + ev.count) % ev.n;
+  fxRingClear(ev, k);
+  return k;
+}
+function fxRingClear(ev, k) {
+  ev.type[k] = FX_EMIT; ev.rec[k] = -1; ev.x[k] = ev.y[k] = ev.z[k] = ev.h[k] = 0;
+  ev.dx[k] = ev.dy[k] = ev.dz[k] = ev.nx[k] = ev.ny[k] = 0; ev.nz[k] = 1;
+  ev.vx[k] = ev.vy[k] = ev.vz[k] = 0; ev.scale[k] = 1; ev.num[k] = -1;
+  ev.kind[k] = 0; ev.spell[k] = 0; ev.rgb[k] = ev.rgb2[k] = ev.ore[k] = -1; ev.surf[k] = -1; ev.flags[k] = 0;
+}
+function fxRingCommit(S, k) {
+  var ev = S.ev;
+  if (!Number.isFinite(ev.x[k]) || !Number.isFinite(ev.y[k]) || !Number.isFinite(ev.z[k])) { S.stats.badEvents++; return false; }
+  ev.count++; S.stats.eventsIn++;
+  return true;
+}
+function fxEvent(type, a, b, c, d, e) {
+  try {
+    var S = fxState;
+    if (!FX_EVENTS.hasOwnProperty(type)) { S.stats.unknownEvents++; return; }
+    var family = FX_EVENTS[type].family;
+    if (family && effectFamilyMode(family) === 'legacy') {
+      var adapter = FX_LEGACY_ADAPTERS[type];               // verbatim legacy body (S4), private stream
+      if (adapter) effectWithLegacyRandom(adapter, a, b, c);
+      return;
+    }
+    if (!fxEventOpen(S, FX_EVENT_CODE[type])) { S.stats.eventsGated++; return; }
+    var k = fxRingSlot(S);
+    if (k < 0) return;
+    S.ev.type[k] = FX_EVENT_CODE[type];
+    if (FX_EVENT_READERS[type](S, k, a, b, c, d, e) !== false) fxRingCommit(S, k);   // false: not queued
+  } catch (err) { effectFailure('fxEvent', err); }
+}
+// Direct burst; opts {nx, ny, nz, dx, dy, dz, vx, vy, vz, color, scale, count, self, under}.
+function fxEmit(recipeId, x, y, z, opts) {
+  try {
+    var S = fxState, r = S.C.ID[recipeId];
+    if (r === undefined) { S.stats.unknownRecipes++; return false; }
+    var k = fxRingSlot(S), ev = S.ev;
+    if (k < 0) return false;
+    ev.rec[k] = r; ev.x[k] = x; ev.y[k] = y; ev.z[k] = z;
+    if (opts) {
+      if (Number.isFinite(opts.nx)) { ev.nx[k] = opts.nx; ev.ny[k] = opts.ny || 0; ev.nz[k] = opts.nz || 0; }
+      if (Number.isFinite(opts.dx)) { ev.dx[k] = opts.dx; ev.dy[k] = opts.dy || 0; ev.dz[k] = opts.dz || 0; }
+      if (Number.isFinite(opts.vx)) { ev.vx[k] = opts.vx; ev.vy[k] = opts.vy || 0; ev.vz[k] = opts.vz || 0; }
+      if (opts.color !== undefined) ev.rgb[k] = fxParseColor(opts.color);
+      if (Number.isFinite(opts.scale)) ev.scale[k] = opts.scale;
+      if (Number.isFinite(opts.count) && opts.count >= 0) ev.num[k] = Math.min(4096, opts.count | 0);
+      ev.flags[k] = (opts.self ? FX_EV_SELF : 0) | (opts.under ? FX_EV_UNDER : 0);
+    }
+    return fxRingCommit(S, k);
+  } catch (e) { effectFailure('fxEmit', e); return false; }
+}
+// Continuous emitter; opts {until (game ms), rate (per s), lift, follow}.
+// The rate is opts.rate or the recipe's anchor trigger rate; an api recipe
+// needs opts.rate, e.g. fxAttach('status.burnEmber', enemy, {until, rate}).
+// A body with a numeric health, or any object with opts.follow, is followed
+// every tick at its feet plus lift (gameplay rebases it; a body ends with its
+// health). Anything else is a static point {x, y, z} or segment {.., x2, y2, z2}.
+// Returns a handle, or -1 (counted) for a bad anchor, no rate or a full table.
+function fxAttach(recipeId, anchor, opts) {
+  try {
+    var S = fxState, A = S.anchors, r = S.C.ID[recipeId];
+    if (r === undefined) { S.stats.unknownRecipes++; return -1; }
+    var rate = opts && Number.isFinite(opts.rate) ? opts.rate : S.R.anchorRate[r];
+    if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y) || !(rate > 0)) { S.stats.badEvents++; return -1; }
+    var k = A.used.indexOf(0);
+    if (k < 0) { S.stats.anchorsRefused++; return -1; }
+    var entity = typeof anchor.health === 'number' || !!(opts && opts.follow);
+    A.used[k] = 1; A.live++; A.gen[k] = (A.gen[k] + 1) & 0xffffff; A.rec[k] = r; A.acc[k] = 0;
+    A.kind[k] = entity ? FX_ANCHOR_ENTITY : FX_ANCHOR_POINT; A.ref[k] = entity ? anchor : null;
+    A.x[k] = anchor.x; A.y[k] = anchor.y;
+    A.z[k] = entity ? (opts && Number.isFinite(opts.lift) ? opts.lift : 0) : Number.isFinite(anchor.z) ? anchor.z : 0;
+    A.seg[k] = !entity && Number.isFinite(anchor.x2) && Number.isFinite(anchor.y2) ? 1 : 0;
+    A.x2[k] = anchor.x2 || 0; A.y2[k] = anchor.y2 || 0; A.z2[k] = Number.isFinite(anchor.z2) ? anchor.z2 : A.z[k];
+    A.rate[k] = rate;
+    A.until[k] = opts && Number.isFinite(opts.until) ? opts.until : 0;
+    return A.gen[k] * 256 + k;
+  } catch (e) { effectFailure('fxAttach', e); return -1; }
+}
+function fxDetach(handle) {
+  try {
+    var A = fxState.anchors, k = handle & 255;
+    if (!(handle >= 0) || k >= A.n || !A.used[k] || A.gen[k] !== Math.floor(handle / 256)) return false;
+    fxFreeAnchor(A, k);
+    return true;
+  } catch (e) { effectFailure('fxDetach', e); return false; }
+}
+function fxFreeAnchor(A, k) { A.used[k] = 0; A.ref[k] = null; A.live--; }
+
+// Readers normalise a producer's arguments into one ring slot; they never
+// keep or write the producer's objects. z is the natural anchor (feet or
+// item floor), h the body height (torso = z + 0.45 h). A reader returning
+// false leaves its slot unqueued.
+function _fxReadBody(S, k, body, h) {
+  var ev = S.ev;
+  ev.x[k] = body.x; ev.y[k] = body.y; ev.z[k] = entityFeetSpatialZ(body); ev.h[k] = h;
+  if (body.underground) ev.flags[k] |= FX_EV_UNDER;
+}
+var FX_EVENT_READERS = {
+  enemyDeath: function (S, k, e) { _fxReadBody(S, k, e, 40 * ((e.enemyType && e.enemyType.size) || 1)); },
+  spawnerDeath: function (S, k, sp) { _fxReadBody(S, k, sp, 60); },
+  pickup: function (S, k, item, kind, color) {
+    var ev = S.ev, at = FX_EVENTS.pickup.kinds.indexOf(kind);
+    ev.x[k] = item.x; ev.y[k] = item.y; ev.z[k] = getEntityRenderFloorZ(item);
+    ev.kind[k] = at < 0 ? 30 : at; ev.rgb[k] = fxParseColor(color);
+    if (item.underground) ev.flags[k] |= FX_EV_UNDER;
+  },
+  shrine: function (S, k, shr) {
+    _fxReadBody(S, k, shr, 0);
+    var role = {damage:'shrineDamage', speed:'shrineSpeed', regen:'shrineRegen'}[shr.buffType] || 'shrineArmor';
+    S.ev.rgb[k] = FX_MATERIALS.fxFeedback.packed[role];
+  },
+  phoenix: function (S, k) {
+    var ev = S.ev;
+    ev.x[k] = pos.x; ev.y[k] = pos.y; ev.z[k] = playerFeetSpatialZ(); ev.h[k] = 60;
+    ev.flags[k] = FX_EV_SELF | (playerUnderground ? FX_EV_UNDER : 0);
+  },
+  thunderCore: function (S, k, e) { _fxReadBody(S, k, e, 40 * ((e.enemyType && e.enemyType.size) || 1)); },
+  allyDeath: function (S, k, ally) { _fxReadBody(S, k, ally, 50); },
+  projectileContact: _fxReadContact,
+  // An NPC melee strike that committed (10-npc-controller.js): between the
+  // bodies, 0.65 of the way to the target, at the target's feet (torso =
+  // feet + 30); direction attacker to target, normal back toward the
+  // attacker; warm white, or garrison gold. SELF when the player is struck.
+  meleeCommit: function (S, k, actor, target) {
+    var ev = S.ev, self = target === pos, dx = target.x - actor.x, dy = target.y - actor.y, l = Math.hypot(dx, dy);
+    ev.x[k] = actor.x + dx * 0.65; ev.y[k] = actor.y + dy * 0.65; ev.z[k] = self ? playerFeetSpatialZ() : entityFeetSpatialZ(target); ev.h[k] = 66;
+    if (l > 1e-9) { ev.dx[k] = dx / l; ev.dy[k] = dy / l; ev.nx[k] = -dx / l; ev.ny[k] = -dy / l; ev.nz[k] = 0; }
+    ev.rgb[k] = actor.npc && actor.npc.role === 'garrison' ? FX_MATERIALS.fxFeedback.packed.garrison : FX_MATERIALS.fxDebris.packed.spark;
+    ev.flags[k] = (self ? FX_EV_SELF : 0) | ((self ? playerUnderground : target.underground) ? FX_EV_UNDER : 0);
+  },
+  // Locomotion (section 9.3): the movement observers emit these themselves
+  // (fxObsEmit); a producer may also pass a body (the player: pos) and a scale.
+  footstep: function (S, k, body, scale) { _fxReadStep(S, k, body, scale); },
+  dashStart: function (S, k, body) { _fxReadStep(S, k, body, 1); },
+  land: function (S, k, body, scale) { _fxReadStep(S, k, body, scale); }
+};
+// A step at the body's feet on its own stratum, moving the way it moves.
+function _fxReadStep(S, k, body, scale) {
+  var ev = S.ev, self = body === pos, feet = self ? playerFeetSpatialZ() : entityFeetSpatialZ(body);
+  var under = self ? !!playerUnderground : fxUnderAt(body.x, body.y, feet), vx = self ? vel.x : body.vx || 0, vy = self ? vel.y : body.vy || 0;
+  var v = Math.hypot(vx, vy);
+  ev.x[k] = body.x; ev.y[k] = body.y; ev.z[k] = fxStepZ(body.x, body.y, feet);
+  if (v > 1e-9) { ev.dx[k] = vx / v; ev.dy[k] = vy / v; }
+  if (Number.isFinite(scale)) ev.scale[k] = scale;
+  ev.flags[k] = (self ? FX_EV_SELF : 0) | (under ? FX_EV_UNDER : 0); ev.surf[k] = fxSurfaceAt(S, body.x, body.y, under);
+}
+// Projectile contacts (section 9.2), called once per blocked contact before
+// the gameplay branches consume the projectile, mine the vein or hurt the
+// body. Kind: 'lob' for a lob, 'ore' for a wall cell holding an ore vein
+// (the vein is read before the ore branch damages or splices it; slime bolts
+// never mine), else the sweep's kind. The sweep's point is the sphere's
+// centre, r off the surface; the spawn point is the struck surface point
+// plus the normal x 0.75, on the shooter's side. Normal: floor and cap the
+// struck terrain triangle's (up), ceiling its downward one; a lob's cloud
+// point on the floor below, +z; bodies against the incoming direction, with
+// the sphere's leading point as the struck point; a wall's from the struck
+// point of its cell box (the closest point to the sphere's centre: a face,
+// its top or an edge). Colours: the spell's recipe light and core roles
+// (else its colour); the vein type. where.spell: the spell id's bit in the
+// installed table. Only reads its arguments.
+var FX_CONTACT_KINDS = FX_EVENTS.projectileContact.kinds;
+// The outward normal of a struck terrain triangle (sign +1 up for floors and
+// caps, -1 down for ceilings): the contact's mesh cell and layer (its
+// surfaceId ends in the layer), split along 0->3 as the sweep's triangles;
+// +-z where no triangle exists (the authored flat floor, a mesh edge).
+var _fxN = new Float64Array(3);
+function fxSurfaceNormalInto(contact, x, y, sign, out) {
+  var m = floorMesh, id = contact.surfaceId, gx = contact.gx, gy = contact.gy, c = _fxCorners;
+  out[0] = 0; out[1] = 0; out[2] = sign;
+  if (!m || !m.layerCount || typeof id !== 'string' || !Number.isInteger(gx) || !Number.isInteger(gy) ||
+      gx < 0 || gy < 0 || gx >= m.w || gy >= m.h || !spatialLayerCornersInto(m, gy * m.w + gx, +id.slice(id.lastIndexOf(':') + 1), c)) return out;
+  var gs = m.gridSize, tx = x / gs - gx, ty = y / gs - gy, k = SPATIAL_Z_SCALE / gs, zx, zy;
+  if (tx >= ty) { zx = (c[1] - c[0]) * k; zy = (c[3] - c[1]) * k; } else { zx = (c[3] - c[2]) * k; zy = (c[2] - c[0]) * k; }
+  var l = Math.sqrt(zx * zx + zy * zy + 1) * sign;
+  out[0] = -zx / l; out[1] = -zy / l; out[2] = 1 / l;
+  return out;
+}
+function _fxReadContact(S, k, p, contact, x, y, z) {
+  var ev = S.ev, spell = p.spell || (typeof spells !== 'undefined' && spells.missile) || _fxNoSpell;
+  var hs = p.hz || p.speed || 0, ang = Number.isFinite(p.ang) ? p.ang : 0;
+  var dx = Math.cos(ang) * hs, dy = Math.sin(ang) * hs, dz = p.vz || 0, dl = Math.hypot(dx, dy, dz);
+  if (dl > 1e-9) { dx /= dl; dy /= dl; dz /= dl; } else dx = dy = dz = 0;
+  var kind = p.isLob ? 'lob' : contact.kind, r = Number.isFinite(p.r) ? Math.max(0, p.r) : 8, ore = -1;
+  var nx = 0, ny = 0, nz = 1, sx = x, sy = y, sz = z;
+  var gx = Number.isFinite(contact.gx) ? contact.gx : Math.floor((x + Math.cos(ang) * 1e-6) / cell);
+  var gy = Number.isFinite(contact.gy) ? contact.gy : Math.floor((y + Math.sin(ang) * 1e-6) / cell);
+  if (kind === 'wall' && !spell.isCompanion && typeof oreVeins !== 'undefined' && oreVeins && oreVeins.length) {
+    for (var o = 0; o < oreVeins.length; o++) {
+      var vein = oreVeins[o];
+      if (vein && vein.gx === gx && vein.gy === gy) { kind = 'ore'; ore = vein.veinType === 'gold' ? 0 : 1; break; }
+    }
+  }
+  if (kind === 'wall' || kind === 'ore') {
+    var span = spatialWallSpan(gx, gy), x0 = gx * cell, y0 = gy * cell, x1 = x0 + cell, y1 = y0 + cell;
+    var lo = span ? span.baseZ : z, hi = span ? span.topZ : z;
+    var qx = x < x0 ? x0 : x > x1 ? x1 : x, qy = y < y0 ? y0 : y > y1 ? y1 : y, qz = z < lo ? lo : z > hi ? hi : z;
+    var ex = x - qx, ey = y - qy, ez = z - qz, ax = Math.abs(ex), ay = Math.abs(ey), az = Math.abs(ez);
+    nz = 0;
+    if (ax + ay + az > 0) {                                    // outside the box: its closest point's face
+      if (ax >= ay && ax >= az) nx = ex > 0 ? 1 : -1; else if (ay >= az) ny = ey > 0 ? 1 : -1; else nz = ez > 0 ? 1 : -1;
+    } else if (span && z >= hi - 1) { nz = 1; qz = hi; }      // the centre inside the cell: the top,
+    else {                                                     // else the nearest face
+      var u = x / cell - gx, v = y / cell - gy, m = Math.min(u, 1 - u, v, 1 - v);
+      if (m === u) { nx = -1; qx = x0; } else if (m === 1 - u) { nx = 1; qx = x1; } else if (m === v) { ny = -1; qy = y0; } else { ny = 1; qy = y1; }
+    }
+    sx = qx + nx * 0.75; sy = qy + ny * 0.75; sz = qz + nz * 0.75;
+  } else if (kind === 'enemy' || kind === 'spawner') {
+    if (dl > 1e-9) { nx = -dx; ny = -dy; nz = -dz; sx = x + dx * (r - 0.75); sy = y + dy * (r - 0.75); sz = z + dz * (r - 0.75); }
+    else sz = z + 0.75;
+  } else if (kind === 'lob') {                                 // on the floor under the cloud the lob leaves
+    var floorZ = floorMesh ? sampleSpatialSupportZ(x, y, p.renderFloorZ, p.underground) : 0;
+    sz = Number.isFinite(floorZ) ? floorZ + 0.75 : z - r + 0.75;
+  } else {                                                     // floor, cap, ceiling: the struck triangle
+    var tn = fxSurfaceNormalInto(contact, x, y, kind === 'ceiling' ? -1 : 1, _fxN);
+    nx = tn[0]; ny = tn[1]; nz = tn[2];
+    sx = x - nx * (r - 0.75); sy = y - ny * (r - 0.75); sz = z - nz * (r - 0.75);
+  }
+  ev.x[k] = sx; ev.y[k] = sy; ev.z[k] = sz;
+  ev.dx[k] = dx; ev.dy[k] = dy; ev.dz[k] = dz; ev.nx[k] = nx; ev.ny[k] = ny; ev.nz[k] = nz;
+  var code = FX_CONTACT_KINDS.indexOf(kind);
+  ev.kind[k] = code < 0 ? 30 : code; ev.ore[k] = ore;
+  ev.spell[k] = spell.id && _fxHas(S.C.SPELLS, spell.id) ? S.C.SPELLS[spell.id] : 0;
+  var visual = spell.id && typeof SPELL_VISUAL_RECIPES !== 'undefined' ? SPELL_VISUAL_RECIPES[spell.id] : null;
+  var mat = visual && GAME_MATERIALS[visual.material];
+  if (mat) { ev.rgb[k] = mat.packed.light; ev.rgb2[k] = mat.packed.core; } else ev.rgb[k] = fxParseColor(spell.color);
+  ev.flags[k] = (p.underground ? FX_EV_UNDER : 0) | (spell.isCompanion ? FX_EV_COMPANION : 0);
+  return fxContactAdmit(S, k);
+}
+var _fxNoSpell = {};
+// The contact cap: the first FX_CONTACTS_PER_TICK contacts since the last
+// tick are queued; each further one takes the slot of the farthest of them
+// if it is nearer the camera, else it is dropped (both counted).
+function fxContactAdmit(S, k) {
+  var ev = S.ev, n = S.contactN, far = 0;
+  if (!Number.isFinite(ev.x[k] + ev.y[k] + ev.z[k])) return true;            // the commit counts it as bad
+  var d = Math.hypot(ev.x[k] - cam.x, ev.y[k] - cam.y);
+  if (!(d >= 0)) d = Infinity;
+  if (n < FX_CONTACTS_PER_TICK) { S.contactSlot[n] = k; S.contactD[n] = d; S.contactN = n + 1; return true; }
+  for (var j = 1; j < n; j++) if (S.contactD[j] > S.contactD[far]) far = j;
+  S.stats.contactsDropped++;
+  if (d < S.contactD[far]) { fxRingCopy(ev, k, S.contactSlot[far]); S.contactD[far] = d; }
+  return false;
+}
+// Legacy mode (the A/B reference until S10): the producers' old bodies,
+// re-scoped into functions (the pickup body split by kind, the producer's
+// tick-local `now` read as gameTimeNow(), equal inside a session), run by
+// fxEvent on the private legacy stream (11-enemies.js, 10-combat.js and
+// 18-arena-fortress.js before S4). The shrine, Phoenix,
+// Thunder Core and garrison-death producers pushed {life,maxLife} or {t,dur}
+// records that were pruned before any frame drew them, so their Legacy mode
+// shows nothing, as before (section 4.4), and has no adapter.
+var FX_LEGACY_ADAPTERS = {
+  enemyDeath: function (e) {
+    var now = gameTimeNow();
+    // Bone scatter — 7 tumbling segments fly outward
+    for (var b = 0; b < 7; b++) {
+      var bang = Math.random() * Math.PI * 2;
+      var bspd = 50 + Math.random() * 110;
+      deathEffects.push({x:e.x, y:e.y, vx:Math.cos(bang)*bspd, vy:Math.sin(bang)*bspd,
+        rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*10,
+        len:7+Math.random()*13, spawnMs:now, lifeMs:800, color:'#cfc8b8'});
+    }
+  },
+  spawnerDeath: function (sp2) {
+    var now = gameTimeNow();
+    // Death burst
+    for (var sb = 0; sb < 5; sb++) {
+      var sba = Math.random() * Math.PI * 2, sbs = 40 + Math.random() * 80;
+      deathEffects.push({x:sp2.x, y:sp2.y, vx:Math.cos(sba)*sbs, vy:Math.sin(sba)*sbs,
+        rot:Math.random()*Math.PI*2, rotVel:(Math.random()-0.5)*8,
+        len:8+Math.random()*10, spawnMs:now, lifeMs:600, color:'#3a1520'});
+    }
+  },
+  // Arcane tomes and stat pickups: stacked rings at the item.
+  pickup: function (item, kind, pColor) {
+    var pi, ang;
+    if (kind === 'tome') {
+      var tome = item;
+      for (pi = 0; pi < 15; pi++) {
+        ang = (pi / 15) * Math.PI * 2;
+        impacts.push({x: tome.x, y: tome.y, z: getEntityRenderFloorZ(tome) + 10,
+          vx: Math.cos(ang) * 50, vy: Math.sin(ang) * 50, vz: 20 + Math.random() * 30,
+          spawnMs: gameTimeNow(), lifeMs: 1000, color: '#bb66ff', size: 5});
+      }
+    } else if (kind === 'stat') {
+      var sp = item;
+      for (pi = 0; pi < 12; pi++) {
+        ang = (pi / 12) * Math.PI * 2;
+        impacts.push({x: sp.x, y: sp.y, z: getEntityRenderFloorZ(sp) + 8,
+          vx: Math.cos(ang) * 45, vy: Math.sin(ang) * 45, vz: 15 + Math.random() * 25,
+          spawnMs: gameTimeNow(), lifeMs: 800, color: pColor, size: 4});
+      }
+    }
+  }
+};
+
+// ── Spawning ──────────────────────────────────────────────────────────────
+// sky: z is already the open-sky support at (x, y) (a weather column). A
+// segment resolver may widen the lateral spread by segW at the far end
+// (growing with u squared, as a fanning beam does) and bow the height with
+// segQ: z + (floor + 1 - z) u squared, the flame's arc from the hand down to
+// 1 u above the floor under each particle's own point (fxSegPoint), which
+// is the walkable layer nearest `feet` (the caster's), as the beam's is.
+var _fxCtx = {x:0, y:0, z:0, h:0, nx:0, ny:0, nz:1, dx:0, dy:0, dz:0, vx:0, vy:0, vz:0,
+  x2:0, y2:0, z2:0, seg:false, segW:0, segQ:false, feet:0, pal:-1, pal2:-1, ore:-1, surf:-1, flags:0, spec:0, space:0, frame:0, owner:-1, sky:false};
+function fxCtxReset(ctx) {
+  ctx.x = ctx.y = ctx.z = ctx.h = 0; ctx.nx = ctx.ny = 0; ctx.nz = 1; ctx.dx = ctx.dy = ctx.dz = 0;
+  ctx.vx = ctx.vy = ctx.vz = 0; ctx.seg = false; ctx.segW = 0; ctx.segQ = false; ctx.feet = 0;
+  ctx.pal = ctx.pal2 = ctx.ore = -1; ctx.surf = -1; ctx.flags = 0; ctx.space = 0; ctx.frame = 0;
+  ctx.owner = -1; ctx.sky = false;
+}
+function fxBiomeIndex(S) {
+  var i = S.C.PAL.surfBiomes.indexOf(terrain);
+  return i < 0 ? 0 : i;
+}
+// Event colours are interned inside the tick into this state's dynamic table,
+// so palette indices depend only on the seed and the events since the reset.
+function fxInternColor(S, rgb) {
+  var P = S.C.PAL, d = S.dynPal, n = S.dynCount, best = 0, bestD = Infinity;
+  for (var k = 0; k < n; k++) if (d[k] === rgb) return P.count + k;
+  if (n < d.length) { d[n] = rgb; S.dynCount = n + 1; return P.count + n; }
+  S.stats.palOverflow++;
+  for (var j = 0; j < n; j++) {
+    var dr = ((d[j] >> 16) & 255) - ((rgb >> 16) & 255), dg = ((d[j] >> 8) & 255) - ((rgb >> 8) & 255), db = (d[j] & 255) - (rgb & 255);
+    var dist = dr * dr + dg * dg + db * db;
+    if (dist < bestD) { bestD = dist; best = j; }
+  }
+  return P.count + best;
+}
+function fxPickPal(S, spec, u, ctx) {
+  var P = S.C.PAL, src = P.specSrc[spec];
+  if (src === 0) {
+    var s0 = P.specStart[spec], last = s0 + P.specCount[spec] - 1;
+    for (var k = s0; k < last; k++) if (u < P.cum[k]) return P.cand[k];
+    return P.cand[last];
+  }
+  if (src === FX_COLOR_ORE && ctx.ore >= 0) return P.ore[ctx.ore * 2 + (u < 0.6 ? 0 : 1)];   // the vein's base or lit entry
+  // Event and spell colours: the event's colour, or either of its two (a spell's light and core roles).
+  if (src <= FX_COLOR_ORE) return ctx.pal2 >= 0 && u >= 0.5 ? ctx.pal2 : ctx.pal >= 0 ? ctx.pal : 0;
+  var biome = ctx.flags & FX_EV_UNDER ? P.surfBiomes.length - 1 : ctx.surf >= 0 ? ctx.surf : fxBiomeIndex(S);
+  return P.surf[biome * 4 + src - FX_COLOR_ORE - 1];
+}
+// First-person in-view test from the sim camera (same geometry as projToScreen).
+function fxInView(px, py, pz, margin) {
+  var dx = px - cam.x, dy = py - cam.y, c = Math.cos(cam.ang), s = Math.sin(cam.ang), fwd = dx * c + dy * s;
+  if (fwd < 1) return false;
+  if (Math.abs((-dx * s + dy * c) / fwd) > Math.tan(cam.fov / 2) * margin) return false;
+  var eyeZ = 60 + ((Number.isFinite(cam.z) ? cam.z : 60) - 60) * 0.625;
+  return Math.abs((eyeZ - pz) / fwd - (cam.pitch || 0)) < (2 / 3) * margin;
+}
+// Spawn keep: 1 up to near, farKeep at far, 0 beyond cull.
+function fxKeep(R, r, d) {
+  if (d <= R.near[r]) return 1;
+  if (d > R.cull[r]) return 0;
+  if (d >= R.far[r]) return R.farKeep[r];
+  return 1 + (R.farKeep[r] - 1) * (d - R.near[r]) / (R.far[r] - R.near[r]);
+}
+// The keep of a spawn of recipe r at (x, y), from the sim camera. Locomotion
+// dust in the 2D view, where nothing shrinks with distance: 1 inside the view
+// (viewCam and the canvas, 1 u a pixel, both kept by the tick) and 0 outside.
+function fxSpawnKeep(R, r, x, y) {
+  if (MODE3D || R.cls[r] !== FX_CLASS_LOCO) return fxKeep(R, r, Math.hypot(x - cam.x, y - cam.y));
+  var m = FX_VIEW2D_MARGIN, vx = viewCam.x, vy = viewCam.y;
+  return x >= vx - m && y >= vy - m && x <= vx + canvas.width + m && y <= vy + canvas.height + m ? 1 : 0;
+}
+// A burst's spawn count for x nominal particles: rounded; under one, its
+// first serial spawns when that serial's own draw u (attribute 22 of its
+// seed) is below x, so a sparser setting or a farther event shows a subset
+// of the same particles and a one-particle burst thins instead of vanishing.
+function fxRoundCount(x, u) { return x >= 1 ? Math.round(x) : x > 0 && u < x ? 1 : 0; }
+// First-person placement, decided once per burst from the sim camera.
+// Returns 0 (placed), 1 (self event out of view) or 2 (no screen space).
+function fxPlace(S, r, place, ctx) {
+  var R = S.R, fp = MODE3D && CAM_FOLLOW;
+  if (S.placeOver[r] >= 0) place = S.placeOver[r];
+  ctx.space = 0; ctx.frame = 0;
+  // A burst of the player's own event that would sit at its source (the
+  // feet): selfView decides (section 5.7). A placement that moves it in front
+  // of the camera (an override such as frontSides, or screen) is always seen.
+  if ((ctx.flags & FX_EV_SELF) && fp && place === FX_PLACE_SOURCE) {
+    var sv = R.selfView[r];
+    if (sv === FX_SELF_SKIP || sv === FX_SELF_IFVISIBLE && !fxInView(ctx.x, ctx.y, ctx.z, 1.1)) return 1;
+  }
+  if (!fp) return place === FX_PLACE_SCREEN ? 2 : 0;          // eye bursts fall back to their source
+  if (place === FX_PLACE_EYE) { ctx.space = 1; return 0; }
+  if (place === FX_PLACE_SCREEN) { ctx.space = 2; return 0; }
+  if (place === FX_PLACE_SIDES) { ctx.frame = 2; return 0; }
+  if (place === FX_PLACE_SOURCE) return 0;
+  var c = Math.cos(cam.ang), s = Math.sin(cam.ang), dist = R.pDist[r], eyeZ = 60 + ((Number.isFinite(cam.z) ? cam.z : 60) - 60) * 0.625;
+  if (place === FX_PLACE_FRONT && Math.hypot(ctx.x - cam.x, ctx.y - cam.y) >= R.pNear[r] && fxInView(ctx.x, ctx.y, ctx.z, 0.9)) return 0;
+  // In front: `distance` along the pitched view ray (the screen centre is
+  // where (eyeZ - z) / fwd = pitch), and `drop` below it scaled with the
+  // forward distance, so the burst keeps its pitch-0 screen offset below the
+  // crosshair when the player looks down or up.
+  var p = Number.isFinite(cam.pitch) ? cam.pitch : 0, fd = dist / Math.sqrt(1 + p * p);
+  var lateral = place === FX_PLACE_FRONT ? -(ctx.x - cam.x) * s + (ctx.y - cam.y) * c : 0, half = fd / 2;
+  lateral = lateral < -half ? -half : lateral > half ? half : lateral;
+  ctx.x = cam.x + c * fd - s * lateral; ctx.y = cam.y + s * fd + c * lateral; ctx.z = eyeZ - p * fd - R.pDrop[r] * fd / dist;
+  if (place === FX_PLACE_RING) ctx.frame = 1;
+  else fxFrontVelocity(ctx);
+  return 0;
+}
+// A burst moved in front of a walking player carries the player's velocity
+// (recipes take a share with spawn.inherit; drag decays it), so the player
+// does not walk through it within its life. Capped at twice the base walking
+// speed: a dash impulse decays much faster than particle drag.
+function fxFrontVelocity(ctx) {
+  var vx = Number.isFinite(vel.x) ? vel.x : 0, vy = Number.isFinite(vel.y) ? vel.y : 0, v = Math.hypot(vx, vy);
+  var cap = 2 * GAME_CONFIG.player.baseSpeed, k = v > cap ? cap / v : 1;
+  ctx.vx = vx * k; ctx.vy = vy * k; ctx.vz = 0;
+}
+// Console/dev A/B of first-person placement (spec 5.7, Revision 3 Q5): every
+// state places recipeId with `place` from the next tick; null restores the
+// recipe's own. Never persisted. Camera-local particles skip collision.
+var _fxPlaceOverride = {};
+function setEffectPlacementOverride(recipeId, place) {
+  if (!fxState.C.ID.hasOwnProperty(recipeId)) throw new Error('effect placement: unknown recipe ' + recipeId);
+  if (place !== null && FX_ENUMS.place.indexOf(place) < 0) throw new Error('effect placement: place must be one of ' + FX_ENUMS.place.join(' ') + ' or null');
+  if (place === null) delete _fxPlaceOverride[recipeId]; else _fxPlaceOverride[recipeId] = FX_ENUMS.place.indexOf(place);
+  _effectToggleGen++;
+  return place;
+}
+// A burst of n authored particles. Every serial of the burst is consumed, so
+// a lower density or a farther event shows a prefix of the same particles.
+// Anchor and child spawns (exact) are already rate-scaled.
+function fxBurst(S, r, n, place, ctx, exact) {
+  var R = S.R, c = R.cls[r], st = S.stats, serial = S.serial, m = n, spawned = 0;
+  if (!exact) {
+    var nominal = n * S.scale[c], keep = fxSpawnKeep(R, r, ctx.x, ctx.y), total = Math.ceil(n * FX_CLASS_MAX_SCALE[c]);
+    var u = nominal < 1 || nominal * keep < 1 ? effectNoise((effectNoise(R.salt[r] ^ S.seed, serial) * 4294967296) >>> 0, 22) : 0;
+    var base = fxRoundCount(nominal, u);                         // the count at keep 1: the distance LOD refuses the rest
+    m = fxRoundCount(nominal * keep, u);
+    if (c === 4 && m < 1 && keep > 0 && n > 0) m = 1;             // feedback never disappears
+    if (m > total) m = total;
+    S.serial = (serial + Math.max(total, m)) >>> 0;
+    if (base > m) st.refusedLod += base - m;
+  } else S.serial = (serial + n) >>> 0;
+  if (m <= 0) return 0;
+  if (ctx.z !== ctx.z) { st.refusedNoSupport += m; return 0; }    // no ground under a movement observer's event
+  var why = fxPlace(S, r, place, ctx);
+  if (why) { if (why === 1) st.refusedOffscreenSelf += m; else st.refusedView += m; return 0; }
+  for (var j = 0; j < m; j++) {
+    if (S.spawnLeft <= 0) { st.refusedSpawnCap += m - j; break; }
+    var got = fxSpawn(S, r, (serial + j) >>> 0, j, n, ctx);
+    if (got >= 0) { S.spawnLeft--; spawned++; continue; }
+    // A gate or cap refusal holds for the rest of the burst: count it once.
+    // A refused steal scan uses up spawn-cap work, so later events wait.
+    if (got >= -2) { fxRefuse(S, r, got, m - j); break; }
+    fxRefuse(S, r, got, 1);
+    if (got === -3 && !S.noSteal) S.spawnLeft--;
+  }
+  return spawned;
+}
+// Admission (section 3.6): gate, per-recipe and class caps, then the budget,
+// with a bounded steal from a lower class. Returns the free slot or a
+// refusal: -1 gate, -2 cap, -3 budget.
+function fxAdmit(S, r) {
+  var R = S.R, c = R.cls[r];
+  if (!S.gate[r]) return -1;
+  if (S.recipeLive[r] >= R.maxLive[r] || S.classLive[c] - S.classDying[c] >= S.caps[c]) return -2;
+  if (S.count >= (c === 4 ? S.cap : S.B)) {
+    if (S.noSteal || !fxSteal(S, c)) return -3;
+  }
+  return S.count;
+}
+// Counts n refused spawns by reason (-4: no support at the spawn column).
+function fxRefuse(S, r, why, n) {
+  var st = S.stats;
+  if (why === -1) { if (S.gateWhy[r] === 1) st.refusedToggle += n; else st.refusedFamily += n; }
+  else if (why === -2) st.refusedCap += n;
+  else if (why === -3) st.refusedBudget += n;
+  else st.refusedNoSupport += n;
+}
+// 64-slot scan from a rotating cursor: the lowest class below the spawn's,
+// then the oldest normalized age.
+function fxSteal(S, c) {
+  var n = S.count;
+  if (!n) return false;
+  var scan = Math.min(n, EFFECT_CONFIG.stealScan), at = S.stealCursor % n, best = -1, bestC = c, bestAge = -1;
+  for (var k = 0; k < scan; k++) {
+    var i = (at + k) % n, vc = S.cls[i];
+    if (vc >= c) continue;
+    var a = S.age[i] / S.life[i];
+    if (best < 0 || vc < bestC || vc === bestC && a > bestAge) { best = i; bestC = vc; bestAge = a; }
+  }
+  S.stealCursor = (at + scan) % n;
+  if (best < 0) return false;
+  S.stolenByClass[bestC]++; S.stats.stolen++;
+  fxKill(S, best);
+  return true;
+}
+// The unit vector b tilted by th around a perpendicular at azimuth ph.
+var _fxDir = new Float64Array(3);
+function fxConeInto(out, bx, by, bz, th, ph) {
+  var ex, ey, ez;
+  if (Math.abs(bz) < 0.9) { ex = -by; ey = bx; ez = 0; } else { ex = 0; ey = -bz; ez = by; }
+  var el = Math.hypot(ex, ey, ez); ex /= el; ey /= el; ez /= el;
+  var fx = by * ez - bz * ey, fy = bz * ex - bx * ez, fz = bx * ey - by * ex;
+  var ct = Math.cos(th), st = Math.sin(th), cp = Math.cos(ph), sp = Math.sin(ph);
+  out[0] = bx * ct + (ex * cp + fx * sp) * st; out[1] = by * ct + (ey * cp + fy * sp) * st; out[2] = bz * ct + (ez * cp + fz * sp) * st;
+}
+// Serial j of a burst in bit-reversed order (0, 1/2, 1/4, 3/4, 1/8, ...):
+// any prefix of a ring burst spreads evenly round it.
+function fxRadicalInverse(j) {
+  var v = j & 0xffff;
+  v = ((v & 0x5555) << 1) | ((v >> 1) & 0x5555); v = ((v & 0x3333) << 2) | ((v >> 2) & 0x3333);
+  v = ((v & 0x0f0f) << 4) | ((v >> 4) & 0x0f0f); v = ((v & 0x00ff) << 8) | ((v >> 8) & 0x00ff);
+  return v / 65536;
+}
+// Attribute k of a particle is effectNoise(seedA, k): 0 life, 1 size, 2 alpha,
+// 3-5 shape, 6 speed, 7 up, 8 spread, 9 rotation, 10 palette, 11 light
+// jitter, 12 phase, 13 child chance, 14-15 direction, 16 height, 17 lift,
+// 18 spin, 19 rest time, 20 stick length (21 a prewarm's point, 22 a burst's
+// thinning draw, fxBurst). n is the burst's authored count.
+// A segment emitter's point at u = n3 (lateral by n4, the fan by segW) into
+// _fxSegP[0..1]; for a bowed segment (segQ) [2] is the floor under that
+// point by the beam's rule (NaN where there is none), else 0. No allocation.
+var _fxSegP = new Float64Array(3);
+function fxSegPoint(ctx, rad, n3, n4) {
+  var sdx = ctx.x2 - ctx.x, sdy = ctx.y2 - ctx.y, sl = Math.hypot(sdx, sdy) || 1, lat = (rad + ctx.segW * n3) * n3 * (2 * n4 - 1);
+  _fxSegP[0] = ctx.x + sdx * n3 - sdy / sl * lat; _fxSegP[1] = ctx.y + sdy * n3 + sdx / sl * lat;
+  _fxSegP[2] = ctx.segQ ? fxNearestLayerZ(_fxSegP[0], _fxSegP[1], ctx.feet) : 0;
+}
+function fxSpawn(S, r, serial, j, n, ctx) {
+  var R = S.R, st = S.stats, seed = (effectNoise(R.salt[r] ^ S.seed, serial) * 4294967296) >>> 0;
+  var n3 = effectNoise(seed, 3), n4 = effectNoise(seed, 4), c = Math.cos(cam.ang), s = Math.sin(cam.ang), wx = 0, wy = 0, wz = 0;
+  if (ctx.frame === 2) {
+    // A frontSides wedge point (section 5.7): alternately left and right,
+    // 0.6-1 x `distance` along the ground, shortened as the view pitches down
+    // (as sourceOrFront), so at pitch 0 most of it is past the ~90 u of
+    // ground hidden below the canvas. Its ground is found before admission:
+    // a puff with none there (refused) never takes a live particle's slot.
+    var pw = Number.isFinite(cam.pitch) ? cam.pitch : 0, side = (j & 1) ? 1 : -1, sa = cam.ang + side * R.pArc[r] * (0.5 + 0.5 * n4);
+    var sd = R.pDist[r] / Math.sqrt(1 + pw * pw) * (0.6 + 0.4 * n3);
+    wx = cam.x + Math.cos(sa) * sd; wy = cam.y + Math.sin(sa) * sd; wz = fxWedgeZ(S, wx, wy);
+    if (!Number.isFinite(wz)) return -4;
+  }
+  // A bowed segment's point and the floor under it, before admission: a
+  // point where the beam has no floor is skipped, as the beam skips it.
+  if (ctx.segQ && ctx.seg && !ctx.space && !ctx.frame && R.shape[r] === FX_SHAPE_SEGMENT) {
+    fxSegPoint(ctx, R.rad0[r] + (R.rad1[r] - R.rad0[r]) * n3, n3, n4);
+    if (!Number.isFinite(_fxSegP[2])) return -4;
+  }
+  var i = fxAdmit(S, r);
+  if (i < 0) return i;
+  var shape = R.shape[r], ang = 2 * Math.PI * n4;
+  var rad = R.rad0[r] + (R.rad1[r] - R.rad0[r]) * n3, ox = 0, oy = 0, oz = 0;
+  if (shape === FX_SHAPE_SPHERE) {
+    var u = 2 * effectNoise(seed, 5) - 1, w = Math.sqrt(1 - u * u);
+    ox = rad * w * Math.cos(ang); oy = rad * w * Math.sin(ang); oz = rad * u;
+    if (R.halfSpace[r]) {                                   // mirrored to the event normal's side: never into the surface
+      var on = ox * ctx.nx + oy * ctx.ny + oz * ctx.nz;
+      if (on < 0) { ox -= 2 * on * ctx.nx; oy -= 2 * on * ctx.ny; oz -= 2 * on * ctx.nz; }
+    }
+  } else if (shape === FX_SHAPE_DISC || shape === FX_SHAPE_COLUMN) {
+    var rr = R.rad0[r] + (R.rad1[r] - R.rad0[r]) * Math.sqrt(n3);
+    ox = rr * Math.cos(ang); oy = rr * Math.sin(ang);
+    if (shape === FX_SHAPE_COLUMN) oz = R.hgt0[r] + (R.hgt1[r] - R.hgt0[r]) * effectNoise(seed, 16);
+  } else if (shape === FX_SHAPE_RING) {
+    // A heading depends only on the serial and its own hash, never on how
+    // many of the burst spawn (a lower density shows the same particles).
+    var ra = 2 * Math.PI * (fxRadicalInverse(j) + n4 / (n > 0 ? n : 1)), ringR = ctx.frame === 1 && R.pRadius[r] > 0 ? R.pRadius[r] : rad;
+    ox = ringR * Math.cos(ra); oy = ringR * Math.sin(ra);
+  } else if (shape === FX_SHAPE_CONE) {
+    // rad from the apex, within the spread cone around the event direction
+    // (the camera's forward when the event has none).
+    var al = Math.hypot(ctx.dx, ctx.dy, ctx.dz), cone = _fxDir;
+    if (al > 1e-9) fxConeInto(cone, ctx.dx / al, ctx.dy / al, ctx.dz / al, R.spread[r] * Math.sqrt(effectNoise(seed, 5)), ang);
+    else fxConeInto(cone, Math.cos(cam.ang), Math.sin(cam.ang), 0, R.spread[r] * Math.sqrt(effectNoise(seed, 5)), ang);
+    ox = rad * cone[0]; oy = rad * cone[1]; oz = rad * cone[2];
+  } else if (shape === FX_SHAPE_CORNERS) {
+    // Screen units from the centre (canvas heights; x in 3/4 widths on a
+    // canvas narrower than 4:3, so a half width is at least 0.67 units),
+    // alternately left and right of the arms in the lower third, above the
+    // HUD's corner panels and inside the frame: radial motion then carries
+    // each puff out past its lower corner.
+    ox = ((j & 1) ? 1 : -1) * (0.42 + 0.2 * n3); oy = 0.12 + 0.14 * n4;
+  }
+  var lift = R.lift0[r] + (R.lift1[r] - R.lift0[r]) * effectNoise(seed, 17), px, py, pz;
+  if (ctx.space === 1) { px = R.pDist[r] + oz; py = ox; pz = oy + lift; }
+  else if (ctx.space === 2) { px = ox; py = oy; pz = 0; }
+  else if (ctx.frame === 1) { px = ctx.x - s * ox; py = ctx.y + c * ox; pz = ctx.z + oy + lift; }
+  else if (ctx.frame === 2) { px = wx; py = wy; pz = wz + lift; }       // on the wedge's ground
+  else {
+    px = ctx.x + ox; py = ctx.y + oy; pz = ctx.z + oz + lift;
+    if (shape === FX_SHAPE_SEGMENT && ctx.seg) {
+      if (!ctx.segQ) fxSegPoint(ctx, rad, n3, n4);
+      px = _fxSegP[0]; py = _fxSegP[1];
+      pz = (ctx.segQ ? ctx.z + (_fxSegP[2] + 1 - ctx.z) * n3 * n3 : ctx.z + (ctx.z2 - ctx.z) * n3) + lift;
+    }
+    var support = R.support[r];
+    if (support === FX_SUPPORT_OPENSKY) pz = (ctx.sky && px === ctx.x && py === ctx.y ? ctx.z : fxSurfaceZ(px, py)) + oz + lift;
+    else if (support === FX_SUPPORT_CEILING) {
+      var cave = getCaveSpaceAt(px, py, ctx.z / 25);
+      pz = cave.underground ? cave.ceilingH * 25 - 2 + oz + lift : NaN;
+    }
+    if (!Number.isFinite(pz)) return -4;
+  }
+  // Velocity: a direction basis within the spread cone, times speed, plus up.
+  var dir = R.direction[r], bx = 0, by = 0, bz = 0, n8 = effectNoise(seed, 8), n14 = effectNoise(seed, 14);
+  if (dir === FX_DIR_RANDOM) {
+    var ru = 2 * n8 - 1, rw = Math.sqrt(1 - ru * ru); bx = rw * Math.cos(2 * Math.PI * n14); by = rw * Math.sin(2 * Math.PI * n14); bz = ru;
+  } else if (dir === FX_DIR_UP) bz = 1;
+  else if (dir === FX_DIR_RADIAL) {
+    var oh = Math.hypot(ox, oy);
+    if (oh > 1e-9) { bx = ox / oh; by = oy / oh; } else { bx = Math.cos(2 * Math.PI * n14); by = Math.sin(2 * Math.PI * n14); }
+  } else if (dir === FX_DIR_NORMAL) { bx = ctx.nx; by = ctx.ny; bz = ctx.nz; }
+  else if (dir === FX_DIR_REFLECT) {
+    var dn = ctx.dx * ctx.nx + ctx.dy * ctx.ny + ctx.dz * ctx.nz;
+    bx = ctx.dx - 2 * dn * ctx.nx; by = ctx.dy - 2 * dn * ctx.ny; bz = ctx.dz - 2 * dn * ctx.nz;
+  } else if (dir === FX_DIR_ALONG) { bx = ctx.dx; by = ctx.dy; bz = ctx.dz; }
+  else if (dir === FX_DIR_WIND) {                                      // calm air: the prevailing direction
+    var wl = Math.hypot(S.weather.windX, S.weather.windY), calm = FX_WEATHER_RULES.calmDirection;
+    if (wl > 0) { bx = S.weather.windX / wl; by = S.weather.windY / wl; } else { bx = calm[0]; by = calm[1]; }
+  } else if (dir === FX_DIR_BACKWARD) {
+    if (ctx.frame === 2) { bx = -c; by = -s; } else { bx = -ctx.dx; by = -ctx.dy; }
+  }
+  var bl = Math.hypot(bx, by, bz);
+  if (bl > 1e-9) {
+    bx /= bl; by /= bl; bz /= bl;
+    var spread = R.spread[r];
+    if (spread > 0 && dir !== FX_DIR_RANDOM) {
+      fxConeInto(_fxDir, bx, by, bz, spread * Math.sqrt(n8), 2 * Math.PI * n14);
+      bx = _fxDir[0]; by = _fxDir[1]; bz = _fxDir[2];
+    }
+  }
+  var speed = R.spd0[r] + (R.spd1[r] - R.spd0[r]) * effectNoise(seed, 6);
+  var upv = R.up0[r] + (R.up1[r] - R.up0[r]) * effectNoise(seed, 7), inh = R.inherit[r];
+  var vx = bx * speed + inh * ctx.vx, vy = by * speed + inh * ctx.vy, vz = bz * speed + upv + inh * ctx.vz;
+  // Wind-borne particles start at the air's speed (wind x their coupling,
+  // the speed drag relaxes them to), so rain and snow slant from birth.
+  if (dir === FX_DIR_WIND) { vx += S.weather.windX * R.wind[r]; vy += S.weather.windY * R.wind[r]; }
+  if (ctx.space === 1) { vx = bz * speed; vy = bx * speed; vz = by * speed + upv; }       // camera-local fwd, right, up
+  else if (ctx.space === 2) { vx = bx * speed; vy = by * speed; vz = 0; }
+  var life = R.life0[r] + (R.life1[r] - R.life0[r]) * effectNoise(seed, 0), cls = R.cls[r];
+  S.x[i] = px; S.y[i] = py; S.z[i] = pz; S.vx[i] = vx; S.vy[i] = vy; S.vz[i] = vz;
+  S.age[i] = 0; S.life[i] = life;
+  S.size[i] = R.size0[r] + (R.size1[r] - R.size0[r]) * effectNoise(seed, 1);
+  S.alpha[i] = R.alpha0[r] + (R.alpha1[r] - R.alpha0[r]) * effectNoise(seed, 2);
+  S.rot[i] = 2 * Math.PI * effectNoise(seed, 9);
+  S.spin[i] = R.spin0[r] + (R.spin1[r] - R.spin0[r]) * effectNoise(seed, 18);
+  S.phase[i] = 2 * Math.PI * effectNoise(seed, 12);
+  S.gcell[i] = -1; S.owner[i] = ctx.owner; S.seedA[i] = seed; S.rec[i] = r;
+  S.pal[i] = fxPickPal(S, ctx.spec, effectNoise(seed, 10), ctx);
+  S.flags[i] = (ctx.space === 1 ? FX_EYE : ctx.space === 2 ? FX_SCREEN : 0) |
+    (ctx.flags & FX_EV_UNDER ? FX_UNDER : 0) | (ctx.flags & FX_EV_SELF ? FX_SELF : 0);
+  S.bounces[i] = R.bounces[r]; S.cls[i] = cls;
+  S.count++; S.classLive[cls]++; S.recipeLive[r]++; st.spawned++;
+  if (ctx.space) S.eyeCount++;
+  return i;
+}
+
+// FIFO drain inside the tick; an event that no longer fits this tick's spawn
+// cap waits for the next tick (the first event of a tick always runs). Its
+// size is the most its matching, open bindings can spawn.
+function fxEventMax(S, k) {
+  var ev = S.ev, R = S.R, type = ev.type[k], sc = ev.scale[k], total = 0;
+  if (type === FX_EMIT) {
+    var r = ev.rec[k], n = ev.num[k] >= 0 ? ev.num[k] : R.api1[r];
+    return Math.ceil(Math.round(n * sc) * FX_CLASS_MAX_SCALE[R.cls[r]]);
+  }
+  var list = S.C.bindings[type];
+  for (var b = 0; b < list.length; b++) {
+    if (!S.gate[list[b].r] || !fxBindingMatches(list[b], ev, k)) continue;
+    total += Math.ceil(Math.round(list[b].c1 * sc) * FX_CLASS_MAX_SCALE[R.cls[list[b].r]]);
+  }
+  return total;
+}
+// A binding's where predicates (kind, spell, self, companion, underground)
+// against queued event k.
+function fxBindingMatches(bind, ev, k) {
+  var fl = ev.flags[k];
+  if (!(bind.kindMask & (1 << ev.kind[k])) || bind.spellMask && !(bind.spellMask & ev.spell[k])) return false;
+  if (bind.self && (bind.self === 1) !== !!(fl & FX_EV_SELF)) return false;
+  if ((bind.companion === 1) !== !!(fl & FX_EV_COMPANION)) return false;
+  return !(bind.under && (bind.under === 1) !== !!(fl & FX_EV_UNDER));
+}
+function fxDrainEvents(S) {
+  var ev = S.ev, full = S.spawnLeft;
+  while (ev.count > 0 && S.spawnLeft > 0) {
+    var k = ev.head;
+    if (S.spawnLeft < full && fxEventMax(S, k) > S.spawnLeft) break;
+    ev.head = (k + 1) % ev.n; ev.count--;
+    fxRunEvent(S, k);
+  }
+}
+function fxLoadCtx(S, k, ctx, ring) {
+  var ev = ring || S.ev;
+  fxCtxReset(ctx);
+  ctx.x = ev.x[k]; ctx.y = ev.y[k]; ctx.z = ev.z[k]; ctx.h = ev.h[k];
+  ctx.nx = ev.nx[k]; ctx.ny = ev.ny[k]; ctx.nz = ev.nz[k]; ctx.dx = ev.dx[k]; ctx.dy = ev.dy[k]; ctx.dz = ev.dz[k];
+  ctx.vx = ev.vx[k]; ctx.vy = ev.vy[k]; ctx.vz = ev.vz[k]; ctx.flags = ev.flags[k];
+  ctx.surf = ev.surf[k] >= 0 ? ev.surf[k] : fxBiomeIndex(S);
+  ctx.pal = ev.rgb[k] >= 0 ? fxInternColor(S, ev.rgb[k]) : -1;
+  ctx.pal2 = ev.rgb2[k] >= 0 ? fxInternColor(S, ev.rgb2[k]) : -1; ctx.ore = ev.ore[k];
+}
+function fxBurstCount(S, r, c0, c1) {
+  return c0 + Math.min(c1 - c0, Math.floor(effectNoise(S.R.salt[r] ^ S.seed, S.serial) * (c1 - c0 + 1)));
+}
+// Event k of the ring (the queue, or an observer's one-slot event) through
+// its bindings.
+function fxRunEvent(S, k, ring) {
+  var ev = ring || S.ev, R = S.R, ctx = _fxCtx, type = ev.type[k];
+  fxLoadCtx(S, k, ctx, ev);
+  if (type === FX_EMIT) {
+    var r = ev.rec[k], n = ev.num[k] >= 0 ? ev.num[k] : fxBurstCount(S, r, R.api0[r], R.api1[r]);
+    ctx.spec = R.colorSpec[r];
+    fxBurst(S, r, Math.round(n * ev.scale[k]), R.place[r], ctx, false);
+    return;
+  }
+  var list = S.C.bindings[type], x = ctx.x, y = ctx.y, z = ctx.z;
+  for (var b = 0; b < list.length; b++) {
+    var bind = list[b];
+    if (!fxBindingMatches(bind, ev, k)) continue;
+    ctx.x = x; ctx.y = y; ctx.z = z; ctx.vx = ev.vx[k]; ctx.vy = ev.vy[k]; ctx.vz = ev.vz[k];   // placement may replace both
+    if (bind.at === FX_AT_TORSO) ctx.z = z + 0.45 * ev.h[k];
+    else if (bind.at === FX_AT_SHRINE) ctx.z = z + 28;
+    else if (bind.at === FX_AT_PLAYER) { ctx.x = pos.x; ctx.y = pos.y; ctx.z = playerFeetSpatialZ(); }
+    ctx.z += bind.lift;
+    ctx.spec = bind.spec >= 0 ? bind.spec : R.colorSpec[bind.r];
+    fxBurst(S, bind.r, Math.round(fxBurstCount(S, bind.r, bind.c0, bind.c1) * ev.scale[k]),
+      bind.place >= 0 ? bind.place : R.place[bind.r], ctx, false);
+  }
+}
+
+// Anchors: rate accumulators resolved every tick.
+var PARTICLE_ANCHORS = {
+  // 0 detach, 1 emit, 2 skip this tick (support not loaded).
+  entity: function (S, A, k, ctx) {
+    var e = A.ref[k];
+    if (!e || typeof e.health === 'number' && !(e.health > 0) || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return 0;
+    var z = entityFeetSpatialZ(e);
+    if (!Number.isFinite(z)) return 2;
+    fxCtxReset(ctx);
+    ctx.x = e.x; ctx.y = e.y; ctx.z = z + A.z[k]; ctx.flags = e.underground ? FX_EV_UNDER : 0;
+    ctx.vx = e.vx || 0; ctx.vy = e.vy || 0;
+    return 1;
+  },
+  point: function (S, A, k, ctx) {
+    fxCtxReset(ctx);
+    ctx.x = A.x[k]; ctx.y = A.y[k]; ctx.z = A.z[k];
+    if (A.seg[k]) {
+      ctx.seg = true; ctx.x2 = A.x2[k]; ctx.y2 = A.y2[k]; ctx.z2 = A.z2[k];
+      var dx = ctx.x2 - ctx.x, dy = ctx.y2 - ctx.y, dz = ctx.z2 - ctx.z, l = Math.hypot(dx, dy, dz) || 1;
+      ctx.dx = dx / l; ctx.dy = dy / l; ctx.dz = dz / l;
+    }
+    return 1;
+  },
+  // A selected torch light (A = S.torch): embers leave the real flame, 2 u out
+  // along the wall normal and 2 u up (07-decorations-lighting.js), on the
+  // viewer's own floor, so they share the viewer's stratum (set at tick start).
+  torch: function (S, A, k, ctx) {
+    var L = A.ref[k];
+    if (!L || !Number.isFinite(L.x) || !Number.isFinite(L.y) || !Number.isFinite(L.z)) return 0;
+    var nx = Number.isFinite(L.nx) ? L.nx : 0, ny = Number.isFinite(L.ny) ? L.ny : 0;
+    fxCtxReset(ctx);
+    ctx.x = L.x + nx * 2; ctx.y = L.y + ny * 2; ctx.z = L.z + 2;
+    ctx.nx = nx; ctx.ny = ny; ctx.nz = nx || ny ? 0 : 1; ctx.flags = S.viewUnder ? FX_EV_UNDER : 0;
+    return 1;
+  },
+  // The player's feet while a dash lasts (gameTimeNow() < dashUntil, set at
+  // 09-physics.js), moving the way the player moves, on the ground under
+  // them (none while airborne out of reach of it: fxDashZ). Player-owned:
+  // SELF, so selfView applies (section 5.7). Attached by the player observer.
+  dashTrail: function (S, A, k, ctx) {
+    if (!(gameTimeNow() < dashUntil)) return 0;
+    var feet = playerFeetSpatialZ(), under = !!playerUnderground, v = Math.hypot(vel.x, vel.y);
+    if (!Number.isFinite(feet)) return 2;
+    fxCtxReset(ctx);
+    ctx.x = pos.x; ctx.y = pos.y; ctx.z = fxDashZ(pos.x, pos.y, feet, !!jumpAirborne, under);
+    if (v > 1e-9) { ctx.dx = vel.x / v; ctx.dy = vel.y / v; }
+    ctx.flags = FX_EV_SELF | (under ? FX_EV_UNDER : 0); ctx.surf = fxSurfaceAt(S, pos.x, pos.y, under);
+    return 1;
+  },
+  // The flame stream (S8) while its beam is drawn (a stream tick within 180
+  // ms, drawFlameStream3D's own test): the segment from the casting hand (14 u
+  // along the aim and 6 u right, 55 u above the feet) to the beam's end (its
+  // range times the 0.3 s ramp), each ember bowing down to 1 u above the
+  // floor under its own point as the beam does (height by u squared: segQ;
+  // the walkable layer nearest the feet, so a beam that ends in a wall or on
+  // rising ground keeps its embers on the beam) and fanning to the beam's
+  // half width at its end (segW). Along the aim; it carries the player's motion.
+  flameStream: function (S, A, k, ctx) {
+    var now = gameTimeNow();
+    if (!(now - flameStreamLastTick <= 180)) return 0;
+    var ramp = Math.min(1, (now - flameStreamStartMs) / 300), range = flameStreamRange * ramp, ang = flameStreamAng, feet = playerFeetSpatialZ();
+    if (!(range > 0) || !Number.isFinite(ang + pos.x + pos.y + feet)) return 2;
+    var fire = typeof spells !== 'undefined' && spells.fire || _fxNoSpell, hw = fire.tier >= 2 ? 0.55 : fire.streamWidth || 0.4;
+    var c = Math.cos(ang), s = Math.sin(ang);
+    fxCtxReset(ctx);
+    ctx.x = pos.x + c * 14 - s * 6; ctx.y = pos.y + s * 14 + c * 6; ctx.z = feet + 55; ctx.feet = feet;
+    ctx.seg = true; ctx.segQ = true; ctx.x2 = ctx.x + c * range; ctx.y2 = ctx.y + s * range;
+    ctx.segW = (1 + range * Math.tan(hw)) * ramp; ctx.dx = c; ctx.dy = s;
+    ctx.vx = Number.isFinite(vel.x) ? vel.x : 0; ctx.vy = Number.isFinite(vel.y) ? vel.y : 0;
+    ctx.flags = playerUnderground ? FX_EV_UNDER : 0;
+    return 1;
+  }
+};
+// The walkable layer at (x, y) nearest ref (spatial Z), on its support
+// triangle: the beam's floor rule (spellFloorRenderZ with the player's floor
+// as the reference, a triangle required); 0 on a fixed level with no mesh,
+// NaN off the mesh or with no triangle (the beam skips that point). No allocation.
+function fxNearestLayerZ(x, y, ref) {
+  var m = floorMesh;
+  if (!m || !m.layerCount) return 0;
+  var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs), li = -1, best = Infinity;
+  if (gx < 0 || gy < 0 || gx >= m.w || gy >= m.h) return NaN;
+  var ci = gy * m.w + gx;
+  for (var k = 0; k < m.layerCount[ci]; k++) {
+    var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if (type !== 1 && type !== 3 && type !== 4 || !Number.isFinite(h) || !(Math.abs(h * 25 - ref) < best)) continue;
+    best = Math.abs(h * 25 - ref); li = k;
+  }
+  return li < 0 || !spatialLayerCornersInto(m, ci, li, _fxCorners) ? NaN : fxLayerZ(m, ci, li, x, y);
+}
+function fxRunAnchors(S, dt) {
+  var A = S.anchors, R = S.R, ctx = _fxCtx, now = -1;
+  if (!A.live) return;
+  for (var k = 0; k < A.n; k++) {
+    if (!A.used[k]) continue;
+    if (A.until[k] > 0) {
+      if (now < 0) now = gameTimeNow();
+      if (now > A.until[k]) { fxFreeAnchor(A, k); continue; }
+    }
+    var state = PARTICLE_ANCHORS[FX_ANCHOR_NAMES[A.kind[k]]](S, A, k, ctx), r = A.rec[k];
+    if (!state) { fxFreeAnchor(A, k); continue; }
+    if (state === 2 || !S.gate[r]) { A.acc[k] = 0; continue; }
+    A.acc[k] += A.rate[k] * S.scale[R.cls[r]] * fxSpawnKeep(R, r, ctx.x, ctx.y) * dt;
+    var due = Math.floor(A.acc[k]);
+    if (due <= 0) continue;
+    A.acc[k] -= due;
+    ctx.spec = R.colorSpec[r]; ctx.owner = k;
+    fxBurst(S, r, due, R.place[r], ctx, true);
+  }
+}
+
+// ── Movement observers (section 9.3): footstep, dash and landing dust read
+// from the state that step() and the NPC movers leave behind, after every
+// mover of the tick has run; they never write gameplay state and add nothing
+// to the movers. Positions are kept in world coordinates (the window origin
+// added), so a chunk shift is no step; more than 64 u in one tick is a
+// teleport or unstick push and restarts the stride. Per NPC body a small
+// array in a WeakMap (world x, y, stride, side, tick last seen, hop count),
+// never a field on the gameplay record; a body not observed in the last tick
+// (out of range, one of more than the 24 nearest, stunned) starts afresh.
+// step() zeroes jumpVelZ in the landing tick itself, so the landing reads
+// the vertical speed kept from the last airborne tick. (Constants at the top.)
+function fxCreateObservers() {
+  return {seen:false, x:0, y:0, acc:0, side:1, air:0, vz:0, dash:0, npc:new WeakMap(),
+    n:0, ref:new Array(FX_NPC_BODIES), d:new Float64Array(FX_NPC_BODIES), hop:new Uint8Array(FX_NPC_BODIES)};
+}
+function fxRunObservers(S) {
+  // At Particles 0 the locomotion cap is 0 and nothing can spawn: the
+  // observers idle, and the player (like any body unseen for a tick) starts
+  // afresh when the setting rises.
+  if (S.caps[FX_CLASS_LOCO] <= 0) { S.obs.seen = false; return; }
+  fxObservePlayer(S, S.obs);
+  if (fxEventOpen(S, FX_CODE_FOOTSTEP)) fxObserveNpcs(S, S.obs);   // a switched-off preset scans no body
+}
+function fxObservePlayer(S, O) {
+  var ox = ENDLESS_MODE ? windowOriginX : 0, oy = ENDLESS_MODE ? windowOriginY : 0;
+  var wx = pos.x + ox, wy = pos.y + oy, air = !!jumpAirborne;
+  if (!Number.isFinite(wx + wy)) { O.seen = false; return; }
+  if (!O.seen) { O.seen = true; O.x = wx; O.y = wy; O.acc = 0; O.air = air ? 1 : 0; O.vz = air ? jumpVelZ : 0; O.dash = dashUntil; return; }
+  var dx = wx - O.x, dy = wy - O.y, d = Math.sqrt(dx * dx + dy * dy), under = !!playerUnderground;
+  var flags = FX_EV_SELF | (under ? FX_EV_UNDER : 0), feet = playerFeetSpatialZ();
+  O.x = wx; O.y = wy;
+  // A dash starts where dashUntil rose since the last tick; its trail follows.
+  if (dashUntil > O.dash) {
+    var v = Math.hypot(vel.x, vel.y);
+    fxObsEmit(S, FX_CODE_DASH, pos.x, pos.y, fxDashZ(pos.x, pos.y, feet, air, under), v > 1e-9 ? vel.x / v : 0, v > 1e-9 ? vel.y / v : 0, 1, flags);
+    fxAttachDashTrail(S);
+  }
+  O.dash = dashUntil;
+  if (air) { O.air++; O.vz = jumpVelZ; }                        // every airborne tick
+  else {
+    if (O.air >= FX_LAND_TICKS) {
+      var s = -O.vz / FX_LAND_VZ;
+      fxObsEmit(S, FX_CODE_LAND, pos.x, pos.y, fxStepZ(pos.x, pos.y, feet), 0, 0, s < 0.4 ? 0.4 : s > 1.6 ? 1.6 : s, flags);
+    }
+    O.air = 0;
+  }
+  if (d > FX_STEP_JUMP) { O.acc = 0; return; }                  // a teleport or unstick push, not a stride
+  if (air) return;                                              // only grounded travel strides
+  O.acc += d;
+  while (O.acc >= FX_STEP_STRIDE) {
+    O.acc -= FX_STEP_STRIDE;
+    var ux = dx / d, uy = dy / d, side = O.side * FX_STEP_SIDE, x = pos.x - uy * side, y = pos.y + ux * side;
+    O.side = -O.side;
+    fxObsEmit(S, FX_CODE_FOOTSTEP, x, y, fxStepZ(x, y, feet), ux, uy, 1, flags);
+  }
+}
+// Enemies, companions and garrison allies within 240 u of the camera (in the
+// 2D view: of the view's centre, out to its corners), the 24 nearest (dead,
+// stunned and dormant bodies skipped), at most 12 bursts a tick (the rest
+// counted). Walkers step every 14 + 10 size u (wolves x 0.8); a hopping
+// companion puffs where each hop lands: its bounce is |sin(phase)| x its
+// height (19-companions-loot.js), so a hop lands whenever floor(phase / pi)
+// rises between observed ticks (the S6 amendment: the gameplay squash test,
+// z from above 0.5 to 0.5 or less, misses a hop whose phase steps over that
+// window, about half of them while the slime follows a walking player).
+function fxHopCount(b) { return Number.isFinite(b.phase) ? Math.floor(b.phase / Math.PI) : 0; }
+function fxObserveNpcs(S, O) {
+  var ox = ENDLESS_MODE ? windowOriginX : 0, oy = ENDLESS_MODE ? windowOriginY : 0, now = gameTimeNow(), bursts = 0;
+  var hw = canvas.width / 2, hh = canvas.height / 2, cx = MODE3D ? cam.x : viewCam.x + hw, cy = MODE3D ? cam.y : viewCam.y + hh;
+  var radius = MODE3D ? FX_NPC_RADIUS : Math.max(FX_NPC_RADIUS, Math.sqrt(hw * hw + hh * hh) + FX_VIEW2D_MARGIN);
+  O.n = 0;
+  fxObsNearest(O, typeof enemies !== 'undefined' ? enemies : null, 0, now, cx, cy, radius);
+  fxObsNearest(O, typeof companions !== 'undefined' ? companions : null, 1, now, cx, cy, radius);
+  fxObsNearest(O, typeof fortressAllies !== 'undefined' ? fortressAllies : null, 0, now, cx, cy, radius);
+  for (var j = 0; j < O.n; j++) {
+    var b = O.ref[j], st = O.npc.get(b), wx = b.x + ox, wy = b.y + oy;
+    O.ref[j] = null;
+    if (!st) { st = new Float64Array(6); st[4] = -2; O.npc.set(b, st); }
+    var fresh = st[4] !== S.tick - 1, hops = O.hop[j] ? fxHopCount(b) : 0;
+    st[4] = S.tick;
+    if (fresh) { st[0] = wx; st[1] = wy; st[2] = 0; st[3] = 1; st[5] = hops; continue; }
+    var dx = wx - st[0], dy = wy - st[1], d = Math.sqrt(dx * dx + dy * dy), ux = d > 1e-9 ? dx / d : 0, uy = d > 1e-9 ? dy / d : 0;
+    st[0] = wx; st[1] = wy;
+    if (O.hop[j]) {
+      var landed = hops > st[5];
+      st[5] = hops;
+      if (!landed) continue;
+      if (bursts < FX_NPC_BURSTS) { bursts++; fxObsBodyStep(S, b, b.x, b.y, ux, uy); } else S.stats.obsNpcCapped++;
+      continue;
+    }
+    if (d > FX_STEP_JUMP) { st[2] = 0; continue; }
+    st[2] += d;
+    var stride = fxNpcStride(b);
+    while (st[2] >= stride) {
+      st[2] -= stride;
+      var side = st[3] * FX_STEP_SIDE;
+      st[3] = -st[3];
+      if (bursts >= FX_NPC_BURSTS) { S.stats.obsNpcCapped++; continue; }
+      bursts++;
+      fxObsBodyStep(S, b, b.x - uy * side, b.y + ux * side, ux, uy);
+    }
+  }
+}
+// Keeps the FX_NPC_BODIES candidates nearest (cx, cy) within radius, sorted
+// by distance (ties in list order), with no allocation.
+function fxObsNearest(O, list, hop, now, cx, cy, radius) {
+  if (!list) return;
+  for (var i = 0; i < list.length; i++) {
+    var b = list[i];
+    if (!b || typeof b.health === 'number' && !(b.health > 0) || now < (b.stunUntil || 0) || b.npc && b.npc.state === 'dormant') continue;
+    var d = Math.hypot(b.x - cx, b.y - cy), n = O.n;
+    if (!(d <= radius) || n === FX_NPC_BODIES && d >= O.d[n - 1]) continue;
+    for (var j = n < FX_NPC_BODIES ? O.n++ : n - 1; j > 0 && O.d[j - 1] > d; j--) { O.d[j] = O.d[j - 1]; O.ref[j] = O.ref[j - 1]; O.hop[j] = O.hop[j - 1]; }
+    O.d[j] = d; O.ref[j] = b; O.hop[j] = hop;
+  }
+}
+function fxNpcStride(b) {
+  var t = b.enemyType, s = 14 + 10 * ((t && t.size) || 1);
+  return t && t.id === 'wolf' ? s * 0.8 : s;
+}
+// A body's footstep at (x, y): on the support of its own stratum there.
+function fxObsBodyStep(S, b, x, y, ux, uy) {
+  var feet = entityFeetSpatialZ(b), under = fxUnderAt(b.x, b.y, feet);
+  fxObsEmit(S, FX_CODE_FOOTSTEP, x, y, fxStepZ(x, y, feet), ux, uy, 1, under ? FX_EV_UNDER : 0);
+}
+// A step's support at (x, y) on the stepping body's own stratum: of the
+// walkable layers there (each exact on its slope) and the top of a grid wall
+// standing there (the player lands and walks on wall tops, 09-physics.js;
+// not a wall cell a cave runs under, which the surface walks over), the one
+// nearest the feet, if it is within a step of them (1 H, the walk step-up:
+// grounded feet ease onto a layer that far away); else the feet (a foot
+// beside a wall top's edge, no mesh). No allocation.
+function fxStepZ(x, y, feet) {
+  if (!Number.isFinite(feet)) return feet;
+  var m = floorMesh, z = NaN, best = FX_STEP_REACH;
+  if (grid && cell) {
+    var wx = Math.floor(x / cell), wy = Math.floor(y / cell), wi = wy * gridW + wx;
+    if (wx >= 0 && wy >= 0 && wx < gridW && wy < gridH && grid[wi] && !(gridCave && gridCave[wi])) {
+      var top = fxWallTopZ(wi, wx, wy);
+      if (Math.abs(top - feet) <= best) { best = Math.abs(top - feet); z = top; }
+    }
+  }
+  if (m && m.layerCount) {
+    var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs);
+    if (gx >= 0 && gy >= 0 && gx < m.w && gy < m.h) {
+      var ci = gy * m.w + gx;
+      for (var k = 0; k < m.layerCount[ci]; k++) {
+        var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci];
+        if (type !== 1 && type !== 3 && type !== 4 || !Number.isFinite(m[SPATIAL_LAYER_TOP_KEYS[k]][ci])) continue;
+        var h = fxLayerZ(m, ci, k, x, y);
+        if (Math.abs(h - feet) < best) { best = Math.abs(h - feet); z = h; }
+      }
+    }
+  }
+  return z === z ? z : feet;
+}
+// The ground a dash kicks its dust up from (the S6 fix): a grounded player's
+// step support (fxStepZ); an airborne player's support at or below the feet
+// in the player's stratum (fxSupportBelow), if it is within a step (1 H) of
+// them. Else NaN: no ground contact (a dash at the top of a jump, or off a
+// ledge), and fxBurst refuses the dash burst, its screen puffs and that
+// tick's trail puffs, counted as refused.noSupport.
+function fxDashZ(x, y, feet, air, under) {
+  if (!air) return fxStepZ(x, y, feet);
+  var z = fxSupportBelow(x, y, feet, under);
+  return feet - z <= FX_STEP_REACH ? z : NaN;
+}
+// The highest support at or below feet (spatial Z, 1 u tolerance) at (x, y):
+// a walkable layer (exact on its slope) that no ceiling separates from the
+// feet (fxFillGround's rule), and on the surface a grid wall's top (not a
+// cave's wall cell, which the surface walks over; 09-physics.js); a fixed
+// level with no mesh has its flat floor at 0. NaN where there is none. No
+// allocation.
+function fxSupportBelow(x, y, feet, under) {
+  if (!Number.isFinite(feet)) return NaN;
+  var m = floorMesh, top = feet + 1, best = -Infinity;
+  if (!under && grid && cell) {
+    var wx = Math.floor(x / cell), wy = Math.floor(y / cell), wi = wy * gridW + wx;
+    if (wx >= 0 && wy >= 0 && wx < gridW && wy < gridH && grid[wi] && !(gridCave && gridCave[wi])) {
+      var wt = fxWallTopZ(wi, wx, wy);
+      if (wt <= top) best = wt;
+    }
+  }
+  if (!m || !m.layerCount) { if (!ENDLESS_MODE && 0 <= top && best < 0) best = 0; }
+  else {
+    var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs);
+    if (gx >= 0 && gy >= 0 && gx < m.w && gy < m.h) {
+      var ci = gy * m.w + gx, n = m.layerCount[ci];
+      for (var k = 0; k < n; k++) {
+        var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+        if (type !== 1 && type !== 3 && type !== 4 || !Number.isFinite(h) || fxCeilingBetween(m, ci, n, h, feet / 25)) continue;
+        var z = fxLayerZ(m, ci, k, x, y);
+        if (z <= top && z > best) best = z;
+      }
+    }
+  }
+  return best > -Infinity ? best : NaN;
+}
+// Whether feet (spatial Z) at (x, y) are under a roof: getCaveSpaceAt's rule
+// (a ceiling, or a cap more than 1 H above the feet), with no allocation;
+// fxUnderAtH takes the feet in mesh heights (H), as getCaveSpaceAt does.
+function fxUnderAt(x, y, feet) { return fxUnderAtH(x, y, feet / 25); }
+function fxUnderAtH(x, y, fh) {
+  var m = floorMesh;
+  if (!m || !m.layerCount || !Number.isFinite(fh)) return false;
+  var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs);
+  if (gx < 0 || gy < 0 || gx >= m.w || gy >= m.h) return false;
+  var ci = gy * m.w + gx;
+  for (var k = 0; k < m.layerCount[ci]; k++) {
+    var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if ((type === 2 || type === 4 && h > fh + 1.0) && h > fh + 0.001 && h < Infinity) return true;
+  }
+  return false;
+}
+// A frontSides wedge point's ground (section 5.7): the viewer's-stratum
+// support there (fxViewerSupport, the field rule), or on the surface the top
+// of a grid wall standing there; NaN (refused, counted) where there is none.
+function fxWedgeZ(S, x, y) {
+  if (!S.viewUnder && grid && cell) {
+    var wx = Math.floor(x / cell), wy = Math.floor(y / cell), wi = wy * gridW + wx;
+    if (wx >= 0 && wy >= 0 && wx < gridW && wy < gridH && grid[wi] && !(gridCave && gridCave[wi])) {
+      var top = fxWallTopZ(wi, wx, wy);
+      if (top < Infinity) return top;
+    }
+  }
+  return fxViewerSupport(S, x, y);
+}
+// The stepped surface's dust set (section 9.3): cave stone underground, else
+// the biome of the chunk under the step in Endless (its floor's biome,
+// 05-endless-world.js generateChunk), the level's terrain otherwise.
+function fxSurfaceAt(S, x, y, under) {
+  var P = S.C.PAL, b = terrain;
+  if (under) return P.surfBiomes.length - 1;
+  if (ENDLESS_MODE && typeof getBiomeAt === 'function') {
+    var cs = CHUNK_SIZE, wx = x + windowOriginX, wy = y + windowOriginY;
+    b = getBiomeAt((Math.floor(wx / cs) + 0.5) * cs, (Math.floor(wy / cs) + 0.5) * cs);
+  }
+  var i = P.surfBiomes.indexOf(b);
+  return i < 0 ? fxBiomeIndex(S) : i;
+}
+// An observer's event runs through its bindings at once (the observers run
+// after the queue's drain, inside the tick), from a private one-slot ring.
+// z NaN: no ground under the event (fxDashZ); its bindings count their
+// puffs as refused.noSupport (fxBurst).
+function fxObsEmit(S, code, x, y, z, dx, dy, scale, flags) {
+  var st = S.stats, ev = S.obsEv;
+  if (!fxEventOpen(S, code)) { st.eventsGated++; return; }
+  if (!Number.isFinite(x + y) || z === Infinity || z === -Infinity) { st.badEvents++; return; }
+  fxRingClear(ev, 0);
+  ev.type[0] = code; ev.x[0] = x; ev.y[0] = y; ev.z[0] = z; ev.dx[0] = dx; ev.dy[0] = dy; ev.scale[0] = scale; ev.flags[0] = flags;
+  ev.surf[0] = fxSurfaceAt(S, x, y, flags & FX_EV_UNDER);
+  st.eventsIn++;
+  if (code === FX_CODE_DASH) st.obsDashes++; else if (code === FX_CODE_LAND) st.obsLands++;
+  else if (flags & FX_EV_SELF) st.obsSteps++; else st.obsNpcSteps++;
+  fxRunEvent(S, 0, ev);
+}
+// The dash trail: one anchor slot per dashTrail recipe until dashUntil (a
+// new dash takes over its slot).
+function fxAttachDashTrail(S) { fxAttachOwned(S, FX_ANCHOR_DASH, dashUntil); }
+// The flame stream's embers (S8): one anchor slot per flameStream recipe
+// while the beam is drawn; the resolver frees it when the stream stops.
+function fxWatchFlame(S) {
+  if (S.C.anchorRecipes[FX_ANCHOR_FLAME].length && gameTimeNow() - flameStreamLastTick <= 180) fxAttachOwned(S, FX_ANCHOR_FLAME, 0);
+}
+// One slot of anchor kind `code` per recipe of that anchor (its own slot kept,
+// so its rate accumulator carries on), until `until` (0: the resolver ends it).
+function fxAttachOwned(S, code, until) {
+  var A = S.anchors, list = S.C.anchorRecipes[code];
+  for (var q = 0; q < list.length; q++) {
+    var r = list[q], k = -1;
+    if (!S.gate[r]) continue;
+    for (var a = 0; a < A.n && k < 0; a++) if (A.used[a] && A.kind[a] === code && A.rec[a] === r) k = a;
+    if (k < 0) {
+      if ((k = A.used.indexOf(0)) < 0) { S.stats.anchorsRefused++; continue; }
+      A.used[k] = 1; A.live++; A.gen[k] = (A.gen[k] + 1) & 0xffffff; A.acc[k] = 0;
+    }
+    A.kind[k] = code; A.rec[k] = r; A.ref[k] = null; A.seg[k] = 0; A.rate[k] = S.R.anchorRate[r]; A.until[k] = until;
+  }
+}
+
+// Torch anchors (section 4.3): every 0.25 s of sim time, and at once after a
+// rebase, a reset or a rebuilt light list, the nearest torch lights (kind
+// 'torch', never cave-mouth lights) within the recipe radius in 3D and on the
+// viewer's own floor: flame height -40..260 u from the feet, which keeps cave
+// torches under a surface player out. Each emits at its recipe rate x
+// min(s, 1.5) x the distance keep.
+function fxSelectTorches(S, lights, maxN, radius) {
+  var T = S.torch, count = lights ? lights.length : 0, n = 0, i, j;
+  var feet = playerFeetSpatialZ(), per = T.acc.length / FX_TORCH_SLOTS;
+  for (i = 0; i < T.n; i++) { T.oldRef[i] = T.ref[i]; for (j = 0; j < per; j++) T.oldAcc[j * FX_TORCH_SLOTS + i] = T.acc[j * FX_TORCH_SLOTS + i]; }
+  T.oldN = T.n;
+  for (i = 0; i < count; i++) {
+    var L = lights[i];
+    if (!L || L.kind !== 'torch') continue;
+    var dz = L.z - feet;
+    if (!(dz >= -40 && dz <= 260)) continue;
+    var d = Math.hypot(L.x - cam.x, L.y - cam.y, dz);
+    if (!(d < radius) || n === maxN && d >= T.d[n - 1]) continue;
+    for (j = n < maxN ? n++ : n - 1; j > 0 && T.d[j - 1] > d; j--) { T.d[j] = T.d[j - 1]; T.ref[j] = T.ref[j - 1]; }
+    T.d[j] = d; T.ref[j] = L;
+  }
+  for (i = 0; i < n; i++) {
+    var from = T.oldRef.indexOf(T.ref[i]);
+    for (j = 0; j < per; j++) T.acc[j * FX_TORCH_SLOTS + i] = from >= 0 && from < T.oldN ? T.oldAcc[j * FX_TORCH_SLOTS + from] : 0;
+  }
+  for (i = n; i < FX_TORCH_SLOTS; i++) T.ref[i] = null;
+  for (i = 0; i < T.oldN; i++) T.oldRef[i] = null;
+  T.n = n; T.lights = lights; S.torchRefreshAt = S.simTime + 0.25;
+}
+function fxRunTorches(S, dt) {
+  var list = S.C.anchorRecipes[FX_ANCHOR_TORCH], R = S.R, T = S.torch, ctx = _fxCtx, maxN = 0, radius = 0, q, k;
+  var lights = typeof pointLights !== 'undefined' ? pointLights : null;
+  if (!list.length) return;
+  for (q = 0; q < list.length; q++) { maxN = Math.max(maxN, R.anchorMax[list[q]] || FX_TORCH_SLOTS); radius = Math.max(radius, R.anchorRadius[list[q]] || 220); }
+  if (S.simTime >= S.torchRefreshAt || T.lights !== lights) fxSelectTorches(S, lights, Math.min(maxN, FX_TORCH_SLOTS), radius);
+  for (q = 0; q < list.length; q++) {
+    var r = list[q], n = Math.min(T.n, R.anchorMax[r] || FX_TORCH_SLOTS), rad = R.anchorRadius[r] || radius;
+    // A recipe with no 2D form idles in the 2D view, as the field does (mode2D 'none').
+    var idle = !S.gate[r] || !MODE3D && R.view2D[r] === FX_VIEW2D_NONE;
+    for (k = 0; k < n; k++) {
+      var a = q * FX_TORCH_SLOTS + k;
+      if (idle || !(T.d[k] < rad) || !PARTICLE_ANCHORS.torch(S, T, k, ctx)) { T.acc[a] = 0; continue; }
+      T.acc[a] += R.anchorRate[r] * Math.min(S.scale[R.cls[r]], 1.5) * fxKeep(R, r, Math.hypot(ctx.x - cam.x, ctx.y - cam.y)) * dt;
+      var due = Math.floor(T.acc[a]);
+      if (due <= 0) continue;
+      T.acc[a] -= due;
+      ctx.spec = R.colorSpec[r];
+      S.stats.torchSpawned += fxBurst(S, r, due, R.place[r], ctx, true);
+    }
+  }
+}
+
+// ── Fields (section 4.7): a box centred ahead of the sim camera keeps the
+// target population, the Particles setting. Members spawn over the viewer's
+// own stratum, wrap at the box edge keeping their age and height above
+// support, fade near it (drawn), and leave with the viewer's stratum. Refill
+// per tick is min(deficit, ceil(T dt / life 1.25) + 1), turnover-correct at
+// any step; a prewarm fills the target at once in its steady-state mix, with
+// hash-staggered ages (ground-ended lives: hash-staggered heights).
+function fxRunFields(S, dt) {
+  var F = S.C.FIELDS;
+  for (var f = 0; f < F.length; f++) fxRunField(S, F[f], S.fields[f], dt);
+}
+function fxRunField(S, F, st, dt) {
+  if (F.weather) { fxRunWeather(S, F, st, dt); return; }
+  var code = F.code, half = F.half, lim = 3 * half, c = Math.cos(cam.ang), s = Math.sin(cam.ang), R = S.R;
+  var on = MODE3D || F.mode2D !== FX_MODE2D_NONE, under = S.viewUnder;
+  var set = under ? F.underSet : _fxHas(F.biomeSet, terrain) ? F.biomeSet[terrain] : -1;
+  st.cx = cam.x + c * F.bias; st.cy = cam.y + s * F.bias; st.half = st.hx = st.hy = half; st.fade = F.edgeFade * half; st.set = set; st.under = under;
+  st.target = on && set >= 0 ? Math.floor(S.P) : 0;
+  if (!on) st.prewarm = true;
+  var live = 0, fl = S.flags;
+  for (var i = 0; i < S.count;) {
+    var f = fl[i];
+    if (!(f & FX_FIELD) || S.owner[i] !== code || (f & FX_DYING)) { i++; continue; }
+    if (!on || !!(f & FX_UNDER) !== under) { fxMarkDying(S, i); i++; continue; }   // 2D, or the viewer changed stratum
+    var dx = S.x[i] - st.cx, dy = S.y[i] - st.cy;
+    if (dx > half || dx < -half || dy > half || dy < -half) {
+      // Beyond one box of the edge is a teleport or a new window: the member
+      // leaves. A ground-ended life (a drip) leaves at the edge.
+      if (dx > lim || dx < -lim || dy > lim || dy < -lim || R.untilGround[S.rec[i]] ||
+          !fxFieldWrap(S, i, dx > half ? -2 * half : dx < -half ? 2 * half : 0, dy > half ? -2 * half : dy < -half ? 2 * half : 0)) {
+        fxKill(S, i); S.stats.fieldDropped++; continue;
+      }
+    }
+    live++; i++;
+  }
+  if (live > st.target) { fxDyingOldest(S, -1, live - st.target, code); live = st.target; }
+  st.live = live;
+  var list = set >= 0 ? F.sets[set] : null, want = st.target - live, pre = S.prewarm || st.prewarm, open = false;
+  if (!on || !list) return;
+  for (var k = 0; k < list.r.length; k++) if (S.gate[list.r[k]]) open = true;
+  if (!open) return;                                    // Legacy mode: the members are gated off
+  st.prewarm = false;
+  if (want <= 0) return;
+  if (!pre) want = Math.min(want, Math.ceil(st.target * dt / list.life * 1.25) + 1);
+  for (var tries = 0, got = 0; got < want && tries < 2 * want && S.spawnLeft > 0; tries++) got += fxFieldSpawn(S, F, st, list, pre);
+  st.live = live + got;
+}
+// Wraps member i by (ox, oy): same age, same height above its support, the
+// ground cache invalid and no back-projection this frame. False when the new
+// column has no support in the viewer's stratum.
+function fxFieldWrap(S, i, ox, oy) {
+  var g = fxGroundZ(S, i, S.x[i], S.y[i]), x = S.x[i] + ox, y = S.y[i] + oy, h = fxViewerSupport(S, x, y);
+  if (g !== g || h !== h) return false;
+  var z = h + (S.z[i] - g);
+  if (S.viewUnder && !(z < getCaveSpaceAt(x, y, h / 25).ceilingH * 25 - 1)) return false;   // under a lower roof there
+  S.x[i] = x; S.y[i] = y; S.z[i] = z;
+  S.gcell[i] = -1; S.flags[i] |= FX_SNAP; S.stats.fieldWraps++;
+  return true;
+}
+// Spawn support 'viewer' (section 3.5): in the column's cell, the walkable
+// layer nearest the viewer's feet, exact on its support triangle; NaN (the
+// column is resampled) when that layer is in the other stratum, or, for an
+// underground viewer, more than 1.5 H from the feet (another cave level).
+function fxViewerSupport(S, x, y) {
+  var m = floorMesh;
+  if (!m || !m.layerCount) return ENDLESS_MODE ? NaN : 0;
+  var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs);
+  if (gx < 0 || gy < 0 || gx >= m.w || gy >= m.h) return NaN;
+  var ci = gy * m.w + gx, feet = S.feetH, li = -1, best = Infinity;
+  for (var k = 0; k < m.layerCount[ci]; k++) {
+    var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if ((type !== 1 && type !== 3 && type !== 4) || !Number.isFinite(h)) continue;
+    var d = h > feet ? h - feet : feet - h;
+    if (d < best) { best = d; li = k; }
+  }
+  if (li < 0) return NaN;
+  if (fxUnderAtH(x, y, m[SPATIAL_LAYER_TOP_KEYS[li]][ci]) !== S.viewUnder) return NaN;   // getCaveSpaceAt's rule, no allocation
+  if (S.viewUnder && best > 1.5) return NaN;
+  return fxLayerZ(m, ci, li, x, y);
+}
+// One field member: up to 4 columns in the box, a member of the set drawn by
+// weight (a hidden member's weight goes to the first shown one, so the count
+// is unchanged), then one spawn. Returns 1 if it spawned. Noise keys: base x 9
+// + 0..7 the columns' x and y, + 8 the member, so the member never depends on
+// where a column landed.
+function fxFieldSpawn(S, F, st, list, pre) {
+  var base = S.fieldSerial, salt = F.salt ^ S.seed, x = 0, y = 0, h = NaN, ctx = _fxCtx;
+  S.fieldSerial = (base + 1) >>> 0;
+  for (var a = 0; a < 4 && h !== h; a++) {
+    x = st.cx + (2 * effectNoise(salt, base * 9 + 2 * a) - 1) * F.half;
+    y = st.cy + (2 * effectNoise(salt, base * 9 + 2 * a + 1) - 1) * F.half;
+    h = fxViewerSupport(S, x, y);
+  }
+  if (h !== h) { S.stats.refusedNoSupport++; return 0; }
+  var r = fxFieldMember(S, list, effectNoise(salt, base * 9 + 8), pre);
+  if (r < 0) return 0;
+  fxCtxReset(ctx);
+  ctx.x = x; ctx.y = y; ctx.z = h; ctx.flags = S.viewUnder ? FX_EV_UNDER : 0; ctx.spec = S.R.colorSpec[r];
+  var serial = S.serial;
+  S.serial = (serial + 1) >>> 0;
+  var i = fxSpawn(S, r, serial, 0, 1, ctx);
+  if (i < 0) { fxRefuse(S, r, i, 1); return 0; }
+  S.spawnLeft--; S.flags[i] |= FX_FIELD; S.owner[i] = F.code; S.stats.fieldSpawned++;
+  if (pre) {
+    // A ground-ended life (a drip) starts at a hashed point of its fall at
+    // age 0, since its life is a cap, not its length; others at a hashed age.
+    // Nothing in a prewarmed field falls, splashes or fades in step.
+    var u = effectNoise(S.seedA[i], 21);
+    if (S.R.untilGround[r]) S.z[i] -= (S.z[i] - h) * 0.9 * u;
+    else S.age[i] = S.life[i] * 0.95 * u;
+  }
+  return 1;
+}
+// Weighted member choice under the day/night and weather gates (section 4.7):
+// night members need night > 0.35 and no weather above fireflySuppress, day
+// members an outdoor ambient above 0.6; ceiling members (drips) multiply
+// while raining. A prewarm draws by the steady-state share (weight x mean
+// life), so a short-lived member is not over-represented at the start.
+var _fxGate = {night:false, day:true, hideNight:false, rain:false};
+function fxFieldHidden(list, k, g) {
+  var v = list.vis[k];
+  return v === FX_VIS_NIGHT ? !g.night || g.hideNight : v === FX_VIS_DAY && !g.day;
+}
+function fxFieldMember(S, list, u, pre) {
+  var amb = typeof renderSurfaceAmbient === 'number' ? renderSurfaceAmbient : 0.9, wt = S.weather, g = _fxGate;
+  g.night = (0.9 - amb) / 0.58 > 0.35; g.day = amb > 0.6;
+  g.rain = wt.kind === FX_WEATHER_RAIN && wt.intensity > 0; g.hideNight = wt.intensity > FX_WEATHER_RULES.fireflySuppress;
+  var n = list.r.length, W = pre ? list.steady : list.w, total = 0, moved = 0, first = -1, k;
+  for (k = 0; k < n; k++) {
+    var wk = W[k] * (g.rain && list.ceiling[k] ? FX_WEATHER_RULES.rainFedDrips : 1);
+    total += wk;
+    if (fxFieldHidden(list, k, g)) moved += wk;
+    else if (first < 0 && wk > 0) first = k;
+  }
+  if (first < 0) return -1;
+  var at = u * total, acc = 0;
+  for (k = 0; k < n; k++) {
+    if (fxFieldHidden(list, k, g)) continue;
+    acc += W[k] * (g.rain && list.ceiling[k] ? FX_WEATHER_RULES.rainFedDrips : 1) + (k === first ? moved : 0);
+    if (at < acc) return list.r[k];
+  }
+  return list.r[first];
+}
+
+// ── Weather (section 9.1): the schedule, then the weather field ───────────
+// The schedule is sim-owned, keyed on the state's seed and its accumulated
+// sim seconds (S.simTime), never the game clock or the tick count, so the
+// studio's 120 Hz reaches the same weather as 60 Hz at the same sim time.
+// Front k lasts lerp(120, 300 s) of draw 8k; it is active in the current
+// biome when draw 8k+1 is under the biome's chance, at intensity
+// lerp(0.35, 1) of draw 8k+2, with wind at angle 2 pi draw 8k+3 and speed
+// lerp(4, 30) of draw 8k+4 (every front blows; the Weather switch off is
+// calm). When a kind's goal changes (a front end, split exactly; a biome
+// change, at the tick it is seen) its level eases linearly from where it is
+// to the new goal over crossfadeSeconds, so a front and a biome change
+// crossfade the kinds in 8 s whatever the step; the wind eases from the
+// last front's over windEaseSeconds. A new mode (the Weather switch, a dev
+// force) or a fresh state starts at its goals and prewarms the field.
+// Visibility is 1 - smoothstep(0.5, 1, renderCameraCaveBlend).
+function fxWeatherFront(S, W, k) {
+  var rules = FX_WEATHER_RULES, salt = (S.seed ^ FX_WEATHER_SALT) | 0, fs = rules.frontSeconds, ws = rules.windSpeed, iv = rules.intensity;
+  if (k > 0) { W.start = W.end; W.wx0 = W.wx1; W.wy0 = W.wy1; } else W.start = 0;
+  W.front = k;
+  W.end = W.start + fs[0] + (fs[1] - fs[0]) * effectNoise(salt, 8 * k);
+  W.roll = effectNoise(salt, 8 * k + 1);
+  W.frontI = iv[0] + (iv[1] - iv[0]) * effectNoise(salt, 8 * k + 2);
+  var a = 2 * Math.PI * effectNoise(salt, 8 * k + 3), sp = ws[0] + (ws[1] - ws[0]) * effectNoise(salt, 8 * k + 4);
+  W.wx1 = Math.cos(a) * sp; W.wy1 = Math.sin(a) * sp;
+  if (k === 0) { W.wx0 = W.wx1; W.wy0 = W.wy1; }
+}
+// Each kind's goal level under `mode` in the current biome (terrain): clear;
+// a forced kind (at 1, or the dev force's intensity); the biome's kind at
+// the dev force's intensity; or auto: the front's intensity for the biome's
+// kind when its roll is under the biome's chance, except in Cave Test.
+function fxWeatherGoal(S, W, mode) {
+  var G = W.goal, b = terrain;
+  G[0] = G[1] = G[2] = 0;
+  if (mode === FX_WM_CLEAR) return;
+  if (mode >= 1 && mode <= 3) { G[mode - 1] = W.force !== FX_WF_NONE ? W.forceI : 1; return; }
+  if (!_fxHas(FX_WEATHER.biomeKind, b)) return;
+  if (mode === FX_WM_BIOME) G[FX_WEATHER.biomeKind[b]] = W.forceI;
+  else if (!CAVE_TEST_MODE && W.roll < FX_WEATHER.biomeChance[b]) G[FX_WEATHER.biomeKind[b]] = W.frontI;
+}
+function fxUpdateWeather(S) {
+  var W = S.weather, rules = FX_WEATHER_RULES, now = S.simTime, mode = S.weatherToggle, k;
+  if (mode !== FX_WM_OFF && W.force !== FX_WF_NONE) mode = W.force;
+  var cv = rules.caveVisibility, blend = typeof renderCameraCaveBlend === 'number' ? renderCameraCaveBlend : 0;
+  var u = (blend - cv[0]) / (cv[1] - cv[0]);
+  u = u < 0 ? 0 : u > 1 ? 1 : u;
+  W.visibility = 1 - u * u * (3 - 2 * u); W.snapped = false;
+  if (!(now >= W.t && now < Infinity)) return;          // sim time runs forward and stays finite (updateEffects)
+  if (mode === FX_WM_OFF) {                             // calm and clear; turning it on starts fresh
+    W.level[0] = W.level[1] = W.level[2] = 0; W.kind = 0; W.intensity = 0; W.windX = W.windY = 0; W.mode = mode; W.t = now;
+    return;
+  }
+  var modeI = W.force !== FX_WF_NONE ? W.forceI : 1, snap = W.fresh || W.mode !== mode || W.modeI !== modeI;
+  var fade = rules.crossfadeSeconds, t = snap ? now : W.t, guard = 0;
+  if (W.front < 0) fxWeatherFront(S, W, 0);
+  W.mode = mode; W.modeI = modeI; W.fresh = false; W.snapped = snap;
+  for (;;) {
+    while (W.end <= t && guard++ < 64) fxWeatherFront(S, W, W.front + 1);
+    var seg = now < W.end ? now : W.end, step = seg - t;
+    if (!(step >= 0) || guard > 64) break;              // more fronts than a step can hold: never spins
+    fxWeatherGoal(S, W, mode);
+    for (k = 0; k < 3; k++) {
+      var g = W.goal[k], v = W.level[k];
+      if (snap) { W.level[k] = W.aim[k] = g; W.rate[k] = 0; continue; }
+      if (g !== W.aim[k]) { W.aim[k] = g; W.rate[k] = (g > v ? g - v : v - g) / fade; }   // a new crossfade: 8 s from here
+      var d = step * W.rate[k];
+      W.level[k] = v < g ? (v + d < g ? v + d : g) : (v - d > g ? v - d : g);
+    }
+    if (seg >= now) break;
+    t = seg;
+  }
+  while (W.end <= now && guard++ < 64) fxWeatherFront(S, W, W.front + 1);
+  W.t = now;
+  var e = (now - W.start) / rules.windEaseSeconds;
+  e = e < 0 ? 0 : e > 1 ? 1 : e;
+  W.windX = W.wx0 + (W.wx1 - W.wx0) * e; W.windY = W.wy0 + (W.wy1 - W.wy0) * e;
+  var best = 0;
+  for (k = 1; k < 3; k++) if (W.level[k] > W.level[best]) best = k;
+  W.kind = best; W.intensity = W.level[best];
+}
+// The weather field: each kind's set keeps population x s x its level x
+// visibility members over open-sky columns of the box ahead of the sim
+// camera. In 2D the box is the view (1 u a pixel) plus the 2D margin, over
+// which members fade and wrap, and the population is x twoDScale x the
+// view's area over the authored 360 x 240 canvas (1 to FX_VIEW2D_AREA_CAP):
+// the spec's count at the authored canvas, a sparser sky beyond 3 x its
+// area (fullscreen) instead of a pool of thousands. A member leaving the
+// box wraps to the far side at the same height above its column's open sky
+// (a settled one leaves). The field runs in two passes: before the
+// integrate pass it moves the box, counts and wraps its members and fades
+// the excess (oldest first); after the tick's landings (fxRefillFields) it
+// refills what the tick lost, so every tick ends at the population. The
+// refill is an allowance of refillBoost x the turnover rate carried across
+// ticks (at most one tick's plus one), so every step size refills at the
+// same rate per second; a prewarm (the world's prime, a new weather mode,
+// the return from 2D) fills at once, ground-ended lives at hashed points of
+// their fall, and goes on next tick if the spawn cap cut it. Rain's snow
+// line: fxWeatherSpawn. In 2D rain members leave and the rain set spawns
+// its splashes over the view instead (fxWeatherSplashes2D).
+function fxRunWeather(S, F, st, dt) {
+  var W = S.weather, R = S.R, code = F.code, twoD = !MODE3D, view = twoD ? 2 : 3, pop = FX_WEATHER.population, k, i, q, area = 1;
+  if (twoD) {
+    var cw = canvas.width, ch = canvas.height;
+    st.hx = cw / 2 + FX_VIEW2D_MARGIN; st.hy = ch / 2 + FX_VIEW2D_MARGIN; st.fade = FX_VIEW2D_MARGIN;
+    st.cx = viewCam.x + cw / 2; st.cy = viewCam.y + ch / 2;
+    area = cw * ch / (CANVAS_BASE_W * CANVAS_BASE_H);
+    area = F.twoDScale * (area > FX_VIEW2D_AREA_CAP ? FX_VIEW2D_AREA_CAP : area > 1 ? area : 1);
+  } else {
+    st.hx = st.hy = F.half; st.fade = F.edgeFade * F.half;
+    st.cx = cam.x + Math.cos(cam.ang) * F.bias; st.cy = cam.y + Math.sin(cam.ang) * F.bias;
+  }
+  var hx = st.hx, hy = st.hy, limX = 3 * hx, limY = 3 * hy;
+  st.half = hx > hy ? hx : hy; st.under = false; st.set = W.intensity > 0 ? W.kind : -1;
+  if (st.view !== view) { if (st.view) st.prewarm = true; st.view = view; }
+  var T = st.targets, L = st.lives, scale = S.scale[0] * W.visibility * area, open = false;
+  for (k = 0; k < 3; k++) {
+    var list = F.sets[k], on = false;
+    for (q = 0; q < list.r.length; q++) if (S.gate[list.r[q]]) on = true;
+    open = open || on;
+    T[k] = on ? Math.floor(pop[k] * scale * W.level[k] + 1e-9) : 0;
+    L[k] = 0;
+  }
+  // Rain's swaps: at most snow's population at rain's level (every column above the line).
+  T[FX_WEATHER_SWAP] = T[0] > 0 ? Math.floor(pop[1] * scale * W.level[0] + 1e-9) : 0; L[FX_WEATHER_SWAP] = 0;
+  var fl = S.flags;
+  for (i = 0; i < S.count;) {
+    var f = fl[i], own = S.owner[i];
+    if (!(f & FX_FIELD) || (own & 255) !== code || (f & FX_DYING)) { i++; continue; }
+    if (twoD && R.mode2D[S.rec[i]] !== FX_MODE2D_SIM) { fxMarkDying(S, i); i++; continue; }   // rain drops leave the 2D view
+    var dx = S.x[i] - st.cx, dy = S.y[i] - st.cy;
+    if (dx > hx || dx < -hx || dy > hy || dy < -hy) {
+      if ((f & FX_REST) || dx > limX || dx < -limX || dy > limY || dy < -limY ||
+          !fxWeatherWrap(S, i, dx > hx ? -2 * hx : dx < -hx ? 2 * hx : 0, dy > hy ? -2 * hy : dy < -hy ? 2 * hy : 0)) {
+        fxKill(S, i); S.stats.fieldDropped++; continue;
+      }
+    }
+    L[own >> 8]++; i++;
+  }
+  for (k = 0; k < 4; k++) if (L[k] > T[k]) { fxDyingOldest(S, -1, L[k] - T[k], code | k << 8); L[k] = T[k]; }
+  st.target = T[0] + T[1] + T[2]; st.live = L[0] + L[1] + L[2] + L[3];
+  st.open = open; st.gone.fill(0);                    // members that die from here on are refilled after the tick's landings
+  if (!open) { st.acc[0] = st.acc[1] = st.acc[2] = 0; st.swapV = 0; }
+}
+// After the tick's landings and splashes: every weather field refills what
+// its sets lost since it counted them (fxKill counts them).
+function fxRefillFields(S, dt) {
+  var F = S.C.FIELDS;
+  for (var f = 0; f < F.length; f++) if (F[f].weather) fxRefillWeather(S, F[f], S.fields[f], dt);
+}
+function fxRefillWeather(S, F, st, dt) {
+  var W = S.weather, T = st.targets, L = st.lives, twoD = st.view === 2, k;
+  for (k = 0; k < 4; k++) { L[k] -= st.gone[k]; st.live -= st.gone[k]; st.gone[k] = 0; }
+  if (!st.open) return;
+  var pre = S.prewarm || st.prewarm || W.snapped, cut = false;
+  st.prewarm = false;
+  st.swapV = pre ? 0 : st.swapV * Math.exp(-dt / F.sets[0].life);    // rain's virtual slots last one rain turnover
+  for (k = 0; k < 3; k++) {
+    var set = F.sets[k];
+    if (!set.r.length) continue;
+    var rate = T[k] * dt / set.life * FX_WEATHER_RULES.refillBoost, want = T[k] - L[k];
+    if (twoD && set.splash >= 0) { fxWeatherSplashes2D(S, F, st, k, set, rate / FX_WEATHER_RULES.refillBoost); continue; }
+    if (k === 0) want -= Math.round(st.swapV);
+    if (pre) st.acc[k] = 0;
+    else {
+      var acc = st.acc[k] + rate;
+      st.acc[k] = acc = acc > rate + 1 ? rate + 1 : acc;
+      if (want > Math.floor(acc)) want = Math.floor(acc);
+    }
+    if (want <= 0) continue;
+    for (var tries = 0, got = 0; got < want && tries < 2 * want && S.spawnLeft > 0; tries++) {
+      if (S.count >= S.B) { S.stats.refusedBudget += want - got; break; }   // weather never steals: no column lookups for refusals
+      got += fxWeatherSpawn(S, F, st, k, set, pre);
+    }
+    if (!pre) st.acc[k] -= got;
+    else if (got < want && S.spawnLeft <= 0) cut = true;
+  }
+  if (cut) st.prewarm = true;
+}
+// One draw of kind set k: up to 4 columns of the box with open sky, a
+// member of the set drawn by weight. Rain's per-drop snow line: over a
+// column whose sky layer is at or above snowLineH, a rain draw takes a
+// virtual rain slot for one rain turnover (so rain keeps its density over
+// the valleys: the rain set holds T x the share of columns below the line)
+// and spawns its snow swap (set 3) with the chance that gives the peaks
+// forced snow's density (fxSwapChance). Noise keys as the ambient field's:
+// the field serial x 9 + 0..7 the columns, + 8 the member; the swap chance
+// on its own salt. Returns 1 when the draw used a slot (a member spawned or
+// a virtual rain slot).
+function fxWeatherSpawn(S, F, st, k, set, pre) {
+  var serial = S.fieldSerial, key = F.salt ^ S.seed, x = 0, y = 0, z = NaN, R = S.R, sky = _fxSky, alt;
+  S.fieldSerial = (serial + 1) >>> 0;
+  for (var a = 0; a < 4 && z !== z; a++) {
+    x = st.cx + (2 * effectNoise(key, serial * 9 + 2 * a) - 1) * st.hx;
+    y = st.cy + (2 * effectNoise(key, serial * 9 + 2 * a + 1) - 1) * st.hy;
+    z = fxSkyInto(x, y, sky);
+  }
+  if (z !== z) { S.stats.refusedNoSupport++; return 0; }
+  var r = fxFieldMember(S, set, effectNoise(key, serial * 9 + 8), pre);
+  if (r < 0) return 0;
+  if ((alt = R.snowAlt[r]) >= 0 && sky.top >= FX_WEATHER_RULES.snowLineH * 25) {
+    st.swapV++;
+    if (st.lives[FX_WEATHER_SWAP] < st.targets[FX_WEATHER_SWAP] && effectNoise(key ^ FX_WEATHER_SWAP_SALT, serial) < fxSwapChance(S, set, alt, pre) &&
+        fxWeatherMember(S, F, st, FX_WEATHER_SWAP, alt, x, y, z, pre)) S.stats.weatherSnowLine++;
+    return 1;
+  }
+  return fxWeatherMember(S, F, st, k, r, x, y, z, pre);
+}
+// The chance that a rain draw above the snow line spawns its swap: snow's
+// population share of rain's, x rain's turnover over the swap's own life
+// span (its fall plus its rest), so the swaps hold forced snow's density
+// over the peaks; a prewarm places the steady share at once.
+function fxSwapChance(S, set, alt, pre) {
+  var R = S.R, pop = FX_WEATHER.population, share = pop[0] > 0 ? pop[1] / pop[0] : 0;
+  if (pre) return share;
+  var span = R.meanLife[alt] + (R.collision[alt] === FX_MODE_REST ? (R.restMin[alt] + R.restMax[alt]) / 2 : 0);
+  return share * set.life / span;
+}
+// Recipe r as a member of set k over the column (x, y), open sky at z (the
+// column fxSkyInto just resolved into _fxSky, whose sky layer seeds the new
+// particle's ground cache: its first collision needs no layer scan).
+function fxWeatherMember(S, F, st, k, r, x, y, z, pre) {
+  var ctx = _fxCtx, serial = S.serial, sky = _fxSky;
+  fxCtxReset(ctx);
+  ctx.x = x; ctx.y = y; ctx.z = z; ctx.sky = true; ctx.spec = S.R.colorSpec[r];
+  S.serial = (serial + 1) >>> 0;
+  var i = fxSpawn(S, r, serial, 0, 1, ctx);
+  if (i < 0) { fxRefuse(S, r, i, 1); return 0; }
+  S.spawnLeft--; S.flags[i] |= FX_FIELD; S.owner[i] = F.code | k << 8; S.stats.fieldSpawned++; S.stats.weatherSpawned++;
+  st.lives[k]++; st.live++;
+  if (sky.ci >= 0 && sky.x === S.x[i] && sky.y === S.y[i] && S.R.stratum[r] === FX_STRATUM_OPENSKY) {
+    S.gcell[i] = sky.ci; S.g0[i] = sky.g[0]; S.g1[i] = sky.g[1]; S.g2[i] = sky.g[2]; S.g3[i] = sky.g[3];
+  }
+  if (pre) {
+    var u = effectNoise(S.seedA[i], 21);
+    if (S.R.untilGround[r]) S.z[i] -= (S.z[i] - z) * 0.9 * u; else S.age[i] = S.life[i] * 0.95 * u;
+  }
+  return 1;
+}
+// A wrapped member keeps its age and its height above the open sky of its
+// column, moved to the far side of the box, with no back-projection this frame.
+function fxWeatherWrap(S, i, ox, oy) {
+  var x = S.x[i] + ox, y = S.y[i] + oy, g = fxSurfaceZ(S.x[i], S.y[i]), h = fxSurfaceZ(x, y);
+  if (g !== g || h !== h) return false;
+  S.z[i] = h + (S.z[i] - g); S.x[i] = x; S.y[i] = y;
+  S.gcell[i] = -1; S.flags[i] |= FX_SNAP; S.stats.fieldWraps++;
+  return true;
+}
+// 2D rain (mode2D splashOnly, section 5.8): no drops, only their splashes,
+// scattered over the view at T / mean life per second (T already x
+// twoDScale and the view's area); a point above the snow line spawns rain's
+// snow swap with the 3D swap chance instead, while the swaps are under
+// their cap. A splash that its recipe, class or budget cap would refuse is
+// refused before its column is looked up.
+function fxWeatherSplashes2D(S, F, st, k, set, perTick) {
+  var acc = st.acc[k] + perTick, n = Math.floor(acc), R = S.R, ctx = _fxCtx, salt = F.salt ^ S.seed, sky = _fxSky;
+  var w = canvas.width, h = canvas.height, line = FX_WEATHER_RULES.snowLineH * 25, alt = R.snowAlt[set.r[0]], sp = set.splash, c = R.cls[sp];
+  var chance = alt >= 0 ? fxSwapChance(S, set, alt, false) : 0;
+  st.acc[k] = acc - n;
+  for (var j = 0; j < n && S.spawnLeft > 0; j++) {
+    var base = S.fieldSerial;
+    S.fieldSerial = (base + 1) >>> 0;
+    var swap = alt >= 0 && st.lives[FX_WEATHER_SWAP] < st.targets[FX_WEATHER_SWAP] && effectNoise(salt ^ FX_WEATHER_SWAP_SALT, base) < chance;
+    if (!swap) {
+      if (S.recipeLive[sp] >= R.maxLive[sp] || S.classLive[c] - S.classDying[c] >= S.caps[c]) { S.stats.refusedCap++; continue; }
+      if (S.count >= S.B) { S.stats.refusedBudget++; continue; }
+    }
+    var x = viewCam.x + effectNoise(salt, base * 9) * w, y = viewCam.y + effectNoise(salt, base * 9 + 1) * h, z = fxSkyInto(x, y, sky);
+    if (z !== z) { S.stats.refusedNoSupport++; continue; }
+    if (alt >= 0 && sky.top >= line) {
+      if (swap && fxWeatherMember(S, F, st, FX_WEATHER_SWAP, alt, x, y, z, false)) S.stats.weatherSnowLine++;
+      continue;
+    }
+    fxCtxReset(ctx);
+    ctx.x = x; ctx.y = y; ctx.z = z; ctx.spec = R.colorSpec[sp];
+    S.stats.weatherSplashes2D += fxBurst(S, sp, 1, FX_PLACE_SOURCE, ctx, true);
+  }
+}
+// Console and fxBench: force 'rain' | 'snow' | 'ash' at intensity (0..1,
+// default 1), 'biome' (the biome's kind, active at intensity), 'clear', or
+// null (back to the Weather switch) on the live state. Kept across world
+// resets; the Weather switch off still turns weather off. Throws on a bad
+// value (console use); returns effectWeatherState().
+var FX_WEATHER_MODE_NAMES = {'-2':'off', '-1':'clear', 0:'auto', 1:'rain', 2:'snow', 3:'ash', 4:'biome'};
+function fxWeatherForceCode(kind) {
+  if (kind === null || kind === undefined) return FX_WF_NONE;
+  if (kind === 'clear') return FX_WM_CLEAR;
+  if (kind === 'biome') return FX_WM_BIOME;
+  var k = FX_ENUMS.weatherKind.indexOf(kind);
+  return k >= 0 ? k + 1 : NaN;
+}
+function effectWeatherForce(kind, intensity) {
+  var code = fxWeatherForceCode(kind), v = intensity === undefined ? 1 : Number(intensity);
+  if (code !== code) throw new Error('effect weather: kind must be rain, snow, ash, biome, clear or null');
+  if (!(v >= 0 && v <= 1)) throw new Error('effect weather: intensity must be 0..1');
+  fxState.weather.force = code; fxState.weather.forceI = v;
+  return effectWeatherState();
+}
+function effectWeatherState() {
+  var W = typeof fxState === 'object' && fxState && fxState.weather;
+  if (!W) return null;
+  return {mode:FX_WEATHER_MODE_NAMES[W.mode] || 'off', kind:W.intensity > 0 ? FX_ENUMS.weatherKind[W.kind] : null, intensity:W.intensity,
+    target:W.goal[W.kind], levels:{rain:W.level[0], snow:W.level[1], ash:W.level[2]}, front:W.front, frontStart:W.start, frontEnd:W.end,
+    windX:W.windX, windY:W.windY, visibility:W.visibility, force:W.force === FX_WF_NONE ? null : FX_WEATHER_MODE_NAMES[W.force]};
+}
+
+// ── Hot loop ───────────────────────────────────────────────────────────────
+// Exact per-step integration of dv/dt = drag (wind target - v) - gravity, so
+// 60 Hz and the studio's 120 Hz follow the same analytic path. Factors are
+// cached per recipe and recomputed only when dt changes.
+function fxDragFactors(S, dt) {
+  if (S.KDdt === dt) return;
+  var R = S.R, n = S.C.count;
+  for (var r = 0; r < n; r++) {
+    var D = R.dragCoef[r], g = R.gravity[r], K = Math.exp(-D * dt), F = D > 0 ? (1 - K) / D : dt;
+    S.KD[r] = K; S.KF[r] = F;
+    S.KGV[r] = D > 0 ? g * (1 - K) / D : g * dt;
+    S.KGX[r] = D > 0 ? g * (dt - F) / D : 0.5 * g * dt * dt;
+  }
+  S.KDdt = dt;
+}
+// SNAP (present the current state, no back-projection) lasts from the contact
+// or field wrap that set it until the next tick starts; wraps run before the
+// integrate pass, so the flag is cleared here, not per particle in it.
+function fxClearSnap(S) {
+  for (var i = 0, fl = S.flags, n = S.count; i < n; i++) fl[i] &= ~FX_SNAP;
+}
+function fxIntegrate(S, dt) {
+  fxDragFactors(S, dt);
+  var R = S.R, KD = S.KD, KF = S.KF, KGV = S.KGV, KGX = S.KGX, WR = R.wind, TA = R.turbAmp, TW = R.turbW, CO = R.collision;
+  var x = S.x, y = S.y, z = S.z, vx = S.vx, vy = S.vy, vz = S.vz, age = S.age, life = S.life, rec = S.rec, fl = S.flags;
+  var wx = S.weather.windX, wy = S.weather.windY, i = 0;
+  while (i < S.count) {
+    var r = rec[i], a = age[i] + dt, f = fl[i];
+    if (a >= life[i]) { fxKill(S, i); continue; }                      // slot i now holds an unvisited particle
+    age[i] = a;
+    if (f & FX_REST) { i++; continue; }                                // resting: only ages and fades
+    var k = KD[r], ff = KF[r], w = (f & (FX_EYE | FX_SCREEN)) ? 0 : WR[r], ux = wx * w, uy = wy * w;
+    var ovx = vx[i], ovy = vy[i], ovz = vz[i], oz = z[i];
+    var px = x[i] + ux * dt + (ovx - ux) * ff, py = y[i] + uy * dt + (ovy - uy) * ff, pz = oz + ovz * ff - KGX[r];
+    vx[i] = ux + (ovx - ux) * k; vy[i] = uy + (ovy - uy) * k; vz[i] = ovz * k - KGV[r];
+    var ta = TA[r];
+    if (ta > 0) { var ph = S.phase[i] + a * TW[r]; px += Math.cos(ph) * ta * dt; py += Math.sin(ph * 1.3) * ta * dt; }
+    S.rot[i] += S.spin[i] * dt;
+    x[i] = px; y[i] = py; z[i] = pz;
+    if ((CO[r] !== FX_MODE_NONE || R.wall[r]) && !(f & (FX_EYE | FX_SCREEN)) && fxCollide(S, i, r, CO[r], px, py, pz, oz)) continue;  // died: slot refilled
+    i++;
+  }
+}
+function fxKill(S, i) {
+  var last = --S.count, c = S.cls[i], fl = S.flags[i];
+  S.classLive[c]--; S.recipeLive[S.rec[i]]--;
+  if (fl & FX_DYING) S.classDying[c]--;
+  else if (fl & FX_FIELD) { var o = S.owner[i], fs = S.fields[o & 255]; if (fs) fs.gone[(o >> 8) & 3]++; }   // a counted field member
+  S.stats.killed++;
+  if (i === last) return;
+  S.x[i] = S.x[last]; S.y[i] = S.y[last]; S.z[i] = S.z[last];
+  S.vx[i] = S.vx[last]; S.vy[i] = S.vy[last]; S.vz[i] = S.vz[last];
+  S.age[i] = S.age[last]; S.life[i] = S.life[last]; S.size[i] = S.size[last]; S.alpha[i] = S.alpha[last];
+  S.rot[i] = S.rot[last]; S.spin[i] = S.spin[last]; S.phase[i] = S.phase[last];
+  S.g0[i] = S.g0[last]; S.g1[i] = S.g1[last]; S.g2[i] = S.g2[last]; S.g3[i] = S.g3[last];
+  S.gcell[i] = S.gcell[last]; S.owner[i] = S.owner[last]; S.seedA[i] = S.seedA[last]; S.rec[i] = S.rec[last];
+  S.pal[i] = S.pal[last]; S.flags[i] = S.flags[last]; S.bounces[i] = S.bounces[last]; S.cls[i] = S.cls[last];
+}
+
+// ── Collision, strata and the exact ground cache (section 3.5) ────────────
+var _fxCorners = new Float64Array(4);
+function fxGroundZ(S, i, x, y) {
+  var m = floorMesh;
+  if (!m || !m.layerCount) return ENDLESS_MODE ? NaN : 0;     // authored flat fixed levels
+  var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs);
+  if (gx < 0 || gy < 0 || gx >= m.w || gy >= m.h) return NaN;
+  var ci = gy * m.w + gx;
+  if (S.gcell[i] !== ci && !fxFillGround(S, i, m, ci)) return NaN;
+  var tx = x / gs - gx, ty = y / gs - gy, c0 = S.g0[i];
+  return tx >= ty ? c0 + tx * (S.g1[i] - c0) + ty * (S.g3[i] - S.g1[i])    // the 0->3 split of sampleSpatialSupportZ
+                  : c0 + ty * (S.g2[i] - c0) + tx * (S.g3[i] - S.g2[i]);
+}
+// Miss path only (cell change or mesh swap). reference: the highest walkable
+// layer at or below the particle that no ceiling separates from it (the
+// player's own rule), else the nearest; surface: the highest walkable;
+// openSky: the column's sky layer (fxSkyLayer).
+function fxFillGround(S, i, m, ci) {
+  var stratum = S.R.stratum[S.rec[i]], reference = stratum === FX_STRATUM_REFERENCE, ref = S.z[i] / 25, n = m.layerCount[ci];
+  var sky = stratum === FX_STRATUM_OPENSKY, li = sky ? fxSkyLayer(m, ci) : -1, best = -Infinity, near = -1, nearD = Infinity;
+  for (var k = 0; k < n && !sky; k++) {
+    var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if ((type !== 1 && type !== 3 && type !== 4) || !Number.isFinite(h)) continue;
+    if (!reference) { if (h > best) { best = h; li = k; } continue; }
+    var d = Math.abs(h - ref);
+    if (d < nearD) { nearD = d; near = k; }
+    if (h > ref + 0.04 || h <= best) continue;                // support at or below the particle (1 u)
+    if (fxCeilingBetween(m, ci, n, h, ref)) continue;
+    best = h; li = k;
+  }
+  if (li < 0) li = near;
+  if (li < 0) return false;
+  if (!spatialLayerCornersInto(m, ci, li, _fxCorners)) {         // last row/column or stratum edge: flat
+    S.g0[i] = S.g1[i] = S.g2[i] = S.g3[i] = m[SPATIAL_LAYER_TOP_KEYS[li]][ci] * 25;
+  } else { S.g0[i] = _fxCorners[0] * 25; S.g1[i] = _fxCorners[1] * 25; S.g2[i] = _fxCorners[2] * 25; S.g3[i] = _fxCorners[3] * 25; }
+  S.gcell[i] = ci; S.stats.groundMiss++;
+  return true;
+}
+function fxCeilingBetween(m, ci, n, lo, hi) {
+  for (var k = 0; k < n; k++) if (m[SPATIAL_LAYER_TYPE_KEYS[k]][ci] === 2) {
+    var c = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if (c > lo + 0.001 && c <= hi + 0.001) return true;
+  }
+  return false;
+}
+// Grid wall tops (spatial Z) for collision.wall and open-sky spawns: one
+// spatialWallSpan per wall cell per geometry (grid, mesh or wall arrays
+// replaced), not one per particle tick. Infinity: a wall cell with no span.
+var _fxWallTop = null, _fxWallKey = [];
+function fxWallTopZ(ci, gx, gy) {
+  var t = _fxWallTop, key = _fxWallKey;
+  if (!t || t.length !== grid.length || key[0] !== grid || key[1] !== floorMesh || key[2] !== wallHeights ||
+      key[3] !== wallFaceBase || key[4] !== wallMaxTopZ) {
+    if (!t || t.length !== grid.length) t = _fxWallTop = new Float64Array(grid.length);
+    t.fill(NaN);
+    key[0] = grid; key[1] = floorMesh; key[2] = wallHeights; key[3] = wallFaceBase; key[4] = wallMaxTopZ;
+  }
+  var v = t[ci];
+  if (v !== v) { var span = spatialWallSpan(gx, gy); v = t[ci] = span ? span.topZ : Infinity; }
+  return v;
+}
+// The open sky of a mesh cell (weather): its highest layer, walkable or a
+// cave ceiling. A walkable cap tops a roofed Endless cave; a classic level's
+// deep cave has a floor and a ceiling but no walkable cap (03-level-
+// generation.js), so its ceiling is the rock roof that ends the sky there.
+function fxSkyLayer(m, ci) {
+  var li = -1, best = -Infinity;
+  for (var k = 0; k < m.layerCount[ci]; k++) {
+    var type = m[SPATIAL_LAYER_TYPE_KEYS[k]][ci], h = m[SPATIAL_LAYER_TOP_KEYS[k]][ci];
+    if (type >= 1 && type <= 4 && Number.isFinite(h) && h > best) { best = h; li = k; }
+  }
+  return li;
+}
+// Open-sky support at (x, y), spatial Z (weather spawns, wraps and 2D
+// splashes): the column's sky layer, exact on its slope, or a grid wall's
+// top where that is higher (a wall under a roof ends at the roof); NaN off
+// the mesh or with no layer. A cave's wall cell is not a wall to the
+// surface (the surface walks over it, 09-physics.js), so it takes the
+// layers only. Into out: the point, the sky layer's height there (top:
+// the snow line compares it, never a wall top), and its cell and corners
+// x 25 (ci -1 without one), which seed a new member's ground cache.
+var _fxSky = {x:NaN, y:NaN, top:NaN, ci:-1, g:new Float64Array(4)};
+function fxSkyInto(x, y, out) {
+  var m = floorMesh, top = NaN, g = out.g;
+  out.x = x; out.y = y; out.ci = -1;
+  if (!m || !m.layerCount) top = ENDLESS_MODE ? NaN : 0;               // authored flat fixed levels
+  else {
+    var gs = m.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs), ci = gy * m.w + gx, li;
+    if (gx >= 0 && gy >= 0 && gx < m.w && gy < m.h && (li = fxSkyLayer(m, ci)) >= 0) {
+      if (!spatialLayerCornersInto(m, ci, li, g)) g[0] = g[1] = g[2] = g[3] = m[SPATIAL_LAYER_TOP_KEYS[li]][ci];   // flat
+      g[0] *= 25; g[1] *= 25; g[2] *= 25; g[3] *= 25;
+      var tx = x / gs - gx, ty = y / gs - gy;                            // the 0->3 split of sampleSpatialSupportZ
+      top = tx >= ty ? g[0] + tx * (g[1] - g[0]) + ty * (g[3] - g[1]) : g[0] + ty * (g[2] - g[0]) + tx * (g[3] - g[2]);
+      out.ci = ci;
+    }
+  }
+  out.top = top;
+  if (grid && cell) {
+    var wx = Math.floor(x / cell), wy = Math.floor(y / cell), wi = wy * gridW + wx;
+    if (wx >= 0 && wy >= 0 && wx < gridW && wy < gridH && grid[wi] && !(gridCave && gridCave[wi])) {
+      var wt = fxWallTopZ(wi, wx, wy);
+      if (wt < Infinity && !(top >= wt)) return wt;
+    }
+  }
+  return top;
+}
+function fxSurfaceZ(x, y) { return fxSkyInto(x, y, _fxSky); }
+// Layer li of cell ci at (x, y), spatial Z: its exact support triangle, or
+// its flat top where no triangle exists (last row/column, stratum edge).
+function fxLayerZ(m, ci, li, x, y) {
+  var gs = m.gridSize, tx = x / gs - (ci % m.w), ty = y / gs - Math.floor(ci / m.w), c = _fxCorners;
+  if (!spatialLayerCornersInto(m, ci, li, c)) return m[SPATIAL_LAYER_TOP_KEYS[li]][ci] * 25;
+  return 25 * (tx >= ty ? c[0] + tx * (c[1] - c[0]) + ty * (c[3] - c[1]) : c[0] + ty * (c[2] - c[0]) + tx * (c[3] - c[2]));
+}
+// Floor response per collision code; every contact sets SNAP so presentation
+// never back-projects through the surface just hit. Returns true if died.
+function fxCollide(S, i, r, mode, px, py, pz, oz) {
+  var R = S.R;
+  if (R.wall[r] && grid && cell) {
+    var wx = Math.floor(px / cell), wy = Math.floor(py / cell), wi = wy * gridW + wx;
+    // Open-sky particles (weather) cross a cave's wall cells to the surface
+    // over them, as fxSurfaceZ does.
+    if (wx >= 0 && wy >= 0 && wx < gridW && wy < gridH && grid[wi] &&
+        !(R.stratum[r] === FX_STRATUM_OPENSKY && gridCave && gridCave[wi])) {
+      var top = fxWallTopZ(wi, wx, wy);
+      if (pz < top) {
+        if (oz >= top && mode === FX_MODE_REST) {                // settles on the wall top (snow, ash)
+          S.z[i] = top + 0.3; S.vx[i] = S.vy[i] = S.vz[i] = 0; S.flags[i] |= FX_REST | FX_SNAP;
+          var settle = R.restMin[r] + (R.restMax[r] - R.restMin[r]) * effectNoise(S.seedA[i], 19);
+          if (S.life[i] > S.age[i] + settle) S.life[i] = S.age[i] + settle;
+          return false;
+        }
+        if (oz >= top) fxQueueChild(S, i, r, px, py, top);   // fell onto the wall top
+        fxKill(S, i);
+        return true;
+      }
+    }
+  }
+  if (mode === FX_MODE_NONE) return false;
+  var gz = fxGroundZ(S, i, px, py), gc = gz, stick = R.prim[r] === FX_PRIM_SEGMENT;
+  if (gz !== gz) { fxKill(S, i); return true; }                 // off the mesh or not loaded
+  if (stick) gz = fxStickSupport(S, i, r, px, py, gc);           // a stick touches with its lower end
+  if (mode === FX_MODE_CLAMP) {
+    if (pz < gz + 0.5) { S.z[i] = gz + 0.5; if (S.vz[i] < 0) S.vz[i] = 0; S.flags[i] |= FX_SNAP; }
+    return false;
+  }
+  if (pz > gz) return false;
+  // An open-sky particle that drifted sideways into a higher column (a
+  // cliff, the edge of a cave roof) ends against it: it never climbs on top.
+  if (oz < gz - 1 && R.stratum[r] === FX_STRATUM_OPENSKY) { fxKill(S, i); return true; }
+  if (mode === FX_MODE_KILL) { fxQueueChild(S, i, r, px, py, gz); fxKill(S, i); return true; }
+  // A tumbling stick's end swung into the support while it rises: lift only.
+  if (stick && S.vz[i] > 0) { S.z[i] = gz + 0.05; S.flags[i] |= FX_SNAP; return false; }
+  if (mode === FX_MODE_BOUNCE && S.bounces[i] > 0) {
+    var up = -S.vz[i] * R.restitution[r];
+    if (up >= 8) {
+      S.z[i] = gz + 0.05; S.vz[i] = up; S.vx[i] *= R.friction[r]; S.vy[i] *= R.friction[r];
+      S.bounces[i]--; S.flags[i] |= FX_SNAP;
+      return false;
+    }
+  }
+  // rest (or a spent bounce): lie on the support, then fade.
+  S.z[i] = gz + 0.3; S.vx[i] = S.vy[i] = S.vz[i] = 0; S.flags[i] |= FX_REST | FX_SNAP;
+  if (stick) fxStickRest(S, i, r, px, py, gc);
+  var rest = R.restMin[r] + (R.restMax[r] - R.restMin[r]) * effectNoise(S.seedA[i], 19);
+  if (S.life[i] > S.age[i] + rest) S.life[i] = S.age[i] + rest;
+  return false;
+}
+// Sticks (primitive segment, e.g. bones) are drawn from their centre along
+// azimuth phase, tumbled by rot, half length fxStickHalf: the ends are
+// centre +- (cos(phase) cos(rot) hl, sin(phase) cos(rot) hl, sin(rot) hl).
+function fxStickHalf(R, r, seedA) { return (R.len0[r] + (R.len1[r] - R.len0[r]) * effectNoise(seedA, 20)) / 2; }
+// The centre height at which stick i, as posed, touches the support under
+// its lower end, or under its centre (gc) if that is higher. An end off the
+// mesh adds nothing (NaN compares false).
+function fxStickSupport(S, i, r, px, py, gc) {
+  var hl = fxStickHalf(S.R, r, S.seedA[i]), cr = Math.cos(S.rot[i]) * hl, ez = Math.sin(S.rot[i]) * hl;
+  var ex = Math.cos(S.phase[i]) * cr, ey = Math.sin(S.phase[i]) * cr, g = gc;
+  var g1 = fxGroundZ(S, i, px + ex, py + ey) - ez, g2 = fxGroundZ(S, i, px - ex, py - ey) + ez;
+  if (g1 > g) g = g1;
+  if (g2 > g) g = g2;
+  return g;
+}
+// Rest pose: the stick lies along its azimuth, tilted by the rise of the
+// support between its ends, its centre 0.3 above the higher of the centre's
+// support and the ends' mean. A resting particle no longer spins, so spin
+// holds that tilt, which the renderer draws in place of rot.
+function fxStickRest(S, i, r, px, py, gc) {
+  var hl = fxStickHalf(S.R, r, S.seedA[i]), ex = Math.cos(S.phase[i]) * hl, ey = Math.sin(S.phase[i]) * hl;
+  var g1 = fxGroundZ(S, i, px + ex, py + ey), g2 = fxGroundZ(S, i, px - ex, py - ey);
+  if (g1 !== g1) g1 = gc;
+  if (g2 !== g2) g2 = gc;
+  var mid = (g1 + g2) / 2;
+  S.spin[i] = Math.atan2(g1 - g2, 2 * hl);
+  S.z[i] = (mid > gc ? mid : gc) + 0.3;
+}
+
+// Children are queued during the integrate pass and admitted after it,
+// never by stealing, so the pass never visits a slot twice or skips one.
+function fxQueueChild(S, i, r, x, y, z) {
+  var R = S.R, child = R.child[r];
+  if (child < 0) return;
+  var d = Math.hypot(x - cam.x, y - cam.y);
+  if (d > R.childNear[r] || !(effectNoise(S.seedA[i], 13) < R.onFloorChance[r] * fxKeep(R, child, d))) return;
+  if (S.childCount >= EFFECT_CONFIG.childQueue) { S.stats.refusedChildQueue++; return; }
+  var q = S.childQ, o = S.childCount++ * 5;
+  q[o] = x; q[o + 1] = y; q[o + 2] = z; q[o + 3] = child; q[o + 4] = S.flags[i];
+}
+function fxAdmitChildren(S) {
+  var q = S.childQ, n = S.childCount, ctx = _fxCtx;
+  if (!n) return;
+  S.childCount = 0; S.noSteal = true;
+  try {
+    for (var j = 0; j < n; j++) {
+      var o = j * 5, r = q[o + 3];
+      fxCtxReset(ctx);
+      ctx.x = q[o]; ctx.y = q[o + 1]; ctx.z = q[o + 2]; ctx.flags = q[o + 4] & FX_UNDER ? FX_EV_UNDER : 0;
+      ctx.surf = fxBiomeIndex(S); ctx.spec = S.R.colorSpec[r];
+      S.stats.children += fxBurst(S, r, 1, FX_PLACE_SOURCE, ctx, true);
+    }
+  } finally { S.noSteal = false; }
+}
+
+// ── Presentation on the interpolation timeline (section 3.7): the camera and
+// actors are drawn one tick behind the newest state, so particles
+// back-project by (1 - alpha) ticks. Read-only.
+function fxPresentationBack(S) {
+  var a = typeof renderPresentationAlpha === 'number' ? renderPresentationAlpha : 1;
+  return (1 - a) * S.lastDt;
+}
+// out: x, y, z, t (life fraction). A particle never appears before its birth;
+// SNAP (a contact this tick) presents the current state.
+function fxPresentInto(S, i, back, out) {
+  var age = S.age[i], b = (S.flags[i] & FX_SNAP) ? 0 : age < back ? age : back;
+  out[0] = S.x[i] - S.vx[i] * b; out[1] = S.y[i] - S.vy[i] * b; out[2] = S.z[i] - S.vz[i] * b;
+  out[3] = (age - b) / S.life[i];
+}
+
+// ── Lifecycle hooks (the registry's engine family) ────────────────────────
+// assembleWindow: pool, pending events and point anchors move with the window
+// (events queued before step() are drained after the shift).
+function fxRebase(sx, sy, target) {
+  var S = target || fxState, n = S.count, fl = S.flags, ev = S.ev, A = S.anchors;
+  for (var i = 0; i < n; i++) if (!(fl[i] & (FX_EYE | FX_SCREEN))) { S.x[i] -= sx; S.y[i] -= sy; }
+  for (var e = 0; e < ev.count; e++) { var k = (ev.head + e) % ev.n; ev.x[k] -= sx; ev.y[k] -= sy; }
+  for (var a = 0; a < A.n; a++) {
+    if (!A.used[a] || A.kind[a] !== FX_ANCHOR_POINT) continue;
+    A.x[a] -= sx; A.y[a] -= sy; A.x2[a] -= sx; A.y2[a] -= sy;
+  }
+  S.torchRefreshAt = 0; S.gcell.fill(-1, 0, n);
+}
+function fxWorldSeed() {
+  if (ENDLESS_MODE) return WORLD_SEED | 0;
+  var h = 0x811c9dc5, t = String(terrain);
+  for (var k = 0; k < t.length; k++) h = Math.imul(h ^ t.charCodeAt(k), 16777619);
+  return (effectNoise(level | 0, h) * 4294967296) | 0;
+}
+// Clear phase: pool, ring, anchors, children, colours, counters, seeds and a
+// pending prewarm (the prime phase sets it again).
+function fxReset(scope, target) {
+  var S = target || fxState;
+  S.count = 0; S.prewarm = false; S.classLive.fill(0); S.classDying.fill(0); S.recipeLive.fill(0); S.stolenByClass.fill(0);
+  S.ev.head = S.ev.count = 0; S.childCount = 0; S.dynCount = 0; S.eyeCount = 0; S.stealCursor = 0; S.contactN = 0;
+  for (var a = 0; a < S.anchors.n; a++) if (S.anchors.used[a]) fxFreeAnchor(S.anchors, a);
+  S.seed = fxWorldSeed(); S.legacyRng = (S.seed ^ 0x5bd1e995) >>> 0; S.serial = 0; S.tick = 0; S.simTime = 0;
+  var force = S.weather.force, forceI = S.weather.forceI;          // a dev weather force outlives the world
+  S.mesh = null; S.torchRefreshAt = 0; S.weather = fxCreateWeather(); S.fieldSerial = 0;
+  S.weather.force = force; S.weather.forceI = forceI;
+  S.fields = S.C.FIELDS.map(fxCreateField); S.torch = fxCreateTorchTable(S.C.anchorRecipes[FX_ANCHOR_TORCH].length);
+  S.obs = fxCreateObservers();
+  var st = S.stats;
+  for (var key in st) st[key] = 0;
+}
+// Prime phase (after the player is placed): fields fill on the first tick.
+function fxPrime() { fxState.prewarm = true; }
+// Every studio cycle gets a fresh pinned pool; studio casts never touch the
+// live one. The studio's sky stays clear, so its casts compare.
+function fxStudioInstall(live, job) {
+  live.fxState = createFxState(EFFECT_CONFIG.studioCapacity, job && job.seed, {pinned:true});
+  live.fxState.weather.force = FX_WM_CLEAR;
+}
+// Browser profile (20-browser-profile.js, section 10.4): a fresh pinned pool
+// seeded from the profile, never the live one. New mode primes it with 120
+// frozen-camera ticks; Legacy runs the old init and update under the
+// profile's own seeded Math.random, already installed by the caller.
+// Weather stays clear unless the job names it: 'rain', 'snow', 'ash',
+// 'biome' (forced at 1) or 'auto' (the Weather switch's schedule).
+function effectProfilePrime(job) {
+  var legacy = effectFamilyMode('ambient') === 'legacy';
+  if (legacy) { initAmbientParticles(); updateAmbientParticles(0); }
+  fxState = createFxState(EFFECT_CONFIG.capacity, job.randomSeed, {pinned:true});
+  var wf = job.weather === 'auto' ? FX_WF_NONE : fxWeatherForceCode(job.weather || 'clear');
+  fxState.weather.force = wf === wf ? wf : FX_WM_CLEAR;
+  if (!legacy) for (var k = 0; k < 120; k++) updateEffects(1 / 60);
+}
+function fxEngineStats(out) {
+  var S = fxState, byClass = {};
+  if (!S) return;
+  var st = S.stats;
+  FX_ENUMS.class.forEach(function (name, c) { byClass[name] = {live:S.classLive[c], cap:S.caps[c]}; });
+  var q = effectQuality(S.cap, S.reserve);
+  out.live = S.count; out.capacity = S.cap; out.budget = q.B; out.P = q.P; out.s = q.s; out.byClass = byClass;
+  out.fields = {};
+  S.C.FIELDS.forEach(function (F, f) {
+    var fs = S.fields[f];
+    out.fields[F.name] = {set:fs.set >= 0 ? F.setNames[fs.set] : null, under:fs.under, target:fs.target, live:fs.live};
+    if (F.weather) {
+      FX_ENUMS.weatherKind.forEach(function (kind, k) { out.fields[F.name][kind] = {target:fs.targets[k], live:fs.lives[k]}; });
+      out.fields[F.name].snowLine = {cap:fs.targets[FX_WEATHER_SWAP], live:fs.lives[FX_WEATHER_SWAP]};   // rain's swaps above the line
+    }
+  });
+  out.weather = effectWeatherState();
+  out.weather.spawned = st.weatherSpawned; out.weather.snowLine = st.weatherSnowLine; out.weather.splashes2D = st.weatherSplashes2D;
+  out.torches = S.torch.n;
+  out.tick = {spawned:st.spawned, killed:st.killed, stolen:st.stolen, children:st.children, eventsIn:st.eventsIn,
+    eventsDropped:st.eventsDropped, eventsGated:st.eventsGated, groundMiss:st.groundMiss, fieldWraps:st.fieldWraps, fieldSpawned:st.fieldSpawned,
+    fieldDropped:st.fieldDropped, torchSpawned:st.torchSpawned, badEvents:st.badEvents, contactsDropped:st.contactsDropped,
+    unknownRecipes:st.unknownRecipes, palOverflow:st.palOverflow, anchorsRefused:st.anchorsRefused,
+    refused:{toggle:st.refusedToggle, family:st.refusedFamily, cap:st.refusedCap, budget:st.refusedBudget, lod:st.refusedLod,
+      spawnCap:st.refusedSpawnCap, offscreenSelf:st.refusedOffscreenSelf, view:st.refusedView, noSupport:st.refusedNoSupport,
+      childQueue:st.refusedChildQueue},
+    observers:{steps:st.obsSteps, npcSteps:st.obsNpcSteps, npcCapped:st.obsNpcCapped, dashes:st.obsDashes, lands:st.obsLands}};
+  out.registry.unknownEvents = st.unknownEvents;
+}
+
+// The only engine throw: every named event and anchor has code here.
+function fxAssertEngineTables(events, anchors) {
+  Object.keys(events).forEach(function (name) {
+    if (typeof FX_EVENT_READERS[name] !== 'function') throw new Error('Particle engine: event ' + name + ' has no reader');
+  });
+  anchors.forEach(function (name) {
+    if (typeof PARTICLE_ANCHORS[name] !== 'function') throw new Error('Particle engine: anchor ' + name + ' has no resolver');
+  });
+}
+fxAssertEngineTables(FX_EVENTS, FX_ANCHOR_NAMES);
+registerEffectFamily('fxState', {storage:'engine', life:'engine', prune:'none', rebase:'engine', reset:'level world',
+  interp:'none', studio:'fresh', owner:'fx', hooks:{rebase:fxRebase, reset:fxReset, prime:fxPrime, studio:fxStudioInstall},
+  draw3D:'fxCombat3D ambientFX3D fxOverlay', draw2D:'fx2D'});
 // Shared opaque-scene visibility for the Canvas renderer. Unlike the legacy
 // wall-only column buffer, this records floors, ceilings and walls at each
 // screen pixel. Store reciprocal forward depth: it interpolates linearly in
@@ -18798,6 +22287,7 @@ function drawFlameStream2D() {
     ctx.closePath(); ctx.fill();
   }
 
+  if (typeof effectFamilyMode !== 'function' || effectFamilyMode('flameEmbers') === 'legacy') {   // New: flame.ember particles (fx2D/fxCombat3D)
   // Ember particles scattered across the cone
   var numP = 16;
   for (var p = 0; p < numP; p++) {
@@ -18815,6 +22305,7 @@ function drawFlameStream2D() {
     var hue = (seed + Math.floor(now * 0.01)) % 4;
     ctx.fillStyle = hue === 0 ? '#ffffaa' : hue === 1 ? '#ffcc44' : hue === 2 ? '#ff8800' : '#ff4400';
     ctx.beginPath(); ctx.arc(px, py, size, 0, Math.PI * 2); ctx.fill();
+  }
   }
 
   ctx.shadowBlur = 0;
@@ -18901,6 +22392,7 @@ function drawFlameStream3D() {
     prevL = ptL; prevR = ptR;
   }
 
+  if (typeof effectFamilyMode !== 'function' || effectFamilyMode('flameEmbers') === 'legacy') {   // New: flame.ember particles (fx2D/fxCombat3D)
   // Animated ember particles scattered across the cone
   ctx.shadowBlur = 10; ctx.shadowColor = '#ff6600';
   var numP = 24;
@@ -18927,9 +22419,929 @@ function drawFlameStream3D() {
       ctx.beginPath(); ctx.arc(pt.sx, pt.sy, size, 0, Math.PI * 2); ctx.fill();
     });
   }
+  }
 
   ctx.shadowBlur = 0;
   ctx.restore(); ctx.globalAlpha = 1.0;
+}
+// Shared render primitives (unified effects V1, S2): the particle layers of
+// the 3D view (combat after structures3D, world at the ambient slot), the
+// first-person overlay (eye and screen space, under the arms) and the 2D view,
+// which also draws the soul orbs (S4), and the torch glow stage (S8).
+// They read fxState and never write it. Occlusion is chosen per particle by
+// its device-pixel footprint: a point read, an exact footprint scan, a lazily
+// built 8x8 tile min/max summary, a soft corona, segment sampling, a budgeted
+// exact clip and a bounded grid clip. Visible particles are batched by style
+// bucket over a bounded style table; glows and puffs come from a small sprite
+// LRU of their own; nothing sets shadowBlur. A presentation-only governor
+// thins cosmetic classes. A stage with nothing to draw makes no Canvas call.
+// Entry points catch, count and warn once; none throws into the frame.
+var FX_LIGHT = [0.2, 0.32, 0.44, 0.56, 0.68, 0.8, 0.92, 1.0];
+var FX_ALPHA = (function () { var a = new Float64Array(16); for (var k = 0; k < 16; k++) a[k] = (k + 0.5) / 16; return a; }());
+var FX_WIDTH = [0.75, 1.5, 2, 3], FX_SPRITE_PX = [16, 32, 64, 128];
+var FXP_DOT = _fxCode('primitive', 'dot'), FXP_GLOW = _fxCode('primitive', 'glowDot'), FXP_STREAK = _fxCode('primitive', 'streak'),
+  FXP_SEG = _fxCode('primitive', 'segment'), FXP_CHIP = _fxCode('primitive', 'chip'), FXP_PUFF = _fxCode('primitive', 'puff'),
+  FXP_RING = _fxCode('primitive', 'ring'), FXP_HALO = FX_ENUMS.primitive.length;     // a glowDot's halo: its own sprite item
+if (FXP_HALO > 7) throw new Error('Particle render: the bucket key holds 8 primitives');
+var FX_PRIM_CAT = new Uint8Array(8);                                                   // 0 fill, 1 stroke, 2 sprite
+FX_PRIM_CAT[FXP_STREAK] = FX_PRIM_CAT[FXP_SEG] = FX_PRIM_CAT[FXP_RING] = 1; FX_PRIM_CAT[FXP_PUFF] = FX_PRIM_CAT[FXP_HALO] = 2;
+var FXO_AUTO = _fxCode('occlusion', 'auto'), FXO_POINT = _fxCode('occlusion', 'point'), FXO_FOOT = _fxCode('occlusion', 'footprint'),
+  FXO_TILES = _fxCode('occlusion', 'tiles'), FXO_CORONA = _fxCode('occlusion', 'corona'), FXO_SEG = _fxCode('occlusion', 'segment'),
+  FXO_CLIP = _fxCode('occlusion', 'clip'), FXO_NONE = _fxCode('occlusion', 'none');
+var FXL_AMBIENT = _fxCode('lighting', 'ambient'), FXL_GRID = _fxCode('lighting', 'lightGrid'), FXL_EMISSIVE = _fxCode('lighting', 'emissive'),
+  FXL_SUN = _fxCode('lighting', 'sun'), FXL_NONE = _fxCode('lighting', 'none');
+var FXE_FLASH = _fxCode('envelope', 'flash'), FXE_PULSE = _fxCode('envelope', 'pulse'), FXE_QUAD = _fxCode('envelope', 'quadOut'),
+  FXE_LINEAR = _fxCode('envelope', 'linear');
+var FXV_NONE = _fxCode('view2D', 'none'), FXV_DOT = _fxCode('view2D', 'dot'), FXV_RING = _fxCode('view2D', 'ring'), FXV_LINE = _fxCode('view2D', 'line'), FXV_PUFF = _fxCode('view2D', 'puff');
+var FXM_STATIC = _fxCode('model', 'static');
+
+// Render-side records: never part of fxState, so pools stay a function of
+// sim inputs. _fxFrame is refilled once per frame; _fxStats are frame counters.
+// The governor's raster input (S9): rasterAcc sums the device pixels that
+// unpinned passes (3D, overlay and 2D) painted since its last step; rasterMs
+// and input are that step's raster estimate and total (JS stage time +
+// raster).
+var _fxRender = {governor:1, ema:0, ring:-1, rasterAcc:0, rasterMs:0, input:0, gate:new Uint8Array(0), tier:new Float64Array(0), gateGen:-1, gateC:null, page:0};
+var _fxFrame = {gen:1, threeD:false, w:0, h:0, su:0, cos:1, sin:0, invTanHalf:1, horizonY:0, cameraZ:60, projScale:180, RS:1, RS3:1, fp:false,
+  ambS:0.9, ambC:0.45, night:0, sun:1, fogS:0.3, fogC:0.15, g:1, maskLeft:0, footLeft:0, glowLeft:0, mixedLeft:0};
+var _fxStats = {considered:0, gated:0, thinned:0, offscreen:0, subpixel:0, drawn:0, buckets:0, bucketsMax:0, bucketOverflow:0,
+  point:0, footprint:0, tiles:0, corona:0, segment:0, clip:0, grid:0, mixedSkipped:0, maskPx:0, rasterPx:0,
+  glowDraws:0, glowCapped:0, spriteHits:0, spriteBuilds:0, spriteFallback:0,
+  torchDrawn:0, torchHidden:0, torchCulled:0, torchDropped:0};
+
+// ── Per-frame setup (both views): camera, back-projection, light inputs,
+// budgets, governor, counters and the per-recipe draw gate. No Canvas call.
+// renderFrame calls beginEffectFrame once at the start of every 3D frame (the
+// casting studio's own frame loop included), so it opens the frame; the 2D
+// branch has no such call and its fx2D stage opens the 2D frame itself.
+function beginEffectFrame() {
+  try { fxFrameSetup(true); } catch (e) { effectFailure('render', e); }
+}
+function fxStageMs(name, slot) {
+  var h = typeof _perfStageHistory !== 'undefined' && _perfStageHistory[name];
+  return h ? h[slot] : 0;
+}
+function fxFrameSetup(threeD) {
+  var F = _fxFrame, G = _fxRender, S = fxState, st = _fxStats, cfg = EFFECT_CONFIG, gv = cfg.governor;
+  F.gen = (F.gen + 1) >>> 0 || 1; F.threeD = threeD;
+  F.w = canvas.width; F.h = canvas.height; F.projScale = projScale; F.RS3 = resScale; F.fp = !!(MODE3D && CAM_FOLLOW);
+  // Screen-space unit: the canvas height, or 3/4 of the width on a canvas
+  // narrower than 4:3 (a portrait phone), so screen-placed x and sizes stay
+  // inside the frame; y stays in canvas heights.
+  F.su = Math.min(F.h, 0.75 * F.w);
+  if (threeD) {
+    var C = getCam3D();
+    F.cos = C.cosAng; F.sin = C.sinAng; F.invTanHalf = C.invTanHalf; F.horizonY = C.horizonY; F.cameraZ = C.cameraZ;
+  }
+  F.ambS = typeof renderSurfaceAmbient === 'number' ? renderSurfaceAmbient : 0.9;
+  F.ambC = typeof renderCaveAmbient === 'number' ? renderCaveAmbient : 0.45;
+  F.night = Math.max(0, Math.min(1, (0.9 - F.ambS) / 0.58));
+  F.sun = typeof renderSurfaceSunIntensity === 'number' ? Math.max(0, Math.min(1, renderSurfaceSunIntensity / 0.6)) : 1;
+  F.fogS = typeof renderSurfaceFogFloor === 'number' ? renderSurfaceFogFloor : 0.3;
+  F.fogC = typeof renderCaveFogFloor === 'number' ? renderCaveFogFloor : 0.15;
+  // Governor (section 6.4): the previous frame's fx stage times, one perf ring
+  // slot back, smoothed. It only thins drawing; pinned states draw at 1. A
+  // stage drawn by a family in Legacy mode (the ambient motes, the torch
+  // glow) is left out: thinning cannot reduce its cost. Stage times are JS
+  // only, and the Canvas raster behind them grows with the pixels painted
+  // (1080p Ultra rain: 0.45 ms JS, 2.5 ms flushed), so the input adds the
+  // previous frame's painted device pixels (its unpinned particle passes,
+  // not the torch glows it cannot thin) at rasterMsPerMpx, calibrated in
+  // Chrome with the flush protocol (section 12.2). At 360 x 240 that term is
+  // small. The 2D view's fx2D stage and its pixels count too (S9 fix): its
+  // pass thins the same classes, and a frame draws either view, never both.
+  if (S && !S.pinned && typeof _perfRingIdx === 'number' && G.ring !== _perfRingIdx) {
+    var prev = (_perfRingIdx + PERF_HISTORY_LEN - 1) % PERF_HISTORY_LEN;
+    var last = fxStageMs('fxCombat3D', prev) + fxStageMs('fxOverlay', prev) + fxStageMs('fx2D', prev) +
+      (effectFamilyMode('ambient') === 'new' ? fxStageMs('ambientFX3D', prev) : 0) + (effectFamilyMode('torchGlow') === 'new' ? fxStageMs('torchGlow3D', prev) : 0);
+    G.rasterMs = G.rasterAcc * gv.rasterMsPerMpx * 1e-6; G.rasterAcc = 0; G.input = last + G.rasterMs;
+    G.ring = _perfRingIdx; G.ema = G.ema * 0.9 + G.input * 0.1;
+    if (G.ema > gv.targetMs) G.governor = Math.max(gv.floor, G.governor * gv.down);
+    else if (G.ema < gv.lowMs) G.governor = Math.min(1, G.governor * gv.up);
+  }
+  F.g = !S || S.pinned ? 1 : G.governor;
+  F.maskLeft = cfg.maskBudgetPx; F.footLeft = cfg.footprintBudgetPx; F.mixedLeft = cfg.mixedPerFrame;
+  F.glowLeft = Math.floor(cfg.glowPerFrame * F.g); _fxSpriteBuildsLeft = 3;
+  for (var k in st) st[k] = 0;
+  if (typeof settingsOpen !== 'undefined' && !settingsOpen) G.page = 0;   // reopening the overlay shows its main page
+  if (S) fxDrawGate(S);
+}
+// Draw gate (section 5.2): rebuilt only when a toggle, family mode or table
+// changes, so a preset switched off while paused vanishes on the next frame.
+function fxDrawGate(S) {
+  var G = _fxRender, gen = effectToggleGeneration(), C = S.C, R = S.R;
+  if (G.gateGen === gen && G.gateC === C) return;
+  if (G.gate.length < C.count) { G.gate = new Uint8Array(C.count); G.tier = new Float64Array(C.count); }
+  for (var r = 0; r < C.count; r++) {
+    var t = R.toggle[r], f = R.family[r];
+    G.gate[r] = t && !effectPresetOn(C.TOGGLES[t]) || f && effectFamilyMode(C.FAMILIES[f]) !== 'new' ? 0 : 1;
+    G.tier[r] = R.sizeTier[r] ? getScale3D(C.TIERS[R.sizeTier[r]]) : SCALE_3D_GLOBAL;
+  }
+  G.gateGen = gen; G.gateC = C;
+}
+
+// ── Stages ────────────────────────────────────────────────────────────────
+// 1 combat (after structures3D), 0 world (the ambient slot: in Legacy mode
+// it first draws the legacy array exactly as drawAmbientParticles3D does).
+function drawEffectLayer3D(layer) {
+  if (layer === 0 && typeof drawAmbientParticles3D === 'function' && effectFamilyMode('ambient') === 'legacy') drawAmbientParticles3D();
+  fxStage(layer);
+}
+function drawEffectOverlay() { fxStage(2); }
+// The 2D view's frame opens here; a 2D pass inside an open 3D frame (MODE3D)
+// joins that frame, so its budgets and counters are never refilled twice.
+// Soul orbs (gameplay pickups, the soulOrbs family's 2D stage) draw first,
+// under the particles.
+function drawEffectLayer2D() {
+  drawSoulOrbs2D();
+  if (!(MODE3D && _fxFrame.threeD)) { try { fxFrameSetup(false); } catch (e) { effectFailure('render', e); return; } }
+  fxStage(3);
+}
+// Soul orbs had no 2D renderer (combat-16): the pulsing disc and highlight of
+// drawSoulOrbs3D (19-companions-loot.js) without its shadowBlur, culled to
+// the view. No Canvas call when no orb is in view.
+function drawSoulOrbs2D() {
+  var list = typeof soulOrbs !== 'undefined' ? soulOrbs : null, open = false;
+  if (!list || !list.length) return;
+  try {
+    var now = gameTimeNow(), x0 = viewCam.x - 8, y0 = viewCam.y - 8, x1 = viewCam.x + canvas.width + 8, y1 = viewCam.y + canvas.height + 8;
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i];
+      if (!o || !(o.x >= x0 && o.x <= x1 && o.y >= y0 && o.y <= y1)) continue;
+      var ph = Number.isFinite(o.bob) ? o.bob : 0, r = 5 * (0.75 + 0.25 * Math.sin(now * 0.005 + ph)), y = o.y + Math.sin(now * 0.003 + ph) * 2;
+      if (!open) { open = true; ctx.save(); ctx.translate(-viewCam.x, -viewCam.y); ctx.shadowBlur = 0; ctx.globalAlpha = 0.92; }
+      ctx.fillStyle = '#cc88ff';
+      ctx.beginPath(); ctx.arc(o.x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.beginPath(); ctx.arc(o.x - r * 0.28, y - r * 0.28, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    }
+  } catch (e) { effectFailure('render', e); }
+  finally { if (open) ctx.restore(); }
+}
+function fxStage(mode) {
+  var S = fxState;
+  if (!S || !S.count) return;
+  try { fxRunPass(S, mode); } catch (e) { effectFailure('render', e); }
+  finally { fxClose(); }
+}
+var _fxSaved = false, _fxBlend = -1, _fxPassS = null;
+function fxOpen() {                                   // the first draw of a pass opens its save()
+  if (_fxSaved) return;
+  ctx.save(); _fxSaved = true; ctx.shadowBlur = 0; _fxBlend = -1;
+}
+function fxClose() { if (_fxSaved) { _fxSaved = false; ctx.restore(); } }
+
+// ── Depth tests (predicate and pixel-centre rule of 12-scene-depth.js) ─────
+function fxVis(inv, iz) { return iz * (1 + inv * 0.15) + 1e-9 >= inv; }
+// 0 hidden, 1 all visible, 2 mixed: the decision withSceneDepthBillboard makes
+// for the same rectangle (callback skipped, called unclipped, called clipped).
+function fxDepthFootprint(x0, y0, x1, y1, iz) {
+  var W = _sceneDepthW, H = _sceneDepthH, D = _sceneDepthInv;
+  if (!W || !H) return 0;
+  var sx = Math.max(0, Math.ceil(x0 - 0.5)), ex = Math.min(W - 1, Math.floor(x1 - 0.5));
+  var sy = Math.max(0, Math.ceil(y0 - 0.5)), ey = Math.min(H - 1, Math.floor(y1 - 0.5)), vis = 0, hid = 0;
+  for (var y = sy; y <= ey; y++) for (var j = y * W + sx, x = sx; x <= ex; x++, j++) {
+    var inv = D[j];
+    if (iz * (1 + inv * 0.15) + 1e-9 >= inv) vis++; else hid++;
+    if (vis && hid) return 2;
+  }
+  return vis ? 1 : 0;
+}
+// One pixel; outside the depth frame counts as `edge`.
+function fxDepthPoint(x, y, iz, edge) {
+  var W = _sceneDepthW, px = Math.floor(x), py = Math.floor(y);
+  if (!W) return 0;
+  if (px < 0 || py < 0 || px >= W || py >= _sceneDepthH) return edge;
+  return fxVis(_sceneDepthInv[py * W + px], iz) ? 1 : 0;
+}
+// Corona (section 5.3a): how many of five samples, the centre and four at q
+// px from it, pass the depth test. A sample off the depth frame is judged at
+// the frame's nearest pixel, where the glow actually lands, so a light hidden
+// behind terrain just past the screen edge stays hidden and one in the open
+// keeps its glow. A soft glow scales its alpha by that share and draws
+// unclipped: it fades behind terrain instead of being cut at its edge, at a
+// constant cost.
+function fxCorona(x, y, iz, q) {
+  return fxDepthNearest(x, y, iz) + fxDepthNearest(x - q, y, iz) + fxDepthNearest(x + q, y, iz) +
+    fxDepthNearest(x, y - q, iz) + fxDepthNearest(x, y + q, iz);
+}
+function fxDepthNearest(x, y, iz) {
+  var W = _sceneDepthW, H = _sceneDepthH, px = Math.floor(x), py = Math.floor(y);
+  if (!W || !H) return 0;
+  px = px < 0 ? 0 : px >= W ? W - 1 : px; py = py < 0 ? 0 : py >= H ? H - 1 : py;
+  return fxVis(_sceneDepthInv[py * W + px], iz) ? 1 : 0;
+}
+// Tile summary (section 5.3a): per 8x8 tile min/max inverse depth, built on a
+// tile's first query in a frame. The predicate is monotone in the depth
+// value, so "all visible" holds iff it holds at the tile's max and "all
+// hidden" iff it fails at its min; anything else is mixed (conservative).
+var _fxTileMin = new Float32Array(0), _fxTileMax = new Float32Array(0), _fxTileGen = new Uint32Array(0), _fxTileRuns = new Int32Array(0);
+var _fxTilesW = 0, _fxTileW = 0, _fxTileH = 0;
+function fxTilesReady(W, H) {
+  if (W === _fxTileW && H === _fxTileH) return;
+  var tw = (W + 7) >> 3, n = tw * ((H + 7) >> 3);
+  if (_fxTileGen.length < n) { _fxTileMin = new Float32Array(n); _fxTileMax = new Float32Array(n); _fxTileGen = new Uint32Array(n); }
+  else _fxTileGen.fill(0, 0, n);
+  if (_fxTileRuns.length < 24 * tw) _fxTileRuns = new Int32Array(24 * tw);   // two tile rows of runs, <= 4 per tile
+  _fxTilesW = tw; _fxTileW = W; _fxTileH = H;
+}
+function fxTileBuild(t, tx, ty) {
+  var W = _sceneDepthW, D = _sceneDepthInv, x0 = tx << 3, y0 = ty << 3, x1 = Math.min(W, x0 + 8), y1 = Math.min(_sceneDepthH, y0 + 8);
+  var lo = Infinity, hi = -Infinity;
+  for (var y = y0; y < y1; y++) for (var j = y * W + x0, e = j + x1 - x0; j < e; j++) { var v = D[j]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  _fxTileMin[t] = lo; _fxTileMax[t] = hi; _fxTileGen[t] = _fxFrame.gen;
+}
+// 0 hidden, 1 all visible, 2 mixed; never "all visible" over a hidden pixel
+// and never "hidden" over a visible one.
+function fxTileClass(x0, y0, x1, y1, iz) {
+  var W = _sceneDepthW, H = _sceneDepthH;
+  if (!W || !H) return 0;
+  var sx = Math.max(0, Math.ceil(x0 - 0.5)), ex = Math.min(W - 1, Math.floor(x1 - 0.5));
+  var sy = Math.max(0, Math.ceil(y0 - 0.5)), ey = Math.min(H - 1, Math.floor(y1 - 0.5)), vis = 0, hid = 0;
+  if (sx > ex || sy > ey) return 0;
+  fxTilesReady(W, H);
+  for (var ty = sy >> 3; ty <= ey >> 3; ty++) for (var tx = sx >> 3; tx <= ex >> 3; tx++) {
+    var t = ty * _fxTilesW + tx;
+    if (_fxTileGen[t] !== _fxFrame.gen) fxTileBuild(t, tx, ty);
+    var lo = _fxTileMin[t], hi = _fxTileMax[t];
+    if (iz * (1 + hi * 0.15) + 1e-9 >= hi) vis = 1;
+    else if (iz * (1 + lo * 0.15) + 1e-9 < lo) hid = 1;
+    else return 2;
+    if (vis && hid) return 2;
+  }
+  return vis ? 1 : 0;
+}
+// Clip path of a mixed item under 'tiles'. Fully visible tiles merge into one
+// run per stretch of a tile row, and a run carries down while the next tile
+// row has the same span, so the path grows with the occluder edge inside the
+// item, not with its area or the canvas size. A mixed tile is read exactly
+// while the mask budget lasts (the grid rule beyond it): when all its rows
+// have the same visible runs (a vertical edge or pillar) those runs join the
+// tile row's runs; otherwise it gets per-row rects, identical rows coalesced.
+// The item's box is in whole pixels. Returns the rect count.
+function fxTilePath(sx, sy, ex, ey, iz) {
+  var F = _fxFrame, st = _fxStats, V = _fxTileRuns, Q = _fxQ, n = 0, gridded = false;
+  var prev = 0, pn = 0, cur = 12 * _fxTilesW, cn, c, j, o;              // run lists (x0, x1, top row) of two tile rows
+  for (var ty = sy >> 3; ty <= ey >> 3; ty++) {
+    var ay = Math.max(sy, ty << 3), by = Math.min(ey, (ty << 3) + 7), run = -1, end = -1;
+    for (var tx = sx >> 3, cn = 0; tx <= ex >> 3; tx++) {
+      var t = ty * _fxTilesW + tx, ax = Math.max(sx, tx << 3), bx = Math.min(ex, (tx << 3) + 7);
+      if (_fxTileGen[t] !== F.gen) fxTileBuild(t, tx, ty);
+      if (fxVis(_fxTileMax[t], iz)) { if (run < 0) run = ax; end = bx; continue; }     // all visible: extends the run
+      var mixed = fxVis(_fxTileMin[t], iz), cnt = (bx - ax + 1) * (by - ay + 1), exact = mixed && cnt <= F.maskLeft, alike = false, k = 0;
+      if (exact) {
+        F.maskLeft -= cnt; st.maskPx += cnt;
+        for (var y = ay + 1, k = fxTileRowRuns(ax, bx, ay, iz, 0); y <= by && fxTileRowRuns(ax, bx, y, iz, 8) === k && fxRunsSame(k); y++);
+        alike = y > by;
+      }
+      if (alike) {                                                             // its runs join the tile row's
+        for (c = 0; c < k; c++) {
+          if (run >= 0 && Q[2 * c] === end + 1) { end = Q[2 * c + 1]; continue; }
+          if (run >= 0) { o = cur + 3 * cn++; V[o] = run; V[o + 1] = end; }
+          run = Q[2 * c]; end = Q[2 * c + 1];
+        }
+        if (run < 0 || end === bx) continue;                                   // a run ending at bx may go on
+      }
+      if (run >= 0) { o = cur + 3 * cn++; V[o] = run; V[o + 1] = end; run = -1; }
+      if (!mixed || alike) continue;                                           // hidden, or alike and closed
+      if (exact) n += fxTileRows(ax, bx, ay, by, iz);
+      else { gridded = true; n += fxGridPath(sx, sy, ex, ey, ax, ay, bx, by, iz); }
+    }
+    if (run >= 0) { o = cur + 3 * cn++; V[o] = run; V[o + 1] = end; }
+    // A run with the same span as one in the row above continues it; the
+    // runs of the row above that do not continue are closed here.
+    for (c = 0, j = 0; c < cn; c++) {
+      o = cur + 3 * c; V[o + 2] = ay;
+      while (j < pn && (V[prev + 3 * j] < V[o] || V[prev + 3 * j] === V[o] && V[prev + 3 * j + 1] !== V[o + 1])) n += fxRunRect(V, prev + 3 * j++, ay);
+      if (j < pn && V[prev + 3 * j] === V[o]) V[o + 2] = V[prev + 3 * j++ + 2];
+    }
+    while (j < pn) n += fxRunRect(V, prev + 3 * j++, ay);
+    o = prev; prev = cur; cur = o; pn = cn;
+  }
+  for (j = 0; j < pn; j++) n += fxRunRect(V, prev + 3 * j, ey + 1);
+  if (gridded) st.grid++;
+  return n;
+}
+function fxRunRect(V, o, bottom) { ctx.rect(V[o], V[o + 2], V[o + 1] - V[o] + 1, bottom - V[o + 2]); return 1; }
+// The visible runs (x0, x1) of one row of a tile, into _fxQ at off; at most
+// four in 8 px. fxRunsSame compares the runs at 0 and at 8.
+var _fxQ = new Int32Array(16);
+function fxTileRowRuns(ax, bx, y, iz, off) {
+  var D = _sceneDepthInv, row = y * _sceneDepthW, k = 0;
+  for (var x = ax; x <= bx;) {
+    while (x <= bx && !fxVis(D[row + x], iz)) x++;
+    if (x > bx) break;
+    _fxQ[off + 2 * k] = x;
+    while (x <= bx && fxVis(D[row + x], iz)) x++;
+    _fxQ[off + 2 * k++ + 1] = x - 1;
+  }
+  return k;
+}
+function fxRunsSame(k) { for (var j = 0; j < 2 * k; j++) if (_fxQ[j] !== _fxQ[8 + j]) return false; return true; }
+// Exact rows of a mixed tile; a row with the same runs as the one above
+// extends its rects.
+function fxTileRows(ax, bx, ay, by, iz) {
+  var n = 0, top = ay, k = fxTileRowRuns(ax, bx, ay, iz, 0);
+  for (var y = ay + 1; y <= by + 1; y++) {
+    var k2 = y <= by ? fxTileRowRuns(ax, bx, y, iz, 8) : -1;
+    if (k2 === k && fxRunsSame(k)) continue;
+    for (var c = 0; c < k; c++) { ctx.rect(_fxQ[2 * c], top, _fxQ[2 * c + 1] - _fxQ[2 * c] + 1, y - top); n++; }
+    _fxQ.copyWithin(0, 8, 16); k = k2; top = y;
+  }
+  return n;
+}
+// Pixel centres inside a box, clamped to the depth frame: what the exact mask
+// rasterises and what a footprint scan reads at most.
+function fxPixels(x0, y0, x1, y1) {
+  var w = Math.min(_sceneDepthW - 1, Math.floor(x1 - 0.5)) - Math.max(0, Math.ceil(x0 - 0.5)) + 1;
+  var h = Math.min(_sceneDepthH - 1, Math.floor(y1 - 0.5)) - Math.max(0, Math.ceil(y0 - 0.5)) + 1;
+  return w > 0 && h > 0 ? w * h : 0;
+}
+// The bounded fallback: the box's 12 x 12 cells, each read once at its
+// centre, restricted to [ax..bx] x [ay..by]; visible cells merge into runs.
+function fxGridPath(sx, sy, ex, ey, ax, ay, bx, by, iz) {
+  var cw = (ex - sx + 1) / 12, ch = (ey - sy + 1) / 12, W = _sceneDepthW, D = _sceneDepthInv, n = 0;
+  for (var gj = 0; gj < 12; gj++) {
+    var y0 = Math.max(ay, sy + Math.floor(gj * ch)), y1 = Math.min(by, sy + Math.floor((gj + 1) * ch) - 1);
+    if (y0 > y1) continue;
+    var cy = (y0 + y1) >> 1, run = -1, end = -1;
+    for (var gi = 0; gi < 12; gi++) {
+      var x0 = Math.max(ax, sx + Math.floor(gi * cw)), x1 = Math.min(bx, sx + Math.floor((gi + 1) * cw) - 1);
+      if (x0 > x1) continue;
+      if (fxVis(D[cy * W + ((x0 + x1) >> 1)], iz)) { if (run < 0) run = x0; end = x1; }
+      else if (run >= 0) { ctx.rect(run, y0, end - run + 1, y1 - y0 + 1); n++; run = -1; }
+    }
+    if (run >= 0) { ctx.rect(run, y0, end - run + 1, y1 - y0 + 1); n++; }
+  }
+  return n;
+}
+
+// ── Lighting, fog and envelopes (sections 5.6, 4.1) ───────────────────────
+// Field members fade over the outer edge of their box (edgeFade of its half
+// size; a 2D weather box over its margin beyond the view), so a member wraps
+// where it is invisible (the box of the last tick, section 4.3).
+function fxFieldFade(S, code, x, y) {
+  var st = S.fields[code & 255];                                      // a weather member's owner also holds its set
+  if (!st || !(st.fade > 0) || !(st.hx > 0)) return 1;
+  var e = st.fade, dx = st.hx - Math.abs(x - st.cx), dy = st.hy - Math.abs(y - st.cy), d = dx < dy ? dx : dy;
+  return d >= e ? 1 : d > 0 ? d / e : 0;
+}
+function fxLightLevel(under, grid, x, y) {
+  var F = _fxFrame, a = under ? F.ambC : F.ambS, v = a < 0.85 ? 0.3 + 0.7 * a : 1;   // spriteLight
+  if (grid && _lightGrid) {
+    var gx = Math.floor(x / _lightCellSize), gy = Math.floor(y / _lightCellSize);
+    if (gx >= 0 && gx < _lightGridW && gy >= 0 && gy < _lightGridH) { var p = _lightGrid[gy * _lightGridW + gx]; v += p < 0.6 ? p : 0.6; }
+  }
+  var L = Math.round((v - 0.2) / 0.12);
+  return L < 0 ? 0 : L > 7 ? 7 : L;
+}
+function fxEnvelope(R, r, t, a, phase) {
+  var fi = R.fadeIn[r], fo = R.fadeOut[r], e = 1, env = R.envelope[r];
+  if (fi > 0 && t < fi) e = t / fi;
+  if (fo > 0 && t > 1 - fo) { var o = (1 - t) / fo; if (o < e) e = o; }
+  if (env === FXE_FLASH) e *= (1 - t) * (1 - t);
+  else if (env === FXE_QUAD) e *= 1 - t * t;
+  else if (env === FXE_LINEAR) e *= 1 - t;
+  else if (env === FXE_PULSE) e *= 1 - R.pulseD[r] * (0.5 - 0.5 * Math.cos(R.pulseW[r] * a + phase));
+  return e < 0 ? 0 : e > 1 ? 1 : e;
+}
+
+// ── Style table and sprites (sections 5.4, 5.5) ───────────────────────────
+// 'rgb(r,g,b)' per (palette entry, light level), built once; a slot is rebuilt
+// only when the colour behind its index changes (dynamic entries, tables).
+var _fxStyleStr = new Array(8192), _fxStyleRGB = new Int32Array(8192).fill(-1);
+function fxPalRGB(S, pal) { var P = S.C.PAL; return pal < P.count ? P.rgb[pal] : S.dynPal[pal - P.count]; }
+function fxStyle(S, pal, L) {
+  var k = pal * 8 + L, rgb = fxPalRGB(S, pal);
+  if (_fxStyleRGB[k] !== rgb) {
+    var f = FX_LIGHT[L];
+    _fxStyleStr[k] = 'rgb(' + Math.round(((rgb >> 16) & 255) * f) + ',' + Math.round(((rgb >> 8) & 255) * f) + ',' + Math.round((rgb & 255) * f) + ')';
+    _fxStyleRGB[k] = rgb;
+  }
+  return _fxStyleStr[k];
+}
+// Particle sprite LRU: 64 entries, 1 MB, 3 builds per frame; keyed by colour,
+// lit level (0..3), size bucket (16/32/64/128 px) and kind (glow, puff, torch).
+var _fxSprites = new Map(), _fxSpriteBytes = 0, _fxSpriteBuildsLeft = 3, _fxSpriteFailed = false;
+var FX_SPRITE_STOPS = [[0.55, 0.42, 0.2], [0.9, 0.5, 0.5], [0.7, 0.4, 0.3]];    // centre alpha, mid offset, mid alpha
+function fxSpriteBucket(r) { var d = r * 2; return d <= 16 ? 0 : d <= 32 ? 1 : d <= 64 ? 2 : 3; }
+function fxSprite(rgb, level4, bucket, kind) {
+  var key = ((rgb * 4 + level4) * 4 + bucket) * 3 + kind, e = _fxSprites.get(key), st = _fxStats;
+  if (e) { st.spriteHits++; _fxSprites.delete(key); _fxSprites.set(key, e); return e.canvas; }
+  var px = FX_SPRITE_PX[bucket], bytes = px * px * 4, el;
+  if (_fxSpriteFailed || _fxSpriteBuildsLeft <= 0 || typeof document === 'undefined' || !document || typeof document.createElement !== 'function') return null;
+  try {
+    el = document.createElement('canvas'); el.width = el.height = px;
+    var g = el.getContext('2d');
+    if (!g || typeof g.createRadialGradient !== 'function') throw new Error('no 2D context');
+    var f = FX_LIGHT[level4 * 2 + 1], r = Math.round(((rgb >> 16) & 255) * f), gg = Math.round(((rgb >> 8) & 255) * f), b = Math.round((rgb & 255) * f);
+    var s = FX_SPRITE_STOPS[kind], h = px / 2, c = 'rgba(' + r + ',' + gg + ',' + b + ',';
+    var mid = kind === 2 ? 'rgba(' + r + ',' + Math.floor(gg * 0.7) + ',' + Math.floor(b * 0.3) + ',' : c;   // legacy torch stops
+    var grad = g.createRadialGradient(h, h, 0, h, h, h);
+    grad.addColorStop(0, c + s[0] + ')'); grad.addColorStop(s[1], mid + s[2] + ')'); grad.addColorStop(1, c + '0)');
+    g.fillStyle = grad; g.fillRect(0, 0, px, px);
+  } catch (err) { _fxSpriteFailed = true; return null; }
+  while (_fxSprites.size && (_fxSprites.size >= 64 || _fxSpriteBytes + bytes > 1048576)) {
+    var oldest = _fxSprites.keys().next().value, old = _fxSprites.get(oldest);
+    _fxSprites.delete(oldest); _fxSpriteBytes -= old.bytes;
+  }
+  _fxSprites.set(key, {canvas:el, bytes:bytes}); _fxSpriteBytes += bytes; _fxSpriteBuildsLeft--; st.spriteBuilds++;
+  return el;
+}
+
+// ── Pass scratch: typed items, a bounded bucket table and mixed items ─────
+var _fxCapItems = 0, _fxItems = 0, _fxX, _fxY, _fxR, _fxX2, _fxY2, _fxK, _fxBk, _fxM, _fxOrder;
+function fxScratch(n) {
+  if (n <= _fxCapItems) return;
+  n = _fxCapItems = Math.max(1024, n);
+  _fxK = new Int32Array(n); _fxBk = new Int32Array(n); _fxM = new Int32Array(n); _fxOrder = new Int32Array(n);
+  _fxX = new Float64Array(n); _fxY = new Float64Array(n); _fxR = new Float64Array(n); _fxX2 = new Float64Array(n); _fxY2 = new Float64Array(n);
+}
+// Key: ((((blend*8 + prim)*1024 + pal)*8 + L)*16 + A)*4 + W, bit-packed. An
+// open-addressed table maps keys to at most 512 buckets per pass.
+var FX_BUCKETS = 512, _fxHashKey = new Int32Array(2048), _fxHashGen = new Uint32Array(2048), _fxHashVal = new Int16Array(2048), _fxHashStamp = 0;
+var _fxBucketKey = new Int32Array(FX_BUCKETS), _fxBucketN = new Int32Array(FX_BUCKETS), _fxBucketAt = new Int32Array(FX_BUCKETS), _fxBuckets = 0;
+function fxBucket(key) {
+  for (var h = (Math.imul(key, 0x9e3779b1) >>> 21) & 2047; ; h = (h + 1) & 2047) {
+    if (_fxHashGen[h] !== _fxHashStamp) {
+      if (_fxBuckets >= FX_BUCKETS) return -1;
+      _fxHashGen[h] = _fxHashStamp; _fxHashKey[h] = key; _fxBucketKey[_fxBuckets] = key; _fxBucketN[_fxBuckets] = 0;
+      return (_fxHashVal[h] = _fxBuckets++);
+    }
+    if (_fxHashKey[h] === key) return _fxHashVal[h];
+  }
+}
+function fxAddItem(key, x, y, r, x2, y2, aux, mixed) {
+  var k = _fxItems++, b = mixed ? -2 : fxBucket(key);
+  _fxK[k] = key; _fxX[k] = x; _fxY[k] = y; _fxR[k] = r; _fxX2[k] = x2; _fxY2[k] = y2; _fxM[k] = aux; _fxBk[k] = b;
+  if (b >= 0) _fxBucketN[b]++; else if (b === -1) _fxStats.bucketOverflow++;
+  return k;
+}
+// Mixed items: drawn after the batches, each through its own clip. Mode 0
+// exact mask (withSceneDepthClip over preallocated corners), 1 grid, 2 tiles.
+// The box is the tested (lifted) box; a lifted item's clip is moved down by
+// its lift onto the drawn item.
+var _fxMixN = 0, _fxMixCore = new Int32Array(256), _fxMixHalo = new Int32Array(256), _fxMixMode = new Uint8Array(256), _fxMixBox = new Float64Array(256 * 6);
+var _fxQuad = [{x:0, y:0, depth:1}, {x:0, y:0, depth:1}, {x:0, y:0, depth:1}, {x:0, y:0, depth:1}], _fxClipOpts = {depthBias:0.15}, _fxMixedIndex = 0;
+var _fxOne = new Int32Array(1), _fxP = {x:0, y:0, f:0};
+function fxMixedDraw() {
+  var m = _fxMixedIndex, lift = _fxMixBox[m * 6 + 5];
+  _fxStats.drawn++;
+  if (lift) ctx.translate(0, -lift);                  // inside the clip: back to drawn coordinates
+  fxEmitOne(_fxMixCore[m]);
+  if (_fxMixHalo[m] >= 0) fxEmitOne(_fxMixHalo[m]);
+}
+function fxDrawMixed(m) {
+  var o = m * 6, B = _fxMixBox, x0 = B[o], y0 = B[o + 1], x1 = B[o + 2], y1 = B[o + 3], iz = B[o + 4], lift = B[o + 5], mode = _fxMixMode[m];
+  _fxMixedIndex = m;
+  if (!mode) {
+    var q = _fxQuad;
+    q[0].x = q[3].x = x0; q[1].x = q[2].x = x1; q[0].y = q[1].y = y0; q[2].y = q[3].y = y1;
+    q[0].depth = q[1].depth = q[2].depth = q[3].depth = 1 / iz;
+    if (!lift) { withSceneDepthClip(q, fxMixedDraw, _fxClipOpts); return; }
+  }
+  var W = _sceneDepthW, H = _sceneDepthH;
+  var sx = Math.max(0, Math.ceil(x0 - 0.5)), ex = Math.min(W - 1, Math.floor(x1 - 0.5));
+  var sy = Math.max(0, Math.ceil(y0 - 0.5)), ey = Math.min(H - 1, Math.floor(y1 - 0.5));
+  if (sx > ex || sy > ey) return;
+  ctx.save();
+  try {
+    if (lift) ctx.translate(0, lift);
+    if (!mode) { withSceneDepthClip(_fxQuad, fxMixedDraw, _fxClipOpts); return; }
+    ctx.beginPath();
+    if (mode === 2 ? fxTilePath(sx, sy, ex, ey, iz) : fxGridPath(sx, sy, ex, ey, sx, sy, ex, ey, iz)) { ctx.clip(); fxMixedDraw(); }
+  } finally { ctx.restore(); }
+}
+// World (0), eye (4) or screen (8) point to canvas pixels in _fxP.
+function fxProject(space, x, y, z) {
+  var F = _fxFrame, P = _fxP, fwd, rgt;
+  if (space === 8) { P.x = F.w * 0.5 + x * F.su; P.y = F.h * 0.5 + y * F.h; P.f = 1; return true; }
+  if (space === 4) { fwd = x; rgt = y; if (fwd < 1) return false; P.y = F.horizonY - z / fwd * F.projScale; }
+  else {
+    var dx = x - cam.x, dy = y - cam.y;
+    fwd = dx * F.cos + dy * F.sin;
+    if (fwd < 1) return false;
+    rgt = -dx * F.sin + dy * F.cos; P.y = F.horizonY + (F.cameraZ - z) / fwd * F.projScale;
+  }
+  P.x = (0.5 + rgt / fwd * F.invTanHalf * 0.5) * F.w; P.f = fwd;
+  return true;
+}
+
+// ── One pass: mode 0 world, 1 combat, 2 overlay (eye/screen), 3 the 2D view.
+// Pass 1 culls, lights, sizes, depth-tests and buckets every particle into
+// typed scratch; emission then draws each bucket with one path.
+function fxRunPass(S, mode) {
+  var F = _fxFrame, G = _fxRender, R = S.R, st = _fxStats, n = S.count;
+  if (G.gateC !== S.C) fxDrawGate(S);
+  fxScratch(2 * S.cap);                                  // sized by capacity: a rising live count never reallocates
+  _fxPassS = S; _fxItems = 0; _fxMixN = 0; _fxBuckets = 0;
+  if (!(_fxHashStamp = (_fxHashStamp + 1) >>> 0)) { _fxHashGen.fill(0); _fxHashStamp = 1; }
+  var gate = G.gate, tier = G.tier, twoD = mode === 3, over = mode === 2, W = F.w, H = F.h, back = fxPresentationBack(S);
+  F.RS = twoD ? 1 : F.RS3;
+  var X = S.x, Y = S.y, Z = S.z, VX = S.vx, VY = S.vy, VZ = S.vz, FL = S.flags, drawn0 = st.drawn, mask0 = st.maskPx, grid0 = st.grid, glow0 = st.glowDraws;
+  for (var i = 0; i < n; i++) {
+    var r = S.rec[i], fl = FL[i], space = fl & 12;
+    if (twoD) { if (space || R.view2D[r] === FXV_NONE) continue; }
+    else if (over) { if (space ? !F.fp : R.layer[r] !== 2) continue; }
+    else if (space || R.layer[r] !== mode) continue;
+    if (!gate[r]) { st.gated++; continue; }
+    st.considered++;
+    if (S.cls[i] <= 2 && (S.seedA[i] & 1023) >= F.g * 1024) { st.thinned++; continue; }   // weather, ambient, locomotion
+    var age = S.age[i], b = (fl & FX_SNAP) ? 0 : age < back ? age : back, a = age - b, t = a / S.life[i];
+    var alpha = S.alpha[i] * fxEnvelope(R, r, t, a, S.phase[i]);
+    if (fl & FX_DYING) { var left = (S.life[i] - a) / EFFECT_CONFIG.cullFadeSeconds; if (left < 1) alpha *= left > 0 ? left : 0; }
+    if (alpha < 0.01) continue;
+    var px = X[i] - VX[i] * b, py = Y[i] - VY[i] * b, pz = Z[i] - VZ[i] * b, prim = R.prim[r];
+    if (fl & FX_FIELD) { alpha *= fxFieldFade(S, S.owner[i], px, py); if (alpha < 0.01) continue; }
+    var size = S.size[i] * (1 + (R.grow[r] - 1) * t), sx, sy, sx2 = 0, sy2 = 0, rr, ry = 0, iz = 0, iz2 = 0, fwd = 1, L = 7, hr = 0, Wl = 0;
+    var lift = 0, lift2 = 0;                                                // depth-test offset in pixels (screen up)
+    if (twoD) {
+      var v2 = R.view2D[r];
+      sx = px - viewCam.x; sy = py - viewCam.y;
+      // 1 u = 1 px in 2D: dots, rings and puffs are at least the recipe's 2D floor (minPx2D; a dot 1 px) in radius.
+      var lo2 = R.minPx2D[r];
+      if (v2 === FXV_DOT) { prim = FXP_DOT; if (lo2 < 1) lo2 = 1; rr = size > lo2 ? size : lo2; }
+      else if (v2 === FXV_RING) { prim = FXP_RING; rr = ry = size > lo2 ? size : lo2; }
+      else if (v2 === FXV_PUFF) { prim = FXP_PUFF; rr = size > lo2 ? size : lo2; }
+      else if (v2 === FXV_LINE) {
+        var ls = R.streakS[r] > 0 ? R.streakS[r] : 0.05;
+        prim = FXP_STREAK; rr = 0.75; Wl = 1; sx2 = sx - VX[i] * ls; sy2 = sy - VY[i] * ls;
+      } else {
+        var hl2 = fxStickHalf(R, r, S.seedA[i]), c2 = Math.cos(S.rot[i]) * hl2, s2 = Math.sin(S.rot[i]) * hl2;
+        prim = FXP_SEG; rr = 1; Wl = 2; sx2 = sx + c2; sy2 = sy + s2; sx -= c2; sy -= s2;
+      }
+    } else {
+      // Ground-resting items, and static rings (they stay where they touched
+      // the ground), are depth-tested 0.5 u above their support so the ground
+      // they lie on does not hide them (section 5.3a); they are drawn in place.
+      var up = !space && ((fl & FX_REST) || prim === FXP_RING && R.motion[r] === FXM_STATIC) ? 0.5 : 0;
+      if (prim === FXP_SEG) {
+        // A resting stick lies at the support's tilt, which the engine keeps in spin (fxStickRest).
+        var hl = fxStickHalf(R, r, S.seedA[i]), rot = (fl & FX_REST) ? S.spin[i] : S.rot[i], ph = S.phase[i];
+        var cr = Math.cos(rot) * hl, ex = Math.cos(ph) * cr, ey = Math.sin(ph) * cr, ez = Math.sin(rot) * hl;
+        if (!fxProject(space, px + ex, py + ey, pz + ez)) { st.offscreen++; continue; }
+        sx2 = _fxP.x; sy2 = _fxP.y; iz2 = 1 / _fxP.f; lift2 = up * F.projScale * iz2;
+        if (!fxProject(space, px - ex, py - ey, pz - ez)) { st.offscreen++; continue; }
+      } else if (!fxProject(space, px, py, pz)) { st.offscreen++; continue; }
+      sx = _fxP.x; sy = _fxP.y; fwd = _fxP.f; iz = 1 / fwd; lift = up * F.projScale / fwd;
+      if (prim !== FXP_SEG) lift2 = lift;
+      rr = size * (space === 8 ? F.su : tier[r] * F.projScale / fwd);
+      var lo = R.minPx[r] * F.RS, hi = R.maxPx[r] * F.RS;
+      rr = rr < lo ? lo : rr > hi ? hi : rr;
+      if (prim === FXP_STREAK) {
+        var ss = R.streakS[r];
+        if (!space && fwd > R.far[r]) prim = FXP_DOT;                      // LOD: far streaks draw as dots
+        else if (fxProject(space, px - VX[i] * ss, py - VY[i] * ss, pz - VZ[i] * ss)) { sx2 = _fxP.x; sy2 = _fxP.y; iz2 = 1 / _fxP.f; }
+        else { sx2 = sx; sy2 = sy; iz2 = iz; }
+      } else if (prim === FXP_RING) {
+        var tilt = space ? 1 : (F.cameraZ - pz) / fwd;
+        ry = rr * (tilt < 0.08 ? 0.08 : tilt > 1 ? 1 : tilt);
+      } else if (prim === FXP_GLOW && R.glowA[r] > 0 && (space || fwd <= R.glowFar[r])) {
+        hr = rr * R.glowMul[r]; if (hr > 0.5 * H) hr = 0.5 * H;
+      }
+    }
+    // Screen box and cull.
+    var line = prim === FXP_STREAK || prim === FXP_SEG, hx = hr > rr ? hr : rr, hy = prim === FXP_RING ? ry : hx;
+    var bx0 = line ? Math.min(sx, sx2) - rr : sx - hx, bx1 = line ? Math.max(sx, sx2) + rr : sx + hx;
+    var by0 = line ? Math.min(sy, sy2) - rr : sy - hy, by1 = line ? Math.max(sy, sy2) + rr : sy + hy;
+    if (bx1 < 0 || bx0 > W || by1 < 0 || by0 > H) { st.offscreen++; continue; }
+    if (rr < 0.25 && hr < 0.25 && !line) { st.subpixel++; continue; }
+    // Lighting (level and alpha) and fog.
+    if (!twoD) {
+      var lt = R.light[r];
+      if (lt === FXL_AMBIENT || lt === FXL_GRID) L = fxLightLevel(fl & FX_UNDER, !space && lt === FXL_GRID, px, py);
+      else if (lt === FXL_EMISSIVE) alpha *= 1 + R.nightBoost[r] * F.night;
+      else if (lt === FXL_SUN) alpha *= F.sun;
+      if (R.nightBoost[r] > 0 && (lt === FXL_AMBIENT || lt === FXL_GRID)) alpha *= 1 + F.night * R.nightBoost[r];   // lit snow reads at night
+      if (!space && lt !== FXL_NONE) { var fog = 1 - fwd * 0.0008, ff = (fl & FX_UNDER) ? F.fogC : F.fogS; alpha *= fog > ff ? fog : ff; }
+      if (R.jitter[r]) { L += Math.floor(effectNoise(S.seedA[i], 11) * 3) - 1; L = L < 0 ? 0 : L > 7 ? 7 : L; }
+    }
+    if (alpha > 1) alpha = 1;
+    // A glowDot's halo is decided here: one that will not be drawn (the glow
+    // cap, or too faint) must not size the depth test, the mask cost or the
+    // clip, so the item is then tested and drawn as its core.
+    var halo = hr > 0 && alpha * R.glowA[r] >= 0.01, capped = halo && F.glowLeft <= 0;
+    if (hr > 0 && (!halo || capped)) {
+      hr = 0; hx = hy = rr; bx0 = sx - rr; bx1 = sx + rr; by0 = sy - rr; by1 = sy + rr;
+      if (sx + rr < 0 || sx - rr > W || sy + rr < 0 || sy - rr > H) { st.offscreen++; continue; }
+      if (rr < 0.25) { st.subpixel++; continue; }
+    }
+    // Occlusion (section 5.3), world space only; tested at the lifted box.
+    var cls = 1, aux = 0, occ = space || twoD ? FXO_NONE : R.occ[r];
+    var ty = sy - lift, ty0 = by0 - lift, ty1 = by1 - lift;
+    if (occ === FXO_AUTO) occ = line ? FXO_SEG : hx <= 1.5 ? FXO_POINT : hx <= 12 || hx <= 24 && F.footLeft > 0 ? FXO_FOOT : FXO_TILES;
+    else if (occ === FXO_FOOT && hx > 12 && F.footLeft <= 0) occ = FXO_TILES;
+    else if (occ === FXO_SEG && !line) occ = FXO_POINT;
+    if (occ === FXO_POINT) { st.point++; cls = fxDepthPoint(sx, ty, iz, 0); }
+    else if (occ === FXO_FOOT) {
+      st.footprint++;
+      if (hx > 12) F.footLeft -= fxPixels(bx0, ty0, bx1, ty1);
+      cls = fxDepthFootprint(bx0, ty0, bx1, ty1, iz);
+    } else if (occ === FXO_TILES) { st.tiles++; cls = fxTileClass(bx0, ty0, bx1, ty1, iz); }
+    else if (occ === FXO_CORONA) {                                          // soft: alpha x visible fraction of 5 core samples
+      st.corona++;
+      var seen = fxCorona(sx, ty, iz, rr * 0.5);
+      alpha *= seen / 5; cls = seen ? 1 : 0;
+    } else if (occ === FXO_SEG) {                                           // samples along the line; visible runs are drawn
+      st.segment++;
+      var lenPx = Math.sqrt((sx2 - sx) * (sx2 - sx) + (sy2 - sy) * (sy2 - sy)), ks = Math.ceil(lenPx / 4), bits = 0, ty2 = sy2 - lift2;
+      ks = ks < 2 ? 2 : ks > 9 ? 9 : ks;
+      for (var j = 0; j < ks; j++) {
+        var u = j / (ks - 1);
+        if (fxDepthPoint(sx + (sx2 - sx) * u, ty + (ty2 - ty) * u, iz + (iz2 - iz) * u, 0)) bits |= 1 << j;
+      }
+      cls = bits ? 1 : 0;
+      if (bits && bits !== (1 << ks) - 1) aux = (ks << 10) | bits;
+    } else if (occ === FXO_CLIP) { st.clip++; cls = 2; }
+    if (!cls || alpha < 0.01) continue;
+    var mmode = 0, cost;
+    if (cls === 2) {
+      if (F.mixedLeft <= 0) { st.mixedSkipped++; cls = fxDepthPoint(sx, ty, iz, 0); if (!cls) continue; }
+      else if (occ === FXO_TILES) mmode = 2;
+      else if ((cost = fxPixels(bx0, ty0, bx1, ty1)) <= F.maskLeft) { F.maskLeft -= cost; st.maskPx += cost; }
+      else { mmode = 1; st.grid++; }
+      if (cls === 2) F.mixedLeft--; else st.drawn++;
+    } else st.drawn++;
+    // Bucket keys and items: the core, then a glowDot's additive halo.
+    var A = alpha >= 1 ? 15 : Math.floor(alpha * 16), pal = S.pal[i] & 1023, mixed = cls === 2, x2 = sx2, y2 = sy2;
+    var core = prim === FXP_GLOW ? FXP_DOT : prim;
+    if (line) Wl = twoD ? Wl : rr * 2 <= 1.1 * F.RS ? 0 : rr * 2 <= 1.75 * F.RS ? 1 : rr * 2 <= 2.5 * F.RS ? 2 : 3;
+    else if (core === FXP_RING) { Wl = twoD || rr > 8 * F.RS ? 1 : 0; x2 = ry; }
+    else if (core === FXP_PUFF) Wl = fxSpriteBucket(rr);
+    else if (core === FXP_CHIP) x2 = S.rot[i];
+    var k0 = fxAddItem(((((R.blend[r] * 8 + core) * 1024 + pal) * 8 + L) * 16 + A) * 4 + Wl, sx, sy, rr, x2, y2, aux, mixed), k1 = -1;
+    var ha = halo ? alpha * R.glowA[r] : 0;                                 // corona may have dimmed it
+    if (capped) st.glowCapped++;
+    else if (ha >= 0.01) {
+      var gp = R.glowPal[r], hp = gp >= 0 ? gp & 1023 : pal, hL = gp >= 0 ? L : L + 2 > 7 ? 7 : L + 2;
+      F.glowLeft--; st.glowDraws++;
+      k1 = fxAddItem((((((8 + FXP_HALO) * 1024 + hp) * 8 + hL) * 16 + (ha >= 1 ? 15 : Math.floor(ha * 16))) * 4) + fxSpriteBucket(hr),
+        sx, sy, hr, 0, 0, 0, mixed);
+    }
+    if (mixed) {
+      var m = _fxMixN++, o = m * 6;
+      _fxMixCore[m] = k0; _fxMixHalo[m] = k1; _fxMixMode[m] = mmode;
+      _fxMixBox[o] = bx0; _fxMixBox[o + 1] = ty0; _fxMixBox[o + 2] = bx1; _fxMixBox[o + 3] = ty1; _fxMixBox[o + 4] = iz; _fxMixBox[o + 5] = lift;
+    }
+  }
+  if (!_fxItems) return;
+  // Emission: counting sort by bucket; normal blend first (fills, strokes,
+  // sprites), then additive; then items that overflowed the table; then the
+  // mixed items, each through its own clip. The pixels a pass of an
+  // unpinned state paints feed the governor (fxFrameSetup).
+  var px0 = st.rasterPx;
+  fxOpen();
+  var nb = _fxBuckets, at = 0, k;
+  for (var bk = 0; bk < nb; bk++) { _fxBucketAt[bk] = at; at += _fxBucketN[bk]; _fxBucketN[bk] = 0; }
+  for (k = 0; k < _fxItems; k++) { var bb = _fxBk[k]; if (bb >= 0) _fxOrder[_fxBucketAt[bb] + _fxBucketN[bb]++] = k; }
+  st.buckets += nb; if (nb > st.bucketsMax) st.bucketsMax = nb;
+  for (var blend = 0; blend < 2; blend++) for (var cat = 0; cat < 3; cat++) for (bk = 0; bk < nb; bk++) {
+    var key = _fxBucketKey[bk];
+    if ((key >> 22) === blend && FX_PRIM_CAT[(key >> 19) & 7] === cat) fxEmitList(key, _fxOrder, _fxBucketAt[bk], _fxBucketAt[bk] + _fxBucketN[bk]);
+  }
+  for (k = 0; k < _fxItems; k++) if (_fxBk[k] === -1) fxEmitOne(k);
+  for (var mi = 0; mi < _fxMixN; mi++) fxDrawMixed(mi);
+  if (!S.pinned) G.rasterAcc += st.rasterPx - px0;
+  if (typeof addRenderFrameStat === 'function') {
+    addRenderFrameStat('fxDrawn', st.drawn - drawn0); addRenderFrameStat('fxMaskPx', st.maskPx - mask0);
+    addRenderFrameStat('fxGrid', st.grid - grid0); addRenderFrameStat('fxGlow', st.glowDraws - glow0);
+  }
+}
+function fxEmitOne(k) { _fxOne[0] = k; _fxBlend = -1; fxEmitList(_fxK[k], _fxOne, 0, 1); }
+// One bucket: one style, one path, one fill or stroke (or one drawImage per
+// sprite item). A missing sprite draws a flat disc in its place (counted).
+// Each item's painted area in device pixels is summed into rasterPx: a
+// sprite's square, a dot's rect or disc, a chip's triangle (0.9725 r^2), a
+// line's length x width, a ring's perimeter x width.
+function fxEmitList(key, list, from, to) {
+  var S = _fxPassS, Wl = key & 3, A = (key >> 2) & 15, L = (key >> 6) & 7, pal = (key >> 9) & 1023, prim = (key >> 19) & 7, blend = key >> 22;
+  var cat = FX_PRIM_CAT[prim], X = _fxX, Y = _fxY, RR = _fxR, X2 = _fxX2, Y2 = _fxY2, M = _fxM, j, k, r, px = 0;
+  if (blend !== _fxBlend) { ctx.globalCompositeOperation = blend ? 'lighter' : 'source-over'; _fxBlend = blend; }
+  ctx.globalAlpha = FX_ALPHA[A];
+  if (cat === 2) {
+    var spr = fxSprite(fxPalRGB(S, pal), L >> 1, Wl, prim === FXP_HALO ? 0 : 1);
+    if (spr) {
+      for (j = from; j < to; j++) { k = list[j]; r = RR[k]; ctx.drawImage(spr, X[k] - r, Y[k] - r, r * 2, r * 2); px += 4 * r * r; }
+      _fxStats.rasterPx += px;
+      return;
+    }
+    _fxStats.spriteFallback += to - from;
+    ctx.globalAlpha = FX_ALPHA[A] * 0.6; cat = 0; prim = FXP_DOT;
+  }
+  var style = fxStyle(S, pal, L);
+  ctx.beginPath();
+  if (!cat) {
+    ctx.fillStyle = style;
+    for (j = from; j < to; j++) {
+      k = list[j]; r = RR[k];
+      if (prim === FXP_CHIP) {
+        var c = Math.cos(X2[k]) * r, s = Math.sin(X2[k]) * r, x = X[k], y = Y[k];
+        ctx.moveTo(x + c, y + s); ctx.lineTo(x - 0.6 * c - 0.55 * s, y - 0.6 * s + 0.55 * c); ctx.lineTo(x - 0.5 * c + 0.7 * s, y - 0.5 * s - 0.7 * c);
+        px += 0.9725 * r * r;
+      } else if (r <= 1.25) { ctx.rect(X[k] - r, Y[k] - r, r * 2, r * 2); px += 4 * r * r; }
+      else { ctx.moveTo(X[k] + r, Y[k]); ctx.arc(X[k], Y[k], r, 0, 6.283185307179586); px += 3.141592653589793 * r * r; }
+    }
+    ctx.fill();
+    _fxStats.rasterPx += px;
+    return;
+  }
+  var lw = FX_WIDTH[Wl] * _fxFrame.RS;
+  ctx.strokeStyle = style; ctx.lineWidth = lw;
+  for (j = from; j < to; j++) {
+    k = list[j];
+    if (prim === FXP_RING) {
+      ctx.moveTo(X[k] + RR[k], Y[k]); ctx.ellipse(X[k], Y[k], RR[k], X2[k], 0, 0, 6.283185307179586);
+      px += 6.283185307179586 * Math.sqrt((RR[k] * RR[k] + X2[k] * X2[k]) / 2) * lw;
+      continue;
+    }
+    var aux = M[k], x0 = X[k], y0 = Y[k], dx = X2[k] - x0, dy = Y2[k] - y0, len = Math.sqrt(dx * dx + dy * dy);
+    if (!aux) { ctx.moveTo(x0, y0); ctx.lineTo(X2[k], Y2[k]); px += len * lw; continue; }
+    for (var ks = aux >> 10, bits = aux & 1023, q = 0; q < ks; q++) {       // visible sample runs as sub-segments
+      if (!(bits & (1 << q))) continue;
+      var e = q;
+      while (e + 1 < ks && (bits & (1 << (e + 1)))) e++;
+      var u0 = (q - 0.5) / (ks - 1), u1 = (e + 0.5) / (ks - 1);
+      u0 = u0 < 0 ? 0 : u0; u1 = u1 > 1 ? 1 : u1;
+      ctx.moveTo(x0 + dx * u0, y0 + dy * u0); ctx.lineTo(x0 + dx * u1, y0 + dy * u1);
+      px += (u1 - u0) * len * lw;
+      q = e;
+    }
+  }
+  ctx.stroke();
+  _fxStats.rasterPx += px;
+}
+
+// ── Torch glow (section 5.9, S8): the halos of pointLights on the shared
+// primitives, at the torchGlow3D stage. Legacy mode calls drawTorchGlow3D
+// unchanged. New mode: lights within 400 u with fwd >= 5, culled to the
+// screen by their radius (a glow that covers no pixel is culled); radius
+// 28.8 projScale smGlow / fwd in whole px, at least 10 and at most 0.6 h
+// (the legacy width-based size at 3:2, no longer 18% larger at 16:9 nor
+// unbounded near a torch); the legacy alpha with its flicker phase hashed
+// from the light's world position, so a window shift or a rebuilt light
+// list never makes it jump; the torch sprite (the legacy gradient's stops)
+// drawn 'lighter' at that alpha, no per-light gradient or string.
+// Occlusion, tested before selection so a hidden light never takes a slot
+// from a visible one: corona by default (alpha x the visible share of five
+// samples at half the gradient's core, whose inner stop is at 0.4 R, each
+// at forward depth as the legacy clip tests it; unclipped, a constant cost
+// at any resolution); the dev override fxTorchGlowOcclusion = 'tiles'
+// (browser A/B) classifies the glow's box exactly on the tile summary and
+// clips a mixed glow through the tiles path within the frame's mask budget
+// (the grid rule beyond it; past the mixed-item cap, centre-gated). The
+// nearest 12 visible glows are drawn (fixed arrays, no sort). A sprite miss
+// (build budget, no document) draws the same stops as a gradient, counted
+// spriteFallback.
+var fxTorchGlowOcclusion = 'corona';
+var FX_TORCH_GLOWS = 12, _fxTorchL = new Array(12), _fxTorchD = new Float64Array(12), _fxTorchX = new Float64Array(12),
+  _fxTorchY = new Float64Array(12), _fxTorchR = new Float64Array(12), _fxTorchF = new Float64Array(12),
+  _fxTorchA = new Float64Array(12), _fxTorchC = new Uint8Array(12);
+function drawTorchGlowStage3D() {
+  if (effectFamilyMode('torchGlow') === 'legacy') { drawTorchGlow3D(); return; }
+  try { fxTorchGlows(); } catch (e) { effectFailure('render', e); }
+  finally { fxClose(); }
+}
+function fxTorchGlows() {
+  var lights = typeof pointLights !== 'undefined' ? pointLights : null, F = _fxFrame, st = _fxStats, n = 0, j, k;
+  if (!lights || !lights.length || !MODE3D) return;
+  var w = F.w, h = F.h, ps = F.projScale, sm = 120 * getScale3D('smGlow'), cap = Math.floor(0.6 * h);
+  var amb = typeof ambientLight === 'number' ? ambientLight : 1, base = 0.08 + 0.22 * Math.max(0, 1 - amb), now = gameTimeNow();
+  var ox = ENDLESS_MODE ? windowOriginX : 0, oy = ENDLESS_MODE ? windowOriginY : 0, tiles = fxTorchGlowOcclusion === 'tiles';
+  try {
+    for (var i = 0; i < lights.length; i++) {
+      var L = lights[i];
+      if (!L) continue;
+      var dx = L.x - cam.x, dy = L.y - cam.y, d2 = dx * dx + dy * dy, fwd = dx * F.cos + dy * F.sin;
+      if (!(d2 <= 160000) || !(fwd >= 5)) continue;
+      var sx = Math.floor(((-dx * F.sin + dy * F.cos) / fwd * F.invTanHalf * 0.5 + 0.5) * w);
+      var wz = Number.isFinite(L.z) ? L.z : (floorMesh ? getFloorHeightAt(L.x, L.y) * 25 : 0) + 15;
+      var sy = Math.floor(F.horizonY + (F.cameraZ - wz) / fwd * ps), R = Math.floor(ps * 0.24 * (sm / fwd));
+      R = R < 10 ? 10 : R > cap ? cap : R;
+      if (sx + R <= 0 || sx - R >= w || sy + R <= 0 || sy - R >= h) { st.torchCulled++; continue; }
+      var d = Math.sqrt(d2);
+      if (n === FX_TORCH_GLOWS && d >= _fxTorchD[n - 1]) { st.torchDropped++; continue; }   // 12 nearer glows are drawn
+      var iz = 1 / fwd, qx = Math.round(L.x + ox), qy = Math.round(L.y + oy);
+      var flicker = 0.95 + 0.03 * Math.sin(now * 0.007 + 6.283185307179586 * effectNoise(qx, qy)) +
+        0.02 * Math.sin(now * 0.013 + 6.283185307179586 * effectNoise(qy, qx ^ 0x2545f491));
+      var alpha = base * flicker * Math.max(0.2, 1.0 - d / 400), cls = 1;
+      if (tiles) { st.tiles++; cls = fxTileClass(sx - R, sy - R, sx + R, sy + R, iz); }
+      else { st.corona++; var seen = fxCorona(sx, sy, iz, 0.2 * R); alpha *= seen / 5; cls = seen ? 1 : 0; }
+      if (!cls || alpha < 0.002) { st.torchHidden++; continue; }
+      if (n === FX_TORCH_GLOWS) st.torchDropped++;                                        // the farthest kept one leaves
+      for (j = n < FX_TORCH_GLOWS ? n++ : n - 1; j > 0 && _fxTorchD[j - 1] > d; j--) {
+        _fxTorchL[j] = _fxTorchL[j - 1]; _fxTorchD[j] = _fxTorchD[j - 1]; _fxTorchX[j] = _fxTorchX[j - 1]; _fxTorchY[j] = _fxTorchY[j - 1];
+        _fxTorchR[j] = _fxTorchR[j - 1]; _fxTorchF[j] = _fxTorchF[j - 1]; _fxTorchA[j] = _fxTorchA[j - 1]; _fxTorchC[j] = _fxTorchC[j - 1];
+      }
+      _fxTorchL[j] = L; _fxTorchD[j] = d; _fxTorchX[j] = sx; _fxTorchY[j] = sy; _fxTorchR[j] = R; _fxTorchF[j] = fwd; _fxTorchA[j] = alpha; _fxTorchC[j] = cls;
+    }
+    for (k = 0; k < n; k++) {
+      L = _fxTorchL[k]; sx = _fxTorchX[k]; sy = _fxTorchY[k]; R = _fxTorchR[k]; alpha = _fxTorchA[k]; cls = _fxTorchC[k]; iz = 1 / _fxTorchF[k];
+      if (cls === 2 && F.mixedLeft <= 0) { st.mixedSkipped++; cls = fxDepthPoint(sx, sy, iz, 0); }
+      if (!cls) { st.torchHidden++; continue; }
+      fxOpen();
+      if (_fxBlend !== 1) { ctx.globalCompositeOperation = 'lighter'; _fxBlend = 1; }
+      ctx.globalAlpha = alpha > 1 ? 1 : alpha;
+      if (cls === 1) { st.torchDrawn++; fxTorchDraw(L, sx, sy, R); continue; }
+      F.mixedLeft--;
+      var W = _sceneDepthW, H = _sceneDepthH;
+      ctx.save();
+      try {
+        ctx.beginPath();
+        if (fxTilePath(Math.max(0, Math.ceil(sx - R - 0.5)), Math.max(0, Math.ceil(sy - R - 0.5)),
+          Math.min(W - 1, Math.floor(sx + R - 0.5)), Math.min(H - 1, Math.floor(sy + R - 0.5)), iz)) { ctx.clip(); st.torchDrawn++; fxTorchDraw(L, sx, sy, R); }
+        else st.torchHidden++;                                             // its mixed tiles hold no visible pixel
+      } finally { ctx.restore(); }
+    }
+  } finally { for (k = 0; k < FX_TORCH_GLOWS; k++) _fxTorchL[k] = null; }
+}
+// One torch glow of radius R at (x, y), at the current alpha: the sprite, or
+// on a miss its stops as a gradient (the same look, counted).
+function fxTorchDraw(L, x, y, R) {
+  var r = L.r & 255, g = L.g & 255, b = L.b & 255, spr = fxSprite((r << 16) | (g << 8) | b, 3, fxSpriteBucket(R), 2);
+  if (spr) { ctx.drawImage(spr, x - R, y - R, 2 * R, 2 * R); return; }
+  _fxStats.spriteFallback++;
+  var s = FX_SPRITE_STOPS[2], c = 'rgba(' + r + ',' + g + ',' + b + ',', grad = ctx.createRadialGradient(x, y, 0, x, y, R);
+  grad.addColorStop(0, c + s[0] + ')'); grad.addColorStop(s[1], 'rgba(' + r + ',' + Math.floor(g * 0.7) + ',' + Math.floor(b * 0.3) + ',' + s[2] + ')');
+  grad.addColorStop(1, c + '0)');
+  ctx.fillStyle = grad; ctx.fillRect(x - R, y - R, 2 * R, 2 * R);
+}
+
+// ── Stats (merged into getEffectStats) ────────────────────────────────────
+function fxRenderStats(out) {
+  var s = _fxStats, G = _fxRender;
+  out.governor = _fxFrame.g;
+  out.governorInput = {ema:G.ema, input:G.input, rasterMs:G.rasterMs};
+  out.frame = {considered:s.considered, gated:s.gated, thinned:s.thinned, offscreen:s.offscreen, subpixel:s.subpixel, drawn:s.drawn,
+    buckets:s.buckets, bucketsMax:s.bucketsMax, bucketOverflow:s.bucketOverflow,
+    occ:{point:s.point, footprint:s.footprint, tiles:s.tiles, corona:s.corona, segment:s.segment, clip:s.clip, grid:s.grid, mixedSkipped:s.mixedSkipped},
+    maskPx:s.maskPx, rasterPx:s.rasterPx, glowDraws:s.glowDraws, glowCapped:s.glowCapped, spriteHits:s.spriteHits, spriteBuilds:s.spriteBuilds,
+    spriteFallback:s.spriteFallback, sprites:_fxSprites.size, spriteBytes:_fxSpriteBytes,
+    torch:{drawn:s.torchDrawn, hidden:s.torchHidden, culled:s.torchCulled, dropped:s.torchDropped, occlusion:fxTorchGlowOcclusion}};
+}
+
+// ── In-game control: Settings -> Effects (section 10.2.1). A chip on the
+// settings title row opens a page in the same panel; switches apply at once
+// and are not saved (the render-feature contract). Canvas only, no DOM.
+var FX_SETTINGS_ROWS = ['fxWeather', 'fxDebris', 'fxFootDust', 'fxUnified'];
+function fxSettingsChip(x, y, w, h, text, on, font) {
+  ctx.fillStyle = on ? '#3a3a5a' : '#2a2a4a'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = on ? '#6688bb' : '#444466'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = '#e0e0e0'; ctx.font = 'bold ' + font + 'px Arial'; ctx.textAlign = 'center';
+  ctx.fillText(text, x + w / 2, y + h * 0.7);
+}
+// Called by drawSettingsOverlay right after it clears its click areas. On the
+// main page: draws the chip and returns false. On the Effects page: draws the
+// page in the panel and returns true (the overlay then returns early).
+function drawEffectSettingsPage(px, py, panW, panH, S) {
+  var open = false;
+  ctx.save();
+  try {
+    var pad = 12 * S, leftX = px + pad, rightX = px + panW - pad, curY = py + 8 * S;
+    var fontTitle = Math.max(9, Math.floor(14 * S)), fontLabel = Math.max(7, Math.floor(10 * S)), fontSmall = Math.max(6, Math.floor(8 * S));
+    if (!_fxRender.page) {
+      var cw = 52 * S, ch = 14 * S;
+      fxSettingsChip(rightX - cw, curY, cw, ch, 'Effects ›', false, fontSmall);
+      _settingsClickAreas.push({x:rightX - cw, y:curY, w:cw, h:ch, action:'fx', key:'page', value:1});
+      return false;
+    }
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold ' + fontTitle + 'px Arial'; ctx.textAlign = 'center';
+    ctx.fillText('Effects', px + panW / 2, curY + fontTitle);
+    curY += fontTitle + 10 * S;
+    ctx.strokeStyle = '#333355'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(leftX, curY); ctx.lineTo(rightX, curY); ctx.stroke();
+    curY += 6 * S;
+    var rowH = 18 * S, valW = 60 * S;
+    for (var k = 0; k < FX_SETTINGS_ROWS.length; k++) {
+      var def = _effectToggleIndex[FX_SETTINGS_ROWS[k]], v = effectToggleValue(def.key);
+      var rowY = curY;
+      ctx.fillStyle = '#e0e0e0'; ctx.font = fontLabel + 'px Arial'; ctx.textAlign = 'left';
+      ctx.fillText(def.label, leftX, rowY + rowH * 0.68);
+      fxSettingsChip(rightX - valW, rowY + 2 * S, valW, rowH - 4 * S, def.type === 'bool' ? (v ? 'On' : 'Off') : String(v),
+        def.type === 'bool' ? v === true : v !== def.legacy, fontSmall);
+      _settingsClickAreas.push({x:leftX, y:rowY, w:rightX - leftX, h:rowH, action:'fx', key:def.key});
+      curY = rowY + rowH + 4 * S;
+    }
+    ctx.fillStyle = '#778899'; ctx.font = fontSmall + 'px Arial'; ctx.textAlign = 'left';
+    ctx.fillText('Applies now · not saved', leftX, curY + fontSmall);
+    var bw = Math.floor(60 * S), bh = Math.floor(18 * S), bx = px + panW - pad - bw, by = py + panH - pad - bh;
+    fxSettingsChip(bx, by, bw, bh, '‹ Back', false, fontSmall);
+    _settingsClickAreas.push({x:bx, y:by, w:bw, h:bh, action:'fx', key:'page', value:0});
+    ctx.font = fontSmall + 'px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = '#778899';
+    ctx.fillText('[O] or [ESC] to close', px + panW / 2, py + panH - 4 * S);
+    open = true;
+  } catch (e) { effectFailure('settings', e); } finally { ctx.restore(); }
+  return open;
+}
+// handleSettingsClick forwards action 'fx' here: page chips switch the view,
+// rows flip a bool or cycle an enum through setEffectToggle.
+function handleEffectSettingsClick(a) {
+  try {
+    if (a.key === 'page') { _fxRender.page = a.value; return true; }
+    var def = _effectToggleIndex[a.key], v = effectToggleValue(a.key);
+    if (!def) return false;
+    setEffectToggle(a.key, def.type === 'bool' ? !v : def.values[(def.values.indexOf(v) + 1) % def.values.length]);
+  } catch (e) { effectFailure('settings', e); }
+  return true;
 }
 // First-person presentation only. Combat owns the explicitly approved 120 ms
 // gathering interval; this artwork follows its accepted cast/release timestamps.
@@ -19961,7 +24373,7 @@ function drawCoins2D() {
   ctx.save(); ctx.translate(-viewCam.x, -viewCam.y);
   for (var i = 0; i < coinDrops.length; i++) {
     var c = coinDrops[i];
-    var bob = Math.sin(now * 0.004 + c.bob) * 3;
+    var bob = Math.sin(now * 0.004 + (Number.isFinite(c.bob) ? c.bob : 0)) * 3;
     ctx.fillStyle = '#ffd700';
     ctx.strokeStyle = '#b8860b';
     ctx.lineWidth = 1.5;
@@ -22479,6 +26891,7 @@ function drawSettingsOverlay() {
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
   _settingsClickAreas = [];
+  if (typeof drawEffectSettingsPage === 'function' && drawEffectSettingsPage(px, py, panW, panH, S)) { ctx.restore(); return; }
   var pad = 12 * S;
   var leftX = px + pad, rightX = px + panW - pad;
   var curY = py + 8 * S;
@@ -22712,6 +27125,7 @@ function handleSettingsClick(mx, my) {
         _settingsDirtyCheck();
         return true;
       }
+      if (a.action === 'fx' && typeof handleEffectSettingsClick === 'function') return handleEffectSettingsClick(a);
     }
   }
   return false;
@@ -24189,7 +28603,7 @@ function gameUpdate(dt) {
   physicsStageEnd('followers',stageStart);
   physicsStageEnd('simulationSpan',physicsStart);
   updateMapRevealAnim();
-  updateAmbientParticles(dt);
+  if (typeof updateEffects === 'function') updateEffects(dt);
   updateExplored();
 }
 
@@ -24230,16 +28644,7 @@ function activateShrine(shr) {
   else if (shr.buffType === 'regen') { regenBoostUntil = now + duration; lastRegenTick = now; buffName = 'Regeneration'; }
   else if (shr.buffType === 'armor') { armorBoostUntil = now + duration; buffName = 'Protection'; }
   // Visual feedback — spawn particles at shrine location
-  for (var pi = 0; pi < 12; pi++) {
-    var ang = (pi / 12) * Math.PI * 2;
-    impacts.push({
-      x: shr.x, y: shr.y, z: 10,
-      vx: Math.cos(ang) * 40, vy: Math.sin(ang) * 40, vz: 30 + Math.random() * 20,
-      life: 0.8, maxLife: 0.8,
-      color: shr.buffType === 'damage' ? '#ff4444' : shr.buffType === 'speed' ? '#44ffff' : shr.buffType === 'regen' ? '#44ff44' : '#ffaa44',
-      size: 4
-    });
-  }
+  if (typeof fxEvent === 'function') fxEvent('shrine', shr);
   pushToast('Shrine of ' + buffName + ' — 2 min buff', '#ffcc66', 3000);
   console.log('[SHRINE] Activated ' + buffName + ' shrine for ' + (duration / 1000) + 's');
 }
@@ -24579,9 +28984,7 @@ function updateFortressAllies(dt) {
     // Death check
     if (ally.health <= 0) {
       // Death effect — small explosion of particles
-      for (var pi = 0; pi < 5; pi++) {
-        impacts.push({x: ally.x, y: ally.y, t: gameTimeNow(), dur: 400, r: 8, color: '#c8a028', vx: (Math.random()-0.5)*60, vy: (Math.random()-0.5)*60});
-      }
+      if (typeof fxEvent === 'function') fxEvent('allyDeath', ally);
       var _dName = ally.name || 'Ally';
       pushToast(_dName + ' has fallen', '#cc4444', 4000);
       fortressAllies.splice(ai, 1);
@@ -24730,12 +29133,7 @@ function updateArcaneTomes() {
     {collectRadius: 30, vacuumRadius: 100, vacuumPull: 4.0},
     function(tome) {
       applyArcaneTome();
-      for (var pi = 0; pi < 15; pi++) {
-        var ang = (pi / 15) * Math.PI * 2;
-        impacts.push({x: tome.x, y: tome.y, z: getEntityRenderFloorZ(tome) + 10,
-          vx: Math.cos(ang) * 50, vy: Math.sin(ang) * 50, vz: 20 + Math.random() * 30,
-          spawnMs: gameTimeNow(), lifeMs: 1000, color: '#bb66ff', size: 5});
-      }
+      if (typeof fxEvent === 'function') fxEvent('pickup', tome, 'tome', '#bb66ff');
     });
 }
 
@@ -24760,12 +29158,7 @@ function updateStatPickups() {
       }
       goalMessage = msg;
       goalMessageUntil = gameTimeNow() + 4000;
-      for (var pi = 0; pi < 12; pi++) {
-        var ang = (pi / 12) * Math.PI * 2;
-        impacts.push({x: sp.x, y: sp.y, z: getEntityRenderFloorZ(sp) + 8,
-          vx: Math.cos(ang) * 45, vy: Math.sin(ang) * 45, vz: 15 + Math.random() * 25,
-          spawnMs: gameTimeNow(), lifeMs: 800, color: pColor, size: 4});
-      }
+      if (typeof fxEvent === 'function') fxEvent('pickup', sp, 'stat', pColor);
       console.log('[STAT] Collected ' + sp.type + ' at (' + sp.wx.toFixed(0) + ',' + sp.wy.toFixed(0) + ')');
     });
 }
@@ -26646,7 +31039,7 @@ function caveProfileRender(job, collect) {
 // world's arrays and cached canvases untouched for restoration afterward.
 function caveProfilePrepareInputs(job) {
   var saved=job.savedInputs={mesh:floorMesh,seed:WORLD_SEED,
-    ambient:ambientParticles,explored:exploredCells,minimap:minimapCanvas,dirty:minimapDirty,
+    ambient:ambientParticles,fx:typeof fxState!=='undefined'?fxState:null,explored:exploredCells,minimap:minimapCanvas,dirty:minimapDirty,
     fog:drawMinimap._fogCanvas,hadFog:Object.prototype.hasOwnProperty.call(drawMinimap,'_fogCanvas'),
     exploredUpdate:_lastExploredUpdate,light:_lightGrid,lightScale:_lightGridLastScale,
     lightX:_lightGridLastCamGX,lightY:_lightGridLastCamGY,lightFrame:_lightGridFrameCount,
@@ -26659,8 +31052,10 @@ function caveProfilePrepareInputs(job) {
   gameTimeNow=function(){return job.frozenTime;};
   Math.random=function(){state=(Math.imul(state,1664525)+1013904223)|0;return(state>>>0)/4294967296;};
   try{
-    initAmbientParticles();
-    updateAmbientParticles(0);
+    // A fresh pinned particle pool primed for the profile (unified effects);
+    // hosts without the engine keep the legacy ambient priming.
+    if(typeof effectProfilePrime==='function')effectProfilePrime(job);
+    else{initAmbientParticles();updateAmbientParticles(0);}
     initMinimap();
     var fog=document.createElement('canvas');fog.width=MINIMAP_W;fog.height=MINIMAP_H;
     drawMinimap._fogCanvas=fog;minimapDirty=true;_lastExploredUpdate=job.frozenTime;
@@ -26672,10 +31067,20 @@ function caveProfilePrepareInputs(job) {
     // smoothed rate is unrelated to this frozen, manually paced fixture.
     settings.showFPS=false;
   }finally{
-    saved.ownedAmbient=ambientParticles;saved.ownedExplored=exploredCells;
+    saved.ownedAmbient=ambientParticles;saved.ownedFx=typeof fxState!=='undefined'?fxState:null;saved.ownedExplored=exploredCells;
     saved.ownedMinimap=minimapCanvas;saved.ownedFog=drawMinimap._fogCanvas;saved.ownedLight=_lightGrid;
     Date.now=oldDate;Math.random=oldRandom;gameTimeNow=oldGameClock;
   }
+}
+
+// The profile's workload inputs. particles counts every live particle (the
+// engine's pool, when loaded, plus legacy motes) and particleSetting records
+// the Particles setting, so profiles taken under different settings compare.
+function caveProfileCanonicalInputs(){
+  return{ambientParticles:ambientParticles.length,
+    particles:(typeof getEffectStats==='function'?getEffectStats().live:0)+ambientParticles.length,
+    particleSetting:settings.particles,exploration:'radius 30 around fixture',
+    lighting:'forced frozen-time update',profilingOverlays:false};
 }
 
 function caveProfileRestoreInputs(job) {
@@ -26683,6 +31088,7 @@ function caveProfileRestoreInputs(job) {
   // A cancelled run must not put old arrays back over a newly generated world.
   if(floorMesh===saved.mesh && WORLD_SEED===saved.seed){
     if(ambientParticles===saved.ownedAmbient)ambientParticles=saved.ambient;
+    if(typeof fxState!=='undefined' && fxState===saved.ownedFx)fxState=saved.fx;
     if(exploredCells===saved.ownedExplored)exploredCells=saved.explored;
     if(minimapCanvas===saved.ownedMinimap)minimapCanvas=saved.minimap;
     if(drawMinimap._fogCanvas===saved.ownedFog){
@@ -26699,6 +31105,9 @@ function caveProfileRestoreInputs(job) {
       _surfaceFloorLightStats=saved.surfaceStats;
     }
   }
+  // After a world regeneration the profile's pool was reset for the new world
+  // and stays live; it must not keep the profile's pinned governor.
+  else if(typeof fxState!=='undefined' && fxState && fxState===saved.ownedFx && saved.ownedFx!==saved.fx)fxState.pinned=false;
   settings.showFPS=saved.showFPS;_fpsSmooth=saved.fpsSmooth;_lastFrameTimeMs=saved.lastFrameTime;
   job.savedInputs=null;
 }
@@ -26778,8 +31187,7 @@ async function startCaveBrowserProfile(mode) {
     result.frozenTime=job.frozenTime;result.randomSeed=job.randomSeed;
     caveProfilePrepareInputs(job);
     result.surfaceLightingBake=typeof getSurfaceFloorLightStats==='function'?getSurfaceFloorLightStats():null;
-    result.canonicalInputs={ambientParticles:ambientParticles.length,exploration:'radius 30 around fixture',
-      lighting:'forced frozen-time update',profilingOverlays:false};
+    result.canonicalInputs=caveProfileCanonicalInputs();
     var previous=null;
     for(var frame=0;frame<72;frame++){
       var ts=await caveProfileNextFrame(job);
@@ -26889,6 +31297,7 @@ var _castingStudioKeys = (
   'CASTING_ART_ENABLED HAND_RIG_PREVIEW HAND_RIG_TIME_MS HAND_RIG_VIEW_YAW HAND_RIG_GRIP HAND_RIG_STYLE DEBUG_PERF_HUD DEBUG_CAVE DEBUG_COMBAT DEBUG_EFFECTS ' +
   '_armRightIdle _armRightCast _armLeftIdle _armLeftCast _armLastRobeId'
 ).split(' ');
+if (typeof effectRegistryStudioKeys === 'function') _castingStudioKeys = _castingStudioKeys.concat(effectRegistryStudioKeys(_castingStudioKeys));
 
 function castingStudioWrite(value) {
   var el = document.getElementById('castingStudioResult');
@@ -27023,6 +31432,7 @@ function castingStudioResetCycle(job) {
   job.live.spellCastReservationSerial = 0;
   job.live.coneEffects = []; job.live.chainEffects = []; job.live.novaEffects = [];
   job.live.deathEffects = []; job.live.soulOrbs = []; job.live.coinDrops = [];
+  if (typeof effectRegistryStudioReset === 'function') effectRegistryStudioReset(job.live, job);
   job.live.stats = {totalDamageDone:0, totalDamageTaken:0, totalManaConsumed:0, totalEnemiesKilled:0};
   job.live.mana = MANA_MAX; job.live.lastShotMs = -1e12; job.live.castAnimUntil = 0;
   job.live._castingPoseState = {castAt:-1e12, spellId:'missile', cooldown:450, lastNow:0, walkPhase:0};
@@ -27116,6 +31526,7 @@ function castingStudioAdvance(job, toMs) {
       // 120 ms wind-up. Observe its actual spawn, never create a demo missile.
       if (!job.released && projectiles.length) { job.released=true;job.releaseAt=job.time; }
       tickEffects(CASTING_STUDIO_STEP_MS / 1000);
+      if (typeof updateEffects === 'function') updateEffects(CASTING_STUDIO_STEP_MS / 1000);
       if (job.hitAt === null && enemies[0].health < 1000) job.hitAt = job.time;
     });
   }
@@ -27750,6 +32161,7 @@ function renderFrame() {
   _pt('draw()', function(){ draw(); });
   if (MODE3D) {
     if (typeof beginSpellVisualFrame === 'function') beginSpellVisualFrame();
+    if (typeof beginEffectFrame === 'function') beginEffectFrame();
     _pt('groundFX3D', function(){ drawGroundEffects3D(); });
     _pt('coneFX3D', function(){ drawConeEffects3D(); drawFlameStream3D(); });
     _pt('chainFX3D', function(){ drawChainEffects3D(); });
@@ -27770,8 +32182,10 @@ function renderFrame() {
     _pt('shrines3D', function(){ drawShrines3D(); });
     _pt('ruins3D', function(){ drawRuins3D(); });
     _pt('structures3D', function(){ drawStructures3D(); });
-    _pt('torchGlow3D', function(){ drawTorchGlow3D(); });
-    _pt('ambientFX3D', function(){ drawAmbientParticles3D(); });
+    _pt('fxCombat3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(1); });
+    _pt('torchGlow3D', function(){ if (typeof drawTorchGlowStage3D === 'function') drawTorchGlowStage3D(); else drawTorchGlow3D(); });
+    _pt('ambientFX3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(0); else drawAmbientParticles3D(); });
+    _pt('fxOverlay', function(){ if (typeof drawEffectOverlay === 'function') drawEffectOverlay(); });
     _pt('fpsArms', function(){ drawFPSArms(); });
     _pt('arenaAltarPrompt', function(){ drawArenaAltarPrompt3D(); });
     _pt('arenaHUD', function(){ drawArenaHUD(); });
@@ -27828,6 +32242,7 @@ function renderFrame() {
     _pt('chainFX2D', function(){ drawChainEffects2D(); });
     _pt('novaFX2D', function(){ drawNovaEffects2D(); });
     _pt('impacts2D', function(){ drawImpacts2D(); });
+    _pt('fx2D', function(){ if (typeof drawEffectLayer2D === 'function') drawEffectLayer2D(); });
     _pt('coins2D', function(){ drawCoins2D(); });
     _pt('shopMarker2D', function(){ drawShopMarker2D(); });
     _pt('caveEntrance2D', function(){ drawCaveEntrance2D(); });
@@ -28091,6 +32506,7 @@ function prepareGameRun() {
   castAnimUntil = 0; manaBlinkUntil = 0; flameStreamStartMs = 0;
   dashUntil = 0; dashCooldownUntil = 0; dashFovPunch = 0;
   jumpVelZ = 0; jumpAirborne = false;
+  if (typeof effectRegistryReset === 'function') effectRegistryReset('run');
   resetSimulationFrame();
 }
 

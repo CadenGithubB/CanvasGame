@@ -2041,6 +2041,7 @@ function drawFlameStream2D() {
     ctx.closePath(); ctx.fill();
   }
 
+  if (typeof effectFamilyMode !== 'function' || effectFamilyMode('flameEmbers') === 'legacy') {   // New: flame.ember particles (fx2D/fxCombat3D)
   // Ember particles scattered across the cone
   var numP = 16;
   for (var p = 0; p < numP; p++) {
@@ -2058,6 +2059,7 @@ function drawFlameStream2D() {
     var hue = (seed + Math.floor(now * 0.01)) % 4;
     ctx.fillStyle = hue === 0 ? '#ffffaa' : hue === 1 ? '#ffcc44' : hue === 2 ? '#ff8800' : '#ff4400';
     ctx.beginPath(); ctx.arc(px, py, size, 0, Math.PI * 2); ctx.fill();
+  }
   }
 
   ctx.shadowBlur = 0;
@@ -2144,6 +2146,7 @@ function drawFlameStream3D() {
     prevL = ptL; prevR = ptR;
   }
 
+  if (typeof effectFamilyMode !== 'function' || effectFamilyMode('flameEmbers') === 'legacy') {   // New: flame.ember particles (fx2D/fxCombat3D)
   // Animated ember particles scattered across the cone
   ctx.shadowBlur = 10; ctx.shadowColor = '#ff6600';
   var numP = 24;
@@ -2169,6 +2172,7 @@ function drawFlameStream3D() {
     drawSpellBillboard(pt,size,10,function(){
       ctx.beginPath(); ctx.arc(pt.sx, pt.sy, size, 0, Math.PI * 2); ctx.fill();
     });
+  }
   }
 
   ctx.shadowBlur = 0;

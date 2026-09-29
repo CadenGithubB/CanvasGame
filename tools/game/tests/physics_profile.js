@@ -80,7 +80,7 @@
     ['updateGroundEffects',8],['tickEffects',9],['step',4],['updateTreasureChests',10],
     ['updateEnemySpawners',11],['updateArenaChallenge',12],['updateArcaneTomes',13],
     ['updateStatPickups',14],['updateCompanions',5],['updateFortressAllies',6],
-    ['updateMapRevealAnim',15],['updateAmbientParticles',16],['updateExplored',17]], trace=[];
+    ['updateMapRevealAnim',15],['updateEffects',16],['updateExplored',17]], trace=[];
   stages.forEach(function(stage){G[stage[0]]=function(){trace.push(stage[0]);clock+=stage[1];};});
   reset(true);G.overviewActive=false;G.CAM_FOLLOW=false;G.spatialSimulationTick=100;G.gameUpdate(1/60);
   report=G.physicsProfileReport();

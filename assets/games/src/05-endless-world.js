@@ -3076,31 +3076,13 @@ function assembleWindow(centerCX, centerCY) {
     // Rebase projectiles, effects, etc
     for (var pi = 0; pi < projectiles.length; pi++) {
       projectiles[pi].x -= shiftX; projectiles[pi].y -= shiftY;
+      if (projectiles[pi].isLob) { projectiles[pi].targetX -= shiftX; projectiles[pi].targetY -= shiftY; }
     }
-    for (var ii = 0; ii < impacts.length; ii++) {
-      impacts[ii].x -= shiftX; impacts[ii].y -= shiftY;
-    }
-    for (var gi2 = 0; gi2 < groundEffects.length; gi2++) {
-      groundEffects[gi2].x -= shiftX; groundEffects[gi2].y -= shiftY;
-    }
-    for (var ci3 = 0; ci3 < coinDrops.length; ci3++) {
-      coinDrops[ci3].x -= shiftX; coinDrops[ci3].y -= shiftY;
-    }
-    for (var so = 0; so < soulOrbs.length; so++) {
-      soulOrbs[so].x -= shiftX; soulOrbs[so].y -= shiftY;
-    }
-    for (var de = 0; de < deathEffects.length; de++) {
-      deathEffects[de].x -= shiftX; deathEffects[de].y -= shiftY;
-    }
-    for (var at = 0; at < arcaneTomes.length; at++) {
-      arcaneTomes[at].x -= shiftX; arcaneTomes[at].y -= shiftY;
-    }
+    // Effect families (statPickups were rebuilt above in new coordinates).
+    if (typeof effectRegistryRebase === 'function') effectRegistryRebase(shiftX, shiftY);
     if (arenaChallenge) {
       arenaChallenge.centerX -= shiftX;
       arenaChallenge.centerY -= shiftY;
-    }
-    for (var sp = 0; sp < statPickups.length; sp++) {
-      statPickups[sp].x -= shiftX; statPickups[sp].y -= shiftY;
     }
     for (var ci4 = 0; ci4 < companions.length; ci4++) {
       companions[ci4].x -= shiftX; companions[ci4].y -= shiftY;
@@ -3396,6 +3378,7 @@ function resetEndlessMode() {
   phoenixFeatherUsed = false;
   goal = null;
   goalSpawned = false;
+  if (typeof effectRegistryReset === 'function') effectRegistryReset('world');
 
   // Set window at origin
   windowCX = -Math.floor(WINDOW_CHUNKS / 2);
@@ -3436,7 +3419,7 @@ function resetEndlessMode() {
 
   // Activate settings
   CAM_FOLLOW = true;
-  initAmbientParticles();
+  if (typeof effectRegistryPrime === 'function') effectRegistryPrime('world'); else initAmbientParticles();
   applyPreset();
 
   // Generation stats
@@ -3580,8 +3563,7 @@ function resetLevel(lv) {
   coinDrops = []; coins = 0; wardActive = false; dmgBoostUntil = 0; speedBoostUntil = 0;
   groundEffects = []; chainEffects = []; novaEffects = [];
   projectiles = []; impacts = []; coneEffects = [];
-  ambientParticles = [];
-  initAmbientParticles();
+  if (typeof effectRegistryReset === 'function') { effectRegistryReset('level'); effectRegistryPrime('level'); } else { ambientParticles = []; initAmbientParticles(); }
   initMinimap();
   spawnShop();
   medalGold = (cfg.medals && cfg.medals.gold) ? cfg.medals.gold : 10;

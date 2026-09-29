@@ -578,7 +578,7 @@ function gameUpdate(dt) {
   physicsStageEnd('followers',stageStart);
   physicsStageEnd('simulationSpan',physicsStart);
   updateMapRevealAnim();
-  updateAmbientParticles(dt);
+  if (typeof updateEffects === 'function') updateEffects(dt);
   updateExplored();
 }
 
@@ -619,16 +619,7 @@ function activateShrine(shr) {
   else if (shr.buffType === 'regen') { regenBoostUntil = now + duration; lastRegenTick = now; buffName = 'Regeneration'; }
   else if (shr.buffType === 'armor') { armorBoostUntil = now + duration; buffName = 'Protection'; }
   // Visual feedback — spawn particles at shrine location
-  for (var pi = 0; pi < 12; pi++) {
-    var ang = (pi / 12) * Math.PI * 2;
-    impacts.push({
-      x: shr.x, y: shr.y, z: 10,
-      vx: Math.cos(ang) * 40, vy: Math.sin(ang) * 40, vz: 30 + Math.random() * 20,
-      life: 0.8, maxLife: 0.8,
-      color: shr.buffType === 'damage' ? '#ff4444' : shr.buffType === 'speed' ? '#44ffff' : shr.buffType === 'regen' ? '#44ff44' : '#ffaa44',
-      size: 4
-    });
-  }
+  if (typeof fxEvent === 'function') fxEvent('shrine', shr);
   pushToast('Shrine of ' + buffName + ' — 2 min buff', '#ffcc66', 3000);
   console.log('[SHRINE] Activated ' + buffName + ' shrine for ' + (duration / 1000) + 's');
 }

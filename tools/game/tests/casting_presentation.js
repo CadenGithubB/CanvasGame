@@ -39,13 +39,20 @@
   G.getEntityRenderFloorZ = function (entity) { return entity.renderFloorZ || 0; };
   G.sampleEntitySupportRenderZ = function (x, y, z) { return z; };
   var relicHits = [], presentationEvents = [];
+  // Unified effects S4 (spec 11.3): this partial host loads 10-combat.js
+  // without the effect engine, and producers call fxEvent only when it
+  // exists, so a recorder stands in for it. Events are kept per scenario,
+  // outside the snapshot, so no hash-checked scenario changes.
+  var fxEvents = [], scenarioEvents = {};
+  G.fxEvent = function (type) { fxEvents.push(type); };
+  function recorded(events, type) { return (events || []).filter(function (t) { return t === type; }).length; }
   G.noteFirstPersonCast = function (spell, now) {
     presentationEvents.push({id: spell.id, now: now, projectileCount: G.projectiles.length, mana: G.mana});
   };
   G.applyRelicOnHit = function (damage, entity, companion) { relicHits.push([damage, entity.x, entity.y, companion]); };
   function reset() {
     evaluate(spellDefinitions);
-    clock = 1000; randomCalls = 0; rng = 1234567; relicHits = []; presentationEvents = [];
+    clock = 1000; randomCalls = 0; rng = 1234567; relicHits = []; presentationEvents = []; fxEvents = [];
     G.running = true; G.gameOverState = false; G.menuOpen = false; G.DEBUG_COMBAT = false; G.DEBUG_EFFECTS = false;
     G.shopOpen = G.inventoryOpen = G.forgeOpen = G.settingsOpen = false;
     G.currentSpellIdx = 0; G.mana = 100; G.lastShotMs = 0; G.castAnimUntil = 0;
@@ -222,9 +229,16 @@
         s.randomCalls===1+s.coinDrops.length*2 && s.impacts.length===1 && s.impacts[0].x===103 &&
         s.coinDrops.every(function(c){return Math.abs(Math.hypot(c.x-103,c.y-102)-6)<1e-7;});
     },
-    'spawner hit drop and random consumption': function(s) {
+    // S4 (unified effects, spec 11.3): the spawner's bones left the gameplay
+    // random stream. The producer queues one 'spawnerDeath' effect event (the
+    // engine throws the bones as particles; Legacy mode replays the old body
+    // on a private stream), so no deathEffects record is pushed here and the
+    // 25 bone draws are gone; the five coin-angle draws remain. The case name
+    // and its unused hash stay: the name links scenarios, expected and this
+    // contract (checked by contract, never by hash).
+    'spawner hit drop and random consumption': function(s, events) {
       return s.projectiles.length===0 && s.spawners[0].hp===0 && !s.spawners[0].active &&
-        s.coinDrops.length===5 && s.deathEffects.length===5 && s.randomCalls===30 &&
+        s.coinDrops.length===5 && s.deathEffects.length===0 && s.randomCalls===5 && recorded(events,'spawnerDeath')===1 &&
         s.impacts.length===1 && s.impacts[0].x===103 && s.impacts[0].y===102;
     }
   };
@@ -240,14 +254,14 @@
       G._tryCastSpell = function (now) { realGamepadCast(now); releaseForLegacyReplay(); };
     }
     Object.keys(scenarios).forEach(function (name) {
-      reset(); outcomes[name]=scenarios[name]() || snapshot(); actual[name] = hash(outcomes[name]);
+      reset(); outcomes[name]=scenarios[name]() || snapshot(); actual[name] = hash(outcomes[name]); scenarioEvents[name] = fxEvents.slice();
     });
     if (__argv.indexOf('--record-baseline') >= 0) { __out(JSON.stringify(actual)); return; }
     G.MISSILE_CAST_WINDUP_MS = productionWindup;
     G.castCurrentSpell = realCast; G._tryCastSpell = realGamepadCast;
     if (__argv.indexOf('--world-art-only') < 0) {
     Object.keys(scenarios).forEach(function (name) {
-      if(spatialContracts[name]) check(name + ' follows shared spatial contract', spatialContracts[name](outcomes[name]));
+      if(spatialContracts[name]) check(name + ' follows shared spatial contract', spatialContracts[name](outcomes[name], scenarioEvents[name]));
       else check(name + ' matches pre-art gameplay', actual[name] === expected[name]);
     });
     reset(); G.castCurrentSpell();

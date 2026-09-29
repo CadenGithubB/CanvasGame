@@ -36,6 +36,7 @@ var _castingStudioKeys = (
   'CASTING_ART_ENABLED HAND_RIG_PREVIEW HAND_RIG_TIME_MS HAND_RIG_VIEW_YAW HAND_RIG_GRIP HAND_RIG_STYLE DEBUG_PERF_HUD DEBUG_CAVE DEBUG_COMBAT DEBUG_EFFECTS ' +
   '_armRightIdle _armRightCast _armLeftIdle _armLeftCast _armLastRobeId'
 ).split(' ');
+if (typeof effectRegistryStudioKeys === 'function') _castingStudioKeys = _castingStudioKeys.concat(effectRegistryStudioKeys(_castingStudioKeys));
 
 function castingStudioWrite(value) {
   var el = document.getElementById('castingStudioResult');
@@ -170,6 +171,7 @@ function castingStudioResetCycle(job) {
   job.live.spellCastReservationSerial = 0;
   job.live.coneEffects = []; job.live.chainEffects = []; job.live.novaEffects = [];
   job.live.deathEffects = []; job.live.soulOrbs = []; job.live.coinDrops = [];
+  if (typeof effectRegistryStudioReset === 'function') effectRegistryStudioReset(job.live, job);
   job.live.stats = {totalDamageDone:0, totalDamageTaken:0, totalManaConsumed:0, totalEnemiesKilled:0};
   job.live.mana = MANA_MAX; job.live.lastShotMs = -1e12; job.live.castAnimUntil = 0;
   job.live._castingPoseState = {castAt:-1e12, spellId:'missile', cooldown:450, lastNow:0, walkPhase:0};
@@ -263,6 +265,7 @@ function castingStudioAdvance(job, toMs) {
       // 120 ms wind-up. Observe its actual spawn, never create a demo missile.
       if (!job.released && projectiles.length) { job.released=true;job.releaseAt=job.time; }
       tickEffects(CASTING_STUDIO_STEP_MS / 1000);
+      if (typeof updateEffects === 'function') updateEffects(CASTING_STUDIO_STEP_MS / 1000);
       if (job.hitAt === null && enemies[0].health < 1000) job.hitAt = job.time;
     });
   }

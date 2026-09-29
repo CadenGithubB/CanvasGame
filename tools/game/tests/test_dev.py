@@ -616,5 +616,76 @@ printResult('NAV_PROFILE_REAL_WORKLOAD PASS '+checkCount);
         self.assertEqual([], [url for url in urls if url and not url.startswith("data:")])
 
 
+class FxBenchToolingTests(unittest.TestCase):
+    """tools/game/fx-bench.js is injected into a separate preview tab; it never ships."""
+
+    BENCH = dev.REPO_ROOT / "tools/game/fx-bench.js"
+
+    def test_bench_is_tooling_outside_the_manifest_header_and_preview(self) -> None:
+        manifest = json.loads((dev.SOURCE_ROOT / "manifest.json").read_text(encoding="utf-8"))
+        listed = [name for part in manifest["parts"].values() for name in part]
+        self.assertFalse([name for name in listed if "fx-bench" in name or "fxBench" in name])
+        assembled = dev.assemble()
+        bench = self.BENCH.read_text(encoding="utf-8")
+        marker = "function fxBenchSuppressedDump()"
+        self.assertEqual(1, bench.count(marker), "choose a marker unique to the bench")
+        self.assertNotIn(marker, assembled.header.decode("utf-8"))
+        self.assertNotIn("var fxBench", assembled.header.decode("utf-8"))
+        self.assertNotIn(marker, dev.preview_html(assembled).decode("utf-8"))
+        self.assertEqual(self.BENCH.read_bytes(), dev.fx_bench_js())
+        # The shipping syntax gate cannot see the bench; parse it on its own.
+        dev.syntax_check(replace(assembled, scripts=(bench, "// no second script\n")))
+
+    def test_missing_bench_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hw1-fx-bench-") as directory:
+            with self.assertRaises(dev.SourceError):
+                dev.fx_bench_js(Path(directory))
+
+    def test_preview_server_serves_the_bench_as_javascript(self) -> None:
+        import socket
+        import subprocess
+        import sys
+        import time
+        import urllib.error
+        import urllib.request
+
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        server = subprocess.Popen([sys.executable, str(dev.REPO_ROOT / "tools/game/dev.py"), "serve", "--port", str(port)],
+                                  cwd=dev.REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        try:
+            base, deadline, reply = f"http://127.0.0.1:{port}", time.monotonic() + 120, None
+            while reply is None:
+                if server.poll() is not None:
+                    self.fail("preview server exited: " + server.stderr.read().decode("utf-8", "replace"))
+                try:
+                    with urllib.request.urlopen(base + "/fx-bench.js", timeout=30) as response:
+                        reply = (response.status, response.headers.get("Content-Type"),
+                                 response.headers.get("Cache-Control"), response.read())
+                except urllib.error.HTTPError as answered:     # the server is up: an error answer is final
+                    answered.close()
+                    self.fail(f"/fx-bench.js answered HTTP {answered.code}")
+                except (urllib.error.URLError, ConnectionError):
+                    if time.monotonic() > deadline:
+                        raise
+                    time.sleep(0.2)
+            self.assertEqual((200, "text/javascript; charset=utf-8", "no-store"), reply[:3])
+            self.assertEqual(self.BENCH.read_bytes(), reply[3])
+            # Control: routes are an allow-list; a neighbouring name is not served.
+            with self.assertRaises(urllib.error.HTTPError) as missing:
+                urllib.request.urlopen(base + "/fx-bench.jsx", timeout=30)
+            self.assertEqual(404, missing.exception.code)
+            missing.exception.close()
+        finally:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait()
+            server.stderr.close()
+
+
 if __name__ == "__main__":
     unittest.main()
