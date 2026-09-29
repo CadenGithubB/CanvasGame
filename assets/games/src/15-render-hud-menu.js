@@ -657,6 +657,16 @@ var _shrineBuffColors = { damage: '#ff4444', speed: '#44ffff', regen: '#44ff44',
 var _shrineBuffColorsDark = { damage: '#661111', speed: '#116666', regen: '#116611', armor: '#664411' };
 
 function drawShrines3D() {
+  // landmarkModels (12-prop-models.js): the shrine models, phased like the
+  // other landmarks ('opaque' from draw()'s landmarkOpaque3D stage; with no
+  // argument, landmarkLatePhase's 'overlay' after that pass, else both).
+  // Off: the legacy painter below, which draws nothing for 'opaque'.
+  if (typeof landmarkModelsOn === 'function' && landmarkModelsOn()) {
+    drawShrineModels3D(arguments.length ? arguments[0] :
+      typeof landmarkLatePhase === 'function' ? landmarkLatePhase('shrines') : undefined);
+    return;
+  }
+  if (arguments[0] === 'opaque') return;
   renderEntities3D(shrines, {maxDist: viewDist * 0.8, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
     function(shr, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
@@ -742,6 +752,100 @@ function drawShrines3D() {
     });
 }
 
+// Shrine models (landmarkModels, integration stage J1). With
+// landmarkBoundsGate (stage J2) the gate is the shrine's world bounds (the
+// pedestal and crystal) with scene depth; otherwise the legacy
+// renderEntities3D call's options. The pedestal stands on getEntityRenderFloorZ, so a shrine above a cave sits on the
+// surface (the legacy floorZ is the lowest layer). Opaque phase, near to
+// far: the pedestal at the range fade only (colour fog replaces the legacy
+// see-through alpha), writing depth. Overlay phase, far to near, at the
+// legacy overlay alphas and sizes: the translucent crystal at the legacy bob
+// (depth-tested, no depth write), then the glow, the buff label and the
+// 'Press E' prompt, each a billboard tested at the pedestal's nearest depth,
+// so the shrine never hides its own overlays while anything nearer does.
+var _shrineModelVisible = [];
+function _collectShrineModel(shr, vis) {
+  // A fully faded shrine (only the bounds gate reaches past the range fade)
+  // would write depth without paint.
+  if (!(vis.fade > 0)) return;
+  var floorZ = getEntityRenderFloorZ(shr);
+  if (Number.isFinite(floorZ)) _shrineModelVisible.push({shr: shr, vis: vis, floorZ: floorZ});
+}
+function drawShrineModels3D(phase) {
+  var list = _shrineModelVisible, wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  list.length = 0;
+  if (typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn())
+    renderEntities3D(shrines, {maxDist: viewDist * 0.8, sceneDepth: true, groundAnchor: true, worldRadius: landmarkShrineRadius(),
+      fadeFraction: 0.8, sort: true, mode3dOnly: true}, _collectShrineModel);
+  else renderEntities3D(shrines, {maxDist: viewDist * 0.8, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
+    _collectShrineModel);
+  if (!list.length) return;
+  var C = getCam3D(), now = gameTimeNow();
+  for (var n = list.length - 1; wantOpaque && n >= 0; n--) drawShrineModelOpaque(list[n], C);
+  for (var f = 0; wantOverlay && f < list.length; f++) drawShrineModelOverlay(list[f], C, now);
+  list.length = 0;
+}
+function drawShrineModelOpaque(entry, C) {
+  var alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * entry.vis.fade;   // the range fade only
+  drawWorldModel(shrineModelInstance(entry.shr, entry.floorZ), landmarkModelFor('landmarkShrine'), C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+function drawShrineModelOverlay(entry, C, now) {
+  var shr = entry.shr, vis = entry.vis, fwd = vis.fwd, D = SHRINE_MODEL_DIMS;
+  var pedestal = landmarkModelFor('landmarkShrine'), crystal = landmarkModelFor('landmarkShrineCrystal');
+  var fogAlpha = Math.max(0.5, 1.0 - fwd / viewDist * 0.4) * vis.fade;
+  var crystalColor = shr.used ? '#555555' : (_shrineBuffColors[shr.buffType] || '#ffffff');
+  var darkColor = shr.used ? '#444444' : (_shrineBuffColorsDark[shr.buffType] || '#888888');
+  var crystalZ = entry.floorZ + D.height + D.lift + Math.sin(now * 0.003 + vis.dist * 0.01) * D.bob;
+  ctx.save();
+  ctx.globalAlpha = vis.fade;
+  var inst = shrineCrystalInstance(shr, crystalZ, crystalColor, darkColor);
+  drawWorldModel(inst, crystal, C, 'overlay', null);
+  var ct = landmarkAnchorScreen(crystal, inst, 'glow', C);
+  inst = shrineModelInstance(shr, entry.floorZ);
+  var depth = Math.max(1, landmarkNearDepth(inst, C, D.half, D.half));
+  if (!shr.used && ct) {
+    var glowR = Math.max(16, Math.min(80, 28 * getScale3D('lgGlow') * projScale / fwd));
+    var pulse = 0.5 + 0.3 * Math.sin(now * 0.004 + vis.dist * 0.01), glowY = ct.sy - glowR * 0.3;
+    withSceneDepthBillboard({x: ct.sx - glowR, y: glowY - glowR, width: glowR * 2, height: glowR * 2}, depth, function() {
+      ctx.globalAlpha = fogAlpha * pulse * 0.5;
+      var grad = ctx.createRadialGradient(ct.sx, glowY, 0, ct.sx, glowY, glowR);
+      grad.addColorStop(0, crystalColor); grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(ct.sx, glowY, glowR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (!shr.used && vis.dist < viewDist * 0.5) {
+    var buffLabel = shr.buffType === 'damage' ? 'Power' : shr.buffType === 'speed' ? 'Swiftness' : shr.buffType === 'regen' ? 'Regeneration' : 'Protection';
+    var labelProj = landmarkAnchorScreen(pedestal, inst, 'label', C);
+    if (labelProj) {
+      var labelSize = Math.max(11, Math.floor(22 * getScale3D('smText') * projScale / fwd));
+      var labelHalf = buffLabel.length * labelSize * 0.33 + 2;
+      withSceneDepthBillboard({x: labelProj.sx - labelHalf, y: labelProj.sy - labelSize, width: labelHalf * 2, height: labelSize * 1.4}, depth, function() {
+        ctx.globalAlpha = fogAlpha * Math.min(1, 0.4 + 0.6 * (1 - vis.dist / (viewDist * 0.5)));
+        ctx.fillStyle = crystalColor;
+        ctx.font = 'bold ' + labelSize + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(buffLabel, labelProj.sx, labelProj.sy);
+      });
+    }
+  }
+  if (nearestShrine === shr && !shr.used) {
+    var promptProj = landmarkAnchorScreen(pedestal, inst, 'prompt', C);
+    if (promptProj) {
+      var promptSize = Math.max(14, Math.floor(28 * getScale3D('lgText') * projScale / fwd)), promptHalf = 7 * promptSize * 0.33 + 2;
+      withSceneDepthBillboard({x: promptProj.sx - promptHalf, y: promptProj.sy - promptSize, width: promptHalf * 2, height: promptSize * 1.4}, depth, function() {
+        ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold ' + promptSize + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Press E', promptProj.sx, promptProj.sy);
+      });
+    }
+  }
+  ctx.restore();
+}
+
 // Ruin dressing is authored in structure-local world units. Local +Y points
 // out through the ruin's open face and local +X points to its right. Keeping
 // these positions independent of camera distance prevents the old rubble ring
@@ -800,6 +904,9 @@ function ruinDecorSurfaceZ(wx, wy, fallbackZ) {
 }
 
 function drawRuinDecorFace(vertices, color, C) {
+  // A capture sink (12-prop-models.js) takes the world face instead of it
+  // being drawn; with none installed, drawing is unchanged.
+  if (typeof _ruinDecorFaceSink === 'function') return _ruinDecorFaceSink(vertices, color, C);
   var projected = projectSceneWorldPolygon(vertices, C);
   if (!projected || projected.length < 3) return 0;
   ctx.fillStyle = color;
@@ -844,56 +951,75 @@ function drawRuinDecorBox(center, z0, z1, halfRight, halfOut, colors, C) {
 }
 
 function drawRuins3D() {
+  // Phase: 'opaque' draws the depth-writing debris, post and beams (draw()'s
+  // landmarkOpaque3D stage, landmarkOpaqueEarly); 'overlay' only the
+  // depth-clipped label. The late ruins3D stage calls with no argument:
+  // landmarkLatePhase (12-prop-models.js) makes that the overlay after this
+  // frame's early pass; otherwise both phases draw, as before. The phase is
+  // read from arguments so the declaration line stays byte-identical.
+  var phase = arguments.length ? arguments[0] :
+    typeof landmarkLatePhase === 'function' ? landmarkLatePhase('ruins') : undefined;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
   // Match the wall renderer's range: opaque dressing is too small to notice at
   // the horizon, and no longer hard-culls while its wall remnants are visible.
+  // landmarkBoundsGate (12-prop-models.js, stage J2): the dressing's world
+  // bounds, not the ruin's centre, must be behind the camera to reject it.
+  var ruinRadius = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn() ? landmarkRuinRadius : undefined;
   renderEntities3D(ruins, {maxDist: viewDist, groundAnchor: true, sceneDepth: true,
-    fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
+    fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true, worldRadius: ruinRadius},
     function(ru, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
       var fwd = vis.fwd;
+      // The bounds extend only the near-plane test: past viewDist (the wall
+      // renderer's and terrain's range) the opaque dressing keeps the centre
+      // limit, so it never pops in beyond the terrain edge.
+      if (ruinRadius !== undefined && vis.dist > viewDist) return;
+      if (!wantOpaque && !(fwd < viewDist * 0.3)) return;   // overlay only, and no label this far
       ctx.save();
       // These faces write opaque scene depth, so their paint must be opaque as
       // well. Distance fading is reserved for the non-opaque location label.
       var labelAlpha = Math.max(0.3, 1.0 - fwd / viewDist * 0.6) * vis.fade;
       ctx.globalAlpha = 1;
 
-      var stoneColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.rubbleStone) ?
-        GAME_MATERIALS.rubbleStone.hex : {base:'#787060',shadow:'#686058',lit:'#888070',dark:'#504840'};
-      var debrisLayout = RUIN_DEBRIS_LAYOUTS[ru.ruinType] || RUIN_DEBRIS_LAYOUTS.hut;
-      var debrisPoint = {};
-      for (var rbi = 0; rbi < debrisLayout.length; rbi++) {
-        getRuinDebrisWorld(ru, rbi, debrisPoint);
-        var debrisZ = ruinDecorSurfaceZ(debrisPoint.x, debrisPoint.y, vis.floorZ);
-        drawRuinStone(debrisPoint, debrisZ, stoneColors, C);
+      if (wantOpaque) {
+        var stoneColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.rubbleStone) ?
+          GAME_MATERIALS.rubbleStone.hex : {base:'#787060',shadow:'#686058',lit:'#888070',dark:'#504840'};
+        var debrisLayout = RUIN_DEBRIS_LAYOUTS[ru.ruinType] || RUIN_DEBRIS_LAYOUTS.hut;
+        var debrisPoint = {};
+        for (var rbi = 0; rbi < debrisLayout.length; rbi++) {
+          getRuinDebrisWorld(ru, rbi, debrisPoint);
+          var debrisZ = ruinDecorSurfaceZ(debrisPoint.x, debrisPoint.y, vis.floorZ);
+          drawRuinStone(debrisPoint, debrisZ, stoneColors, C);
+        }
+
+        // A small solid waypost sits to the right of the open face. Both its
+        // stem and crosspiece are world boxes, so they retain their orientation
+        // instead of turning into screen-space lines as the camera moves.
+        var post = getRuinPostWorld(ru, {});
+        var postZ = ruinDecorSurfaceZ(post.x, post.y, vis.floorZ);
+        var woodColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.palisadeWood) ?
+          GAME_MATERIALS.palisadeWood.hex : {lit:'#7a4c2a',mid:'#6b4226',dark:'#5a3720',deep:'#3a2412'};
+        drawRuinDecorBox(post, postZ + 0.2, postZ + 21, 0.9, 0.9, woodColors, C);
+        drawRuinDecorBox(post, postZ + 14, postZ + 19, 8.5, 1.0, woodColors, C);
+
+        // Two fixed roof-frame remnants give the hut a readable shelter
+        // silhouette without closing it in. They use the same facing basis as
+        // the waypost and stay attached to the rear/left wall runs.
+        if (ru.ruinType === 'hut') {
+          var rearBeam = ruinLocalToWorld(ru, 0, -27, {});
+          rearBeam.rightX = post.rightX; rearBeam.rightY = post.rightY;
+          rearBeam.outX = post.outX; rearBeam.outY = post.outY;
+          var rearBeamZ = ruinDecorSurfaceZ(rearBeam.x, rearBeam.y, vis.floorZ);
+          drawRuinDecorBox(rearBeam, rearBeamZ + 52, rearBeamZ + 56, 28, 1.8, woodColors, C);
+          var sideBeam = ruinLocalToWorld(ru, -27, -5, {});
+          sideBeam.rightX = post.rightX; sideBeam.rightY = post.rightY;
+          sideBeam.outX = post.outX; sideBeam.outY = post.outY;
+          var sideBeamZ = ruinDecorSurfaceZ(sideBeam.x, sideBeam.y, vis.floorZ);
+          drawRuinDecorBox(sideBeam, sideBeamZ + 38, sideBeamZ + 42, 1.8, 18, woodColors, C);
+        }
       }
 
-      // A small solid waypost sits to the right of the open face. Both its
-      // stem and crosspiece are world boxes, so they retain their orientation
-      // instead of turning into screen-space lines as the camera moves.
-      var post = getRuinPostWorld(ru, {});
-      var postZ = ruinDecorSurfaceZ(post.x, post.y, vis.floorZ);
-      var woodColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.palisadeWood) ?
-        GAME_MATERIALS.palisadeWood.hex : {lit:'#7a4c2a',mid:'#6b4226',dark:'#5a3720',deep:'#3a2412'};
-      drawRuinDecorBox(post, postZ + 0.2, postZ + 21, 0.9, 0.9, woodColors, C);
-      drawRuinDecorBox(post, postZ + 14, postZ + 19, 8.5, 1.0, woodColors, C);
-
-      // Two fixed roof-frame remnants give the hut a readable shelter
-      // silhouette without closing it in. They use the same facing basis as
-      // the waypost and stay attached to the rear/left wall runs.
-      if (ru.ruinType === 'hut') {
-        var rearBeam = ruinLocalToWorld(ru, 0, -27, {});
-        rearBeam.rightX = post.rightX; rearBeam.rightY = post.rightY;
-        rearBeam.outX = post.outX; rearBeam.outY = post.outY;
-        var rearBeamZ = ruinDecorSurfaceZ(rearBeam.x, rearBeam.y, vis.floorZ);
-        drawRuinDecorBox(rearBeam, rearBeamZ + 52, rearBeamZ + 56, 28, 1.8, woodColors, C);
-        var sideBeam = ruinLocalToWorld(ru, -27, -5, {});
-        sideBeam.rightX = post.rightX; sideBeam.rightY = post.rightY;
-        sideBeam.outX = post.outX; sideBeam.outY = post.outY;
-        var sideBeamZ = ruinDecorSurfaceZ(sideBeam.x, sideBeam.y, vis.floorZ);
-        drawRuinDecorBox(sideBeam, sideBeamZ + 38, sideBeamZ + 42, 1.8, 18, woodColors, C);
-      }
-
-      if (fwd < viewDist * 0.3) {
+      if (wantOverlay && fwd < viewDist * 0.3) {
         var labelLift = ru.ruinType === 'hut' ? 68 : ru.ruinType === 'hall' ? 74 : 62;
         var labelP = proj(ru.x, ru.y, vis.floorZ + labelLift);
         if (labelP && labelP.fwd > 1) {
@@ -1067,39 +1193,71 @@ function drawStructureShellWorld(st, vis, C) {
 }
 
 function drawStructures3D() {
-  renderEntities3D(largeStructures, {maxDist: viewDist * 2.6, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.92, sort: true, minDist: 3, mode3dOnly: true, groundAnchor:true},
+  // Phase: 'opaque' draws the shell (draw()'s landmarkOpaque3D stage,
+  // landmarkOpaqueEarly); 'overlay' the label, keep interactables, prompts
+  // and sealed ring, each depth-clipped (structureOverlayDraw), since no
+  // shell paints after them any more. The late structures3D stage calls
+  // with no argument: landmarkLatePhase (12-prop-models.js) makes that the
+  // overlay after this frame's early pass; otherwise both phases draw
+  // unclipped, as before. The phase is read from arguments so the
+  // declaration line stays byte-identical.
+  var phase = arguments.length ? arguments[0] :
+    typeof landmarkLatePhase === 'function' ? landmarkLatePhase('structures') : undefined;
+  // landmarkModels (12-prop-models.js): the keep interactables' models draw
+  // with the shell, and every overlay is depth-clipped (the models write depth).
+  var keepModels = typeof landmarkModelsOn === 'function' && landmarkModelsOn();
+  // landmarkBoundsGate (stage J2): the shell's world bounds with scene depth
+  // replace the centre-column gate; the hill test stays only for bounds
+  // wholly beyond viewDist. Every overlay is then depth-clipped too.
+  var structBounds = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn();
+  var wantShell = phase !== 'overlay', wantOverlay = phase !== 'opaque', clip = phase === 'overlay' || keepModels || structBounds;
+  renderEntities3D(largeStructures, structBounds ? {maxDist: viewDist * 2.6, sceneDepth: true, groundAnchor: true,
+    worldRadius: landmarkStructureRadius, checkMidpoint: true, midpointBeyond: viewDist, fadeFraction: 0.92, sort: true, mode3dOnly: true} :
+    {maxDist: viewDist * 2.6, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.92, sort: true, minDist: 3, mode3dOnly: true, groundAnchor:true},
     function(st, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
       var fwd = vis.fwd;
+      // Past the range fade (reached only through the bounds) the shell
+      // would write depth without paint.
+      if (structBounds && !(vis.fade > 0)) return;
+      if (!wantShell && !(fwd < viewDist * 0.6) && st.type !== 'fortress') return;   // overlay only, nothing to draw
       ctx.save();
       ctx.globalAlpha = vis.fade;
-      drawStructureShellWorld(st,vis,C);
+      // Structure models (12-structure-models.js) drew this shell, or draw it
+      // fogged beyond their range; otherwise (Legacy, a failure) as before.
+      if (wantShell && !(typeof structureModelHandlesShell === 'function' && structureModelHandlesShell(st, vis, C)))
+        drawStructureShellWorld(st,vis,C);
       ctx.globalAlpha = vis.fade;
+      if (wantShell && keepModels && st.type === 'fortress') drawFortressInteractableModels(st, vis, C);
 
-      if (fwd < viewDist * 0.6) {
+      if (wantOverlay && fwd < viewDist * 0.6) {
         var labelP = proj(st.x, st.y, vis.floorZ + 40);
         if (labelP) {
           var labelSize = Math.max(10, Math.floor(16 * projScale / labelP.fwd));
-          ctx.fillStyle = (st.type === 'fortress') ? '#e8c868' : (st.type === 'arena') ? '#e87848' : '#88c8e8';
-          ctx.font = 'bold ' + labelSize + 'px monospace';
-          ctx.textAlign = 'center';
           var label = (st.type === 'fortress') ? 'Ancient Fortress' : (st.type === 'arena') ? 'Battle Arena' : 'Watchtower';
-          ctx.fillText(label, labelP.sx, labelP.sy);
-          ctx.fillStyle = '#aaa';
-          ctx.font = Math.max(8, labelSize - 3) + 'px monospace';
-          ctx.fillText('Danger Zone', labelP.sx, labelP.sy + labelSize + 2);
+          // Both lines' box: bold monospace is about 0.6 em per character.
+          // Its test depth is the front of the core round the anchor (the
+          // fortress keep roof, the watchtower's tower, the arena pedestal),
+          // so the structure never hides its own label; anything in front
+          // of that core does.
+          var labelHalf = Math.max(label.length, 11) * labelSize * 0.33 + 2;
+          var labelDepth = Math.max(1, labelP.fwd - cell * (st.type === 'fortress' ? 10 : st.type === 'arena' ? 0.8 : 3.3) * (st.scale || 1));
+          structureOverlayDraw(clip, [{sx: labelP.sx - labelHalf, sy: labelP.sy - labelSize, fwd: labelDepth},
+            {sx: labelP.sx + labelHalf, sy: labelP.sy + labelSize * 1.5 + 2, fwd: labelDepth}], 2, function() {
+            ctx.fillStyle = (st.type === 'fortress') ? '#e8c868' : (st.type === 'arena') ? '#e87848' : '#88c8e8';
+            ctx.font = 'bold ' + labelSize + 'px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, labelP.sx, labelP.sy);
+            ctx.fillStyle = '#aaa';
+            ctx.font = Math.max(8, labelSize - 3) + 'px monospace';
+            ctx.fillText('Danger Zone', labelP.sx, labelP.sy + labelSize + 2);
+          });
         }
       }
 
       // ── Fortress keep interactables (forge, lectern, garrison banner) ──
-      if (st.type === 'fortress') {
-        var _fKey2 = st.regionX + ',' + st.regionY;
-        var _fComp2 = completedFortresses[_fKey2] || {};
-        var _interacts3d = [
-          {type: 'forge',    ox: 0,         oy: -cell * 4, used: !!_fComp2.forge,    color: '#ff8800', label: '[E] Enchantment Forge'},
-          {type: 'lectern',  ox: cell * 4,  oy: cell * 2,  used: !!_fComp2.lectern,  color: '#6688ff', label: '[E] Ancient Lectern'},
-          {type: 'garrison', ox: -cell * 4, oy: cell * 2,  used: !!_fComp2.garrison, color: '#c8a028', label: '[E] Rally Garrison'}
-        ];
+      if (wantOverlay && st.type === 'fortress') {
+        var _interacts3d = fortressInteractables3D(st);
         for (var _ii3d = 0; _ii3d < _interacts3d.length; _ii3d++) {
           var _int3d = _interacts3d[_ii3d];
           if (_int3d.used) continue;
@@ -1109,59 +1267,70 @@ function drawStructures3D() {
           var ib1 = proj(ix + 4, iy - 4, vis.floorZ);
           var ib2 = proj(ix + 4, iy + 4, vis.floorZ);
           var ib3 = proj(ix - 4, iy + 4, vis.floorZ);
-          if (ib0 && ib1 && ib2 && ib3) {
-            ctx.fillStyle = '#333'; ctx.globalAlpha = 0.8;
-            ctx.beginPath(); ctx.moveTo(ib0.sx, ib0.sy); ctx.lineTo(ib1.sx, ib1.sy);
-            ctx.lineTo(ib2.sx, ib2.sy); ctx.lineTo(ib3.sx, ib3.sy); ctx.closePath(); ctx.fill();
-          }
-          // Object body
           var ip0 = proj(ix, iy, vis.floorZ);
           var ip1 = proj(ix, iy, vis.floorZ + 18);
-          if (ip0 && ip1 && ip0.fwd > 1) {
-            var ipw = Math.max(3, Math.floor(8 * projScale / ip0.fwd));
-            if (_int3d.type === 'forge') {
-              // Anvil: dark trapezoid
-              ctx.fillStyle = '#444'; ctx.fillRect(ip0.sx - ipw, ip1.sy, ipw * 2, ip0.sy - ip1.sy);
-              ctx.fillStyle = '#666'; ctx.fillRect(ip0.sx - ipw * 1.3, ip1.sy, ipw * 2.6, (ip0.sy - ip1.sy) * 0.3);
-              // Orange glow
-              ctx.globalAlpha = 0.4 + 0.2 * Math.sin(gameTimeNow() * 0.004);
-              ctx.fillStyle = '#ff6600';
-              ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
-            } else if (_int3d.type === 'lectern') {
-              // Thin pedestal + book
-              ctx.fillStyle = '#555'; ctx.fillRect(ip0.sx - ipw * 0.4, ip1.sy, ipw * 0.8, ip0.sy - ip1.sy);
-              ctx.fillStyle = '#8866cc'; ctx.fillRect(ip0.sx - ipw, ip1.sy - ipw * 0.5, ipw * 2, ipw);
-              // Blue glow
-              ctx.globalAlpha = 0.3 + 0.2 * Math.sin(gameTimeNow() * 0.003);
-              ctx.fillStyle = '#4466ff';
-              ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy - ipw * 0.3, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
-            } else {
-              // Garrison banner pole + flag
-              ctx.strokeStyle = '#5a4a3a'; ctx.lineWidth = Math.max(2, ipw * 0.4);
-              ctx.beginPath(); ctx.moveTo(ip0.sx, ip0.sy); ctx.lineTo(ip1.sx, ip1.sy); ctx.stroke();
-              var flagW = Math.max(4, ipw * 1.5);
-              var flagH = Math.max(6, ipw * 2);
-              var wave = Math.sin(gameTimeNow() * 0.005) * flagW * 0.2;
-              ctx.fillStyle = _int3d.color;
-              ctx.beginPath();
-              ctx.moveTo(ip1.sx, ip1.sy);
-              ctx.lineTo(ip1.sx + flagW + wave, ip1.sy + flagH * 0.3);
-              ctx.lineTo(ip1.sx + flagW * 0.8, ip1.sy + flagH);
-              ctx.lineTo(ip1.sx, ip1.sy + flagH * 0.8);
-              ctx.closePath(); ctx.fill();
+          // The platform and object as one overlay; the pad covers the
+          // glow disc (1.5 x its half-width) and the flag.
+          var ipPad = ip0 ? Math.max(6, Math.floor(8 * projScale / Math.max(1, ip0.fwd)) * 2) : 6;
+          if (keepModels) drawFortressInteractableGlow(st, C, _int3d);
+          else structureOverlayDraw(clip, [ib0, ib1, ib2, ib3, ip0, ip1], ipPad, function() {
+            if (ib0 && ib1 && ib2 && ib3) {
+              ctx.fillStyle = '#333'; ctx.globalAlpha = 0.8;
+              ctx.beginPath(); ctx.moveTo(ib0.sx, ib0.sy); ctx.lineTo(ib1.sx, ib1.sy);
+              ctx.lineTo(ib2.sx, ib2.sy); ctx.lineTo(ib3.sx, ib3.sy); ctx.closePath(); ctx.fill();
             }
-            ctx.globalAlpha = vis.fade;
-          }
+            // Object body
+            if (ip0 && ip1 && ip0.fwd > 1) {
+              var ipw = Math.max(3, Math.floor(8 * projScale / ip0.fwd));
+              if (_int3d.type === 'forge') {
+                // Anvil: dark trapezoid
+                ctx.fillStyle = '#444'; ctx.fillRect(ip0.sx - ipw, ip1.sy, ipw * 2, ip0.sy - ip1.sy);
+                ctx.fillStyle = '#666'; ctx.fillRect(ip0.sx - ipw * 1.3, ip1.sy, ipw * 2.6, (ip0.sy - ip1.sy) * 0.3);
+                // Orange glow
+                ctx.globalAlpha = 0.4 + 0.2 * Math.sin(gameTimeNow() * 0.004);
+                ctx.fillStyle = '#ff6600';
+                ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
+              } else if (_int3d.type === 'lectern') {
+                // Thin pedestal + book
+                ctx.fillStyle = '#555'; ctx.fillRect(ip0.sx - ipw * 0.4, ip1.sy, ipw * 0.8, ip0.sy - ip1.sy);
+                ctx.fillStyle = '#8866cc'; ctx.fillRect(ip0.sx - ipw, ip1.sy - ipw * 0.5, ipw * 2, ipw);
+                // Blue glow
+                ctx.globalAlpha = 0.3 + 0.2 * Math.sin(gameTimeNow() * 0.003);
+                ctx.fillStyle = '#4466ff';
+                ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy - ipw * 0.3, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
+              } else {
+                // Garrison banner pole + flag
+                ctx.strokeStyle = '#5a4a3a'; ctx.lineWidth = Math.max(2, ipw * 0.4);
+                ctx.beginPath(); ctx.moveTo(ip0.sx, ip0.sy); ctx.lineTo(ip1.sx, ip1.sy); ctx.stroke();
+                var flagW = Math.max(4, ipw * 1.5);
+                var flagH = Math.max(6, ipw * 2);
+                var wave = Math.sin(gameTimeNow() * 0.005) * flagW * 0.2;
+                ctx.fillStyle = _int3d.color;
+                ctx.beginPath();
+                ctx.moveTo(ip1.sx, ip1.sy);
+                ctx.lineTo(ip1.sx + flagW + wave, ip1.sy + flagH * 0.3);
+                ctx.lineTo(ip1.sx + flagW * 0.8, ip1.sy + flagH);
+                ctx.lineTo(ip1.sx, ip1.sy + flagH * 0.8);
+                ctx.closePath(); ctx.fill();
+              }
+              ctx.globalAlpha = vis.fade;
+            }
+          });
+          if (clip) ctx.globalAlpha = vis.fade;
           // Prompt text when player is near
           if (nearestFortressInteract && nearestFortressInteract.type === _int3d.type &&
               nearestFortressInteract.structure === st) {
-            var tp3 = proj(ix, iy, vis.floorZ + 28);
+            var tp3 = keepModels ? fortressInteractablePoint(st, C, _int3d, 'prompt') : proj(ix, iy, vis.floorZ + 28);
             if (tp3) {
               var fs3 = Math.max(10, Math.floor(18 * getScale3D('lgText') * projScale / (tp3.fwd || 10)));
-              ctx.globalAlpha = 1.0;
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold ' + fs3 + 'px monospace'; ctx.textAlign = 'center';
-              ctx.fillText(_int3d.label, tp3.sx, tp3.sy);
+              var tpHalf = _int3d.label.length * fs3 * 0.33 + 2;
+              structureOverlayDraw(clip, [{sx: tp3.sx - tpHalf, sy: tp3.sy - fs3, fwd: tp3.fwd},
+                {sx: tp3.sx + tpHalf, sy: tp3.sy + fs3 * 0.4, fwd: tp3.fwd}], 2, function() {
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold ' + fs3 + 'px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(_int3d.label, tp3.sx, tp3.sy);
+              });
             }
           }
         }
@@ -1193,22 +1362,31 @@ function drawStructures3D() {
             for (var _sk = 0; _sk < _sealN; _sk++) if (!_sealPts[_sk]) { _sealVisible = false; break; }
             if (_sealVisible && _sealPts[0].fwd > 1) {
               ctx.save();
-              ctx.globalAlpha = vis.fade * (0.4 + 0.35 * _sealPulse);
-              ctx.strokeStyle = 'rgba(255,60,20,0.9)';
-              ctx.lineWidth = Math.max(2, Math.floor(4 * projScale / _sealPts[0].fwd));
-              ctx.shadowBlur = 14; ctx.shadowColor = '#ff3300';
-              ctx.beginPath(); ctx.moveTo(_sealPts[0].sx, _sealPts[0].sy);
-              for (var _sk2 = 1; _sk2 < _sealN; _sk2++) ctx.lineTo(_sealPts[_sk2].sx, _sealPts[_sk2].sy);
-              ctx.closePath(); ctx.stroke();
-              ctx.shadowBlur = 0;
+              // One overlay at the ring's nearest depth; the pad covers the
+              // stroke and its 14 px shadow.
+              var _sealW = Math.max(2, Math.floor(4 * projScale / _sealPts[0].fwd));
+              structureOverlayDraw(clip, _sealPts, _sealW + 16, function() {
+                ctx.globalAlpha = vis.fade * (0.4 + 0.35 * _sealPulse);
+                ctx.strokeStyle = 'rgba(255,60,20,0.9)';
+                ctx.lineWidth = _sealW;
+                ctx.shadowBlur = 14; ctx.shadowColor = '#ff3300';
+                ctx.beginPath(); ctx.moveTo(_sealPts[0].sx, _sealPts[0].sy);
+                for (var _sk2 = 1; _sk2 < _sealN; _sk2++) ctx.lineTo(_sealPts[_sk2].sx, _sealPts[_sk2].sy);
+                ctx.closePath(); ctx.stroke();
+                ctx.shadowBlur = 0;
+              });
               // "SEALED" label at top of ring
               if (fortressLockedNear && fortressLockedNear.structure === st) {
                 var _slP = proj(st.x, st.y, vis.floorZ + 20);
                 if (_slP && _slP.fwd > 1) {
                   var _slFs = Math.max(9, Math.floor(14 * projScale / _slP.fwd));
-                  ctx.globalAlpha = vis.fade;
-                  ctx.fillStyle = '#ff6644'; ctx.font = 'bold ' + _slFs + 'px monospace'; ctx.textAlign = 'center';
-                  ctx.fillText('SEALED — defeat all enemies', _slP.sx, _slP.sy);
+                  var _slHalf = 27 * _slFs * 0.33 + 2;
+                  structureOverlayDraw(clip, [{sx: _slP.sx - _slHalf, sy: _slP.sy - _slFs, fwd: _slP.fwd},
+                    {sx: _slP.sx + _slHalf, sy: _slP.sy + _slFs * 0.4, fwd: _slP.fwd}], 2, function() {
+                    ctx.globalAlpha = vis.fade;
+                    ctx.fillStyle = '#ff6644'; ctx.font = 'bold ' + _slFs + 'px monospace'; ctx.textAlign = 'center';
+                    ctx.fillText('SEALED — defeat all enemies', _slP.sx, _slP.sy);
+                  });
                 }
               }
               ctx.restore();
@@ -1219,6 +1397,70 @@ function drawStructures3D() {
       }
       ctx.restore();
     });
+}
+
+// Fortress keep interactables: offsets from the fortress centre and used
+// flags from completedFortresses, shared by the legacy overlay and the
+// landmark models.
+function fortressInteractables3D(st) {
+  var _fComp2 = completedFortresses[st.regionX + ',' + st.regionY] || {};
+  return [
+    {type: 'forge',    ox: 0,         oy: -cell * 4, used: !!_fComp2.forge,    color: '#ff8800', label: '[E] Enchantment Forge'},
+    {type: 'lectern',  ox: cell * 4,  oy: cell * 2,  used: !!_fComp2.lectern,  color: '#6688ff', label: '[E] Ancient Lectern'},
+    {type: 'garrison', ox: -cell * 4, oy: cell * 2,  used: !!_fComp2.garrison, color: '#c8a028', label: '[E] Rally Garrison'}
+  ];
+}
+
+// Keep interactable models (landmarkModels, integration stage J1): each
+// unused one on its own getEntityRenderFloorZ, facing the fortress centre,
+// drawn in the structures' opaque phase with the shell (drawStructures3D's
+// plain callback) within viewDist, where its faces have faded out. The
+// overlay phase keeps the forge and lectern glows (legacy colours, pulses
+// and sizes) as billboards tested at the prop's nearest depth, so its own
+// model never hides them, and the prompt at the model's prompt anchor.
+var _keepPropProbe = {x: 0, y: 0};
+function fortressInteractableFloorZ(st, item) {
+  _keepPropProbe.x = st.x + item.ox; _keepPropProbe.y = st.y + item.oy;
+  return getEntityRenderFloorZ(_keepPropProbe);
+}
+function drawFortressInteractableModels(st, vis, C) {
+  var list = fortressInteractables3D(st), now = gameTimeNow();
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    if (item.used || Math.hypot(st.x + item.ox - cam.x, st.y + item.oy - cam.y) > viewDist) continue;
+    var floorZ = fortressInteractableFloorZ(st, item);
+    if (!Number.isFinite(floorZ)) continue;
+    drawWorldModel(keepPropInstance(st, item, floorZ, now), landmarkModelFor(keepPropModelKey(item.type)), C, 'opaque', null);
+  }
+}
+function fortressInteractablePoint(st, C, item, anchor) {
+  var floorZ = fortressInteractableFloorZ(st, item);
+  if (!Number.isFinite(floorZ)) return null;
+  return landmarkAnchorScreen(landmarkModelFor(keepPropModelKey(item.type)), keepPropInstance(st, item, floorZ, gameTimeNow()), anchor, C);
+}
+function drawFortressInteractableGlow(st, C, item) {
+  if (item.type !== 'forge' && item.type !== 'lectern') return;
+  var floorZ = fortressInteractableFloorZ(st, item);
+  if (!Number.isFinite(floorZ)) return;
+  var now = gameTimeNow(), inst = keepPropInstance(st, item, floorZ, now), forge = item.type === 'forge';
+  var p = landmarkAnchorScreen(landmarkModelFor(keepPropModelKey(item.type)), inst, 'glow', C);
+  if (!p) return;
+  var r = Math.max(3, Math.floor(8 * projScale / p.fwd)) * 1.5;
+  withSceneDepthBillboard({x: p.sx - r, y: p.sy - r, width: r * 2, height: r * 2},
+    Math.max(1, landmarkNearDepth(inst, C, KEEP_PROP_DIMS.pad, KEEP_PROP_DIMS.pad)), function() {
+      ctx.globalAlpha = forge ? 0.4 + 0.2 * Math.sin(now * 0.004) : 0.3 + 0.2 * Math.sin(now * 0.003);
+      ctx.fillStyle = forge ? '#ff6600' : '#4466ff';
+      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2); ctx.fill();
+    });
+}
+
+// A structures3D overlay: drawn inline for the unclipped (legacy) call, or,
+// after the early landmark pass, depth-clipped over its points' padded screen
+// box at their nearest depth (marketPropDepthClip), so a nearer wall hides it.
+function structureOverlayDraw(clip, points, pad, draw) {
+  if (!clip) { draw(); return 1; }
+  var box = marketPropDepthClip(points, pad);
+  return box ? withSceneDepthBillboard(box.bounds, box.depth, draw) : 0;
 }
 
 // Screen bounds and nearest camera depth of a directly painted prop's
@@ -1240,6 +1482,14 @@ function marketPropDepthClip(points, pad) {
 
 function drawMarketStalls3D() {
   if (!marketStalls || !marketStalls.length || !MODE3D) return;
+  // landmarkModels (12-prop-models.js): the stall and guard tower models,
+  // phased like the other landmarks ('opaque' from draw()'s
+  // landmarkOpaque3D stage; with no argument, landmarkLatePhase's 'overlay'
+  // after that pass, else 'all'). Off (stallPhase undefined): the legacy
+  // painters below, which draw nothing for 'opaque'.
+  var stallPhase = typeof landmarkModelsOn === 'function' && landmarkModelsOn() ?
+    (arguments.length ? arguments[0] : typeof landmarkLatePhase === 'function' ? landmarkLatePhase('stalls') : undefined) || 'all' : undefined;
+  if (stallPhase === undefined && arguments[0] === 'opaque') return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonY = C.horizonY, cameraZ = C.cameraZ;
@@ -1287,7 +1537,10 @@ function drawMarketStalls3D() {
   var POLE_R = 1.5;   // pole visual radius (not used for collision)
 
   // Draw tower first so stalls paint over it (tower is at center, stalls surround it)
-  drawGuardTower3D(C, proj, fillQuad, strokeQuad);
+  // With the models, 'all' is the opaque phase and then the overlay phase
+  // (the beacon after the stall models), as the early pass splits them.
+  drawGuardTower3D(C, proj, fillQuad, strokeQuad, stallPhase === 'all' ? 'opaque' : stallPhase);
+  if (stallPhase === 'overlay') return;   // the stall models have no overlays
 
   // Sort stalls back-to-front so near stalls occlude far ones (painter's algorithm)
   var sortedStalls = [];
@@ -1297,10 +1550,19 @@ function drawMarketStalls3D() {
     // scene-depth clip below, not legacy column/hill gates, hides the stall.
     var _ssZ = floorMesh ? getFloorHeightAt(_ss.x, _ss.y) * 25 : 0;
     var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});
+    // landmarkBoundsGate (stage J2, models only): a centre behind the
+    // camera or out of range is re-asked with the stall's bounds.
+    if (!_sv && stallPhase !== undefined && typeof landmarkBoundsRescue === 'function')
+      _sv = landmarkBoundsRescue(_ss.x, _ss.y, _ssZ, C, viewDist * 0.8, 0.8, landmarkStallRadius());
     if (!_sv) continue;
     sortedStalls.push({idx: si, dist: _sv.dist, vis: _sv});
   }
   sortedStalls.sort(function(a, b) { return b.dist - a.dist; });
+  if (stallPhase !== undefined) {
+    if (typeof drawMarketStallModels3D === 'function') drawMarketStallModels3D(sortedStalls, C, awningColors, awningDark);
+    if (stallPhase === 'all') drawGuardTower3D(C, proj, fillQuad, strokeQuad, 'overlay');
+    return;
+  }
 
   for (var ssi = 0; ssi < sortedStalls.length; ssi++) {
     var stall = marketStalls[sortedStalls[ssi].idx];
@@ -1421,6 +1683,37 @@ function drawMarketStalls3D() {
 
 }
 
+// Market stall models (landmarkModels, integration stage J1) for the stalls
+// the stall pass's gate (sorted far to near; bounds with landmarkBoundsGate):
+// each on its getEntityRenderFloorZ, drawn near to far, writing depth, and
+// tinted with the legacy awning, stripe and goods colours; the goods model
+// within the legacy goods range.
+function drawMarketStallModels3D(sorted, C, awningColors, awningDark) {
+  var model = landmarkModelFor('landmarkStall'), goods = landmarkModelFor('landmarkStallGoods');
+  for (var n = sorted.length - 1; n >= 0; n--) {
+    var stall = marketStalls[sorted[n].idx], floorZ = getEntityRenderFloorZ(stall), type = stall.stallType;
+    if (!Number.isFinite(floorZ)) continue;
+    var inst = stallModelInstance(stall, floorZ, awningColors[type] || '#886633', awningDark[type] || '#553311',
+      awningColors[type] || '#aa8844');
+    drawWorldModel(inst, model, C, 'opaque', null);
+    if (sorted[n].dist < STALL_MODEL_DIMS.goodsDist) drawWorldModel(inst, goods, C, 'opaque', null);
+  }
+}
+
+// Guard tower model (landmarkModels, integration stage J1). Returns the
+// support z it stands on when it owns the tower body (drawn now unless the
+// phase is 'overlay'), or NaN: no model, no support, or the camera in or at
+// the tower (the shop stands there; towerCameraInReach), where the legacy
+// body is drawn with the beacon instead.
+function drawGuardTowerModel3D(C, phase) {
+  var model = landmarkModelFor('landmarkTower'), floorZ = getEntityRenderFloorZ(shopMarker);
+  if (!model || !Number.isFinite(floorZ)) return NaN;
+  var inst = towerModelInstance(shopMarker, floorZ);
+  if (towerCameraInReach(inst, C)) return NaN;
+  if (phase !== 'overlay') drawWorldModel(inst, model, C, 'opaque', null);
+  return floorZ;
+}
+
 // Guard tower — stone column with golden glow on top, drawn at market center.
 // Extracted from drawMarketStalls3D for clarity; uses early returns instead of deep nesting.
 function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
@@ -1430,7 +1723,23 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
   var bgz = bfh * 25;
   var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});
+  // landmarkBoundsGate (stage J2, models only; arguments[4] is their phase):
+  // a centre behind the camera or past 900 u is re-asked with the tower's
+  // bounds. The line above stays the audited centre gate (the audit lab's
+  // _SHOP_ZERO probe replaces it), so a reintroduced column/hill gate still
+  // rejects the tower.
+  if (!towerVis && arguments[4] !== undefined && typeof landmarkBoundsRescue === 'function')
+    towerVis = landmarkBoundsRescue(shopMarker.x, shopMarker.y, bgz, C, 900, 0.8, landmarkTowerRadius());
   if (!towerVis) return;
+  // landmarkModels: arguments[4] is the stall pass's phase. The model (on
+  // getEntityRenderFloorZ) draws in 'opaque'/'all' and then owns the body;
+  // the beacon stays a billboard for 'overlay'/'all', on the model's top. A
+  // camera in or at the tower keeps the legacy body, drawn with the beacon.
+  var towerPhase = arguments[4];
+  var towerModelZ = towerPhase !== undefined && typeof drawGuardTowerModel3D === 'function' ?
+    drawGuardTowerModel3D(C, towerPhase) : NaN;
+  if (towerPhase === 'opaque') return;
+  if (Number.isFinite(towerModelZ)) bgz = towerModelZ;
 
   var bDist = towerVis.dist;
   var bFwd = towerVis.fwd;
@@ -1454,7 +1763,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   }
 
   // Draw tower body, clipped to opaque scene depth at its nearest point
-  var towerClip = (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
+  var towerClip = !Number.isFinite(towerModelZ) && (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
   if (towerClip) withSceneDepthBillboard(towerClip.bounds, towerClip.depth, function() {
     ctx.save();
     var stoneLit = '#9b8b7b', stoneDark = '#6b5d4b', stoneTop = '#8b7d6b';
@@ -1577,10 +1886,19 @@ function drawCaveEntrance3D() {
   var STONE_SHADOW = stoneColors.shadow;
 
   var visibleCaves = [];
+  // landmarkBoundsGate (12-prop-models.js, stage J2): the portal's world
+  // bounds replace the 900 u and fwd < 1 centre checks (its faces are
+  // near-plane clipped), so a mouth seen sideways from inside still draws.
+  var portalBounds = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn();
   for (var ei = 0; ei < deepCaveEntrances.length; ei++) {
     var ce = deepCaveEntrances[ei];
     var dx = ce.x - cam.x, dy = ce.y - cam.y;
     var dist = Math.hypot(dx, dy);
+    if (portalBounds) {
+      if (entityVisible3D(ce.x, ce.y, 0, C, {maxDist: 900, sceneDepth: true, fadeFraction: 1, worldRadius: landmarkPortalRadius(ce)}))
+        visibleCaves.push({ce: ce, dist: dist});
+      continue;
+    }
     if (dist < 1 || dist > 900) continue;
     var fwd = dx * C.cosAng + dy * C.sinAng;
     if (fwd < 1) continue;
@@ -2647,6 +2965,12 @@ function drawHudOverlay() {
     ctx.fillStyle = _fpsSmooth > 45 ? '#44ff44' : _fpsSmooth > 25 ? '#ffcc00' : '#ff4444';
     var _fpsY = pad + (ENDLESS_MODE ? (DEBUG_3D ? 86 : 52) : 26) * S;
     ctx.fillText(Math.round(_fpsSmooth) + ' FPS', w - pad, _fpsY);
+    // Render path A/B line (visible in fullscreen): preset, texture use, fallbacks.
+    if (typeof renderHudStatusLine === 'function') {
+      ctx.font = Math.max(8, Math.floor(9 * S)) + 'px monospace';
+      ctx.fillStyle = '#c8d4e8';
+      ctx.fillText(renderHudStatusLine(), w - pad, _fpsY + 12 * S);
+    }
   }
 
   // Inventory overlay (I key toggle)
@@ -2863,14 +3187,21 @@ function applySettings() {
       requestAnimationFrame(function() { assembleWindow(_rebuildPcx, _rebuildPcy); });
     }
   }
-  // Resolution scaling — apply to canvas if in fullscreen
+  // Resolution scaling — apply to canvas if in fullscreen. Entering
+  // fullscreen uses the same size rule, including the fullscreen row cap.
   var fs = document.fullscreenElement || document.webkitFullscreenElement
          || document.mozFullScreenElement || document.msFullscreenElement;
   if (fs === canvas) {
     var baseW = window.innerWidth || screen.width;
     var baseH = window.innerHeight || screen.height;
-    canvas.width  = Math.floor(baseW * settings.resolution);
-    canvas.height = Math.floor(baseH * settings.resolution);
+    if (typeof fullscreenCanvasSize === 'function') {
+      var fsSize = fullscreenCanvasSize(baseW, baseH, settings.resolution, settings.fullscreenRows);
+      canvas.width = fsSize.width;
+      canvas.height = fsSize.height;
+    } else {
+      canvas.width  = Math.floor(baseW * settings.resolution);
+      canvas.height = Math.floor(baseH * settings.resolution);
+    }
   }
 }
 

@@ -74,7 +74,9 @@ function createWallDecorations() {
 // The decoration owns an actual wall face, not merely a ground coordinate.
 // Match drawWalls3D's center-based top and its per-face base, then fit the
 // sprite inside the exposed span. A collapsed/missing wall cannot hold a torch.
-function getWallDecorationAttachment(dec) {
+// terrain, when given, is wallDecorationTerrain(dec): its three terrain
+// heights replace the three live queries (the wall arrays are read live).
+function getWallDecorationAttachment(dec, terrain) {
   if (dec.gridX < 0 || dec.gridY < 0 || dec.gridX >= gridW || dec.gridY >= gridH) return null;
   var ci = dec.gridY * gridW + dec.gridX;
   if (!grid || !grid[ci]) return null;
@@ -82,15 +84,17 @@ function getWallDecorationAttachment(dec) {
   var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
   if (!nx && !ny) return null;
   var centerX = (dec.gridX + 0.5) * cell, centerY = (dec.gridY + 0.5) * cell;
-  var centerH = floorMesh ? getFloorHeightAt(centerX, centerY) : 0;
+  var centerH = terrain ? terrain.centerH : floorMesh ? getFloorHeightAt(centerX, centerY) : 0;
   var topH = centerH + (CANVAS_BASE_H / 25) * (wallHeights ? wallHeights[ci] : 1);
   if (wallMaxTopZ && isFinite(wallMaxTopZ[ci])) topH = Math.min(topH, wallMaxTopZ[ci]);
   var face = dec.side === 'west' ? 0 : dec.side === 'east' ? 1 : dec.side === 'north' ? 2 : 3;
   var baseH = wallFaceBase ? wallFaceBase[ci * 4 + face] : centerH;
   var x = dec.worldX + nx * 0.5, y = dec.worldY + ny * 0.5;
-  var openH = floorMesh ? getFloorHeightAt(x, y) : 0;
+  var openH = terrain ? terrain.openH : floorMesh ? getFloorHeightAt(x, y) : 0;
   baseH = Math.max(baseH, openH);
-  if (floorMesh && typeof getCaveSpaceAt === 'function') {
+  if (terrain) {
+    topH = Math.min(topH, terrain.ceilingH);
+  } else if (floorMesh && typeof getCaveSpaceAt === 'function') {
     topH = Math.min(topH, getCaveSpaceAt(x, y, openH).ceilingH);
   }
   var span = (topH - baseH) * 25;
@@ -107,6 +111,78 @@ function getWallDecorationAttachment(dec) {
 function getWallDecorationRenderZ(dec) {
   var attachment = getWallDecorationAttachment(dec);
   return attachment ? attachment.z : NaN;
+}
+
+// ── decorAnchorCache (integration stage K; exact, kept for bisecting) ──
+// With the switch on, the scatter, wall-decoration and ore loops first reject
+// by distance and view, in the same arithmetic as entityVisible3D and the
+// loops' own culls, and only then query terrain. The heights a prop stands on
+// or hangs from are cached per record: scatter support (getEntityRenderFloorZ)
+// and the three terrain queries of getWallDecorationAttachment (centre floor,
+// open floor, cave ceiling). Wall arrays (grid, heights, caps, face bases)
+// stay live reads. The cache is dropped when floorMesh changes identity or
+// worldGeometryEpoch moves (05-endless-world.js: every window assembly, and
+// noteWorldGeometryEdit() after any in-place mesh edit). Records are keys of
+// a WeakMap and each entry re-checks the fields it was computed from.
+// DECOR_ANCHOR_STORE = false keeps the early rejection with live queries.
+var DECOR_ANCHOR_STORE = true;
+var _decorAnchors = null, _decorAnchorMesh = null, _decorAnchorEpoch = 0;
+function decorAnchorCacheOn() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('decorAnchorCache');
+}
+// The current anchor map, or null (store off or no WeakMap: live queries).
+function decorAnchorMap() {
+  if (!DECOR_ANCHOR_STORE || typeof WeakMap !== 'function') return null;
+  var epoch = typeof worldGeometryEpoch === 'number' ? worldGeometryEpoch : 0;
+  if (!_decorAnchors || _decorAnchorMesh !== floorMesh || _decorAnchorEpoch !== epoch) {
+    _decorAnchors = new WeakMap(); _decorAnchorMesh = floorMesh; _decorAnchorEpoch = epoch;
+  }
+  return _decorAnchors;
+}
+function _decorAnchorStat(name) {
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat(name, 1);
+}
+// getWallDecorationAttachment's three terrain heights for dec (a wall
+// decoration, or an ore face record keyed by its ore), cached under key when
+// map is given. family names the terr<family>/hit<family> frame counters.
+function wallDecorationTerrain(dec, map, key, family) {
+  var t = map ? map.get(key) : null;
+  if (t && t.gridX === dec.gridX && t.gridY === dec.gridY && t.side === dec.side &&
+      t.worldX === dec.worldX && t.worldY === dec.worldY) {
+    _decorAnchorStat('hit' + family);
+    return t;
+  }
+  _decorAnchorStat('terr' + family);
+  var nx = dec.side === 'west' ? -1 : dec.side === 'east' ? 1 : 0;
+  var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
+  var x = dec.worldX + nx * 0.5, y = dec.worldY + ny * 0.5;
+  t = {gridX: dec.gridX, gridY: dec.gridY, side: dec.side, worldX: dec.worldX, worldY: dec.worldY,
+    centerH: floorMesh ? getFloorHeightAt((dec.gridX + 0.5) * cell, (dec.gridY + 0.5) * cell) : 0,
+    openH: floorMesh ? getFloorHeightAt(x, y) : 0, ceilingH: Infinity};
+  if (floorMesh && typeof getCaveSpaceAt === 'function') t.ceilingH = getCaveSpaceAt(x, y, t.openH).ceilingH;
+  if (map) map.set(key, t);
+  return t;
+}
+// A floor-scatter record for renderEntities3D whose support is cached: a
+// stand-in {x, y, renderFloorZ, _scatterItem} (getEntityRenderFloorZ then
+// reads renderFloorZ), or the item itself when it carries its own height.
+function scatterAnchor(item, map) {
+  if (Number.isFinite(item.renderFloorZ) || Number.isFinite(item.feetZ) || item.underground || item.caveSpawnId) return item;
+  var a = map ? map.get(item) : null;
+  if (a && a.x === item.x && a.y === item.y) { _decorAnchorStat('hitScatter'); return a; }
+  _decorAnchorStat('terrScatter');
+  a = {x: item.x, y: item.y, renderFloorZ: getEntityRenderFloorZ(item), _scatterItem: item};
+  if (map) map.set(item, a);
+  return a;
+}
+// Per-family depth-clip counters, read-only: every withSceneDepthClip call
+// (billboards and model faces included) advances the clip generation.
+function sceneClipMark() {
+  return typeof _sceneDepthClipGeneration === 'number' ? _sceneDepthClipGeneration : 0;
+}
+function addSceneClipStat(name, mark) {
+  if (typeof addRenderFrameStat === 'function' && typeof _sceneDepthClipGeneration === 'number')
+    addRenderFrameStat(name, (_sceneDepthClipGeneration - mark) >>> 0);
 }
 
 // Upper terrain owns a separate, static receiver bake. The legacy XY light
@@ -411,11 +487,28 @@ function isDecorationOccluded(decorX, decorY, camX, camY) {
   return false;
 }
 
+// Keyed on the absolute supporting cell: window-local worldX/Y plus the
+// window origin, stepped half a cell back into the wall along the face
+// normal. gridX/Y are window-relative in Endless, so keying on them re-rolled
+// heraldry and flame sway whenever the window re-centred. The origin is used
+// only in Endless mode (as in 06-spatial-queries): it is not reset when a
+// fixed level starts, and fixed-level records are already absolute. At origin
+// 0 this is the old key. Records without world coordinates keep gridX/Y.
 function getWallDecorationVariant(dec) {
   if (!dec) return 0;
   var sideCode = dec.side === 'north' ? 11 : dec.side === 'south' ? 23 : dec.side === 'west' ? 37 : 53;
-  var h = Math.imul((dec.gridX | 0) + 4099, 73856093) ^
-          Math.imul((dec.gridY | 0) + 8191, 19349663) ^ sideCode;
+  var cellX = dec.gridX | 0, cellY = dec.gridY | 0;
+  if (Number.isFinite(dec.worldX) && Number.isFinite(dec.worldY) && typeof cell === 'number' && cell > 0) {
+    var endless = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+    var ox = endless && typeof windowOriginX === 'number' && isFinite(windowOriginX) ? windowOriginX : 0;
+    var oy = endless && typeof windowOriginY === 'number' && isFinite(windowOriginY) ? windowOriginY : 0;
+    var inX = dec.side === 'west' ? 0.5 : dec.side === 'east' ? -0.5 : 0;
+    var inY = dec.side === 'north' ? 0.5 : dec.side === 'south' ? -0.5 : 0;
+    cellX = Math.floor((dec.worldX + ox) / cell + inX);
+    cellY = Math.floor((dec.worldY + oy) / cell + inY);
+  }
+  var h = Math.imul(cellX + 4099, 73856093) ^
+          Math.imul(cellY + 8191, 19349663) ^ sideCode;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return (h ^ (h >>> 16)) >>> 0;
 }
@@ -446,6 +539,40 @@ function traceWallBannerCloth(x, y, w, h) {
   ctx.lineTo(x, y + h * 0.28);
   ctx.lineTo(x - w * 0.36, y + h * 0.42);
   ctx.closePath();
+}
+
+// Three flat flame layers give a readable core with only bounded paths.
+// (x, y) is the torch sprite's origin, 0.01 h below the top of its shaft.
+// Shared by the sprite and by the modelled torch's overlay-phase billboard.
+function drawWallTorchFlame(x, y, w, h, variant, now, baseAlpha) {
+  var torchWave = Math.sin(now * 0.009 + (variant & 255) * 0.17);
+  var torchX = x + torchWave * w * 0.035;
+  var torchTop = y - h * (0.65 + torchWave * 0.035);
+  ctx.globalAlpha = baseAlpha * 0.92;
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
+  ctx.beginPath(); ctx.moveTo(torchX - w * 0.24, y + h * 0.03);
+  ctx.quadraticCurveTo(torchX - w * 0.30, y - h * 0.28, torchX, torchTop);
+  ctx.quadraticCurveTo(torchX + w * 0.30, y - h * 0.25, torchX + w * 0.22, y + h * 0.03);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
+  ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.19, w * 0.16, h * 0.29, torchWave * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
+  ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.10, w * 0.07, h * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+}
+
+// The sconce's three flame ellipses. cx is the flame's centre (the sprite's
+// bowl, x + 0.25 w) and y the sprite's origin, 0.06 h below the bowl's rim.
+// Shared by the sprite and by the modelled sconce's overlay-phase billboard.
+function drawWallSconceFlame(cx, y, w, h, variant, now, baseAlpha) {
+  var sconceWave = Math.sin(now * 0.010 + (variant & 255) * 0.13);
+  var sconceX = cx + sconceWave * w * 0.025;
+  ctx.globalAlpha = baseAlpha * 0.9;
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.25, w * 0.18, h * 0.29, sconceWave * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.19, w * 0.10, h * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.13, w * 0.045, h * 0.09, 0, 0, Math.PI * 2); ctx.fill();
 }
 
 function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade, dec, now) {
@@ -482,20 +609,7 @@ function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade
     ctx.fillStyle = wallPropLitColor('wallPropIron', 'deep', brightness);
     ctx.fillRect(x - w * 0.14, y + h * 0.02, w * 0.28, Math.max(1, h * 0.07));
     ctx.fillRect(x - w * 0.12, y + h * 0.17, w * 0.24, Math.max(1, h * 0.06));
-    // Three flat flame layers give a readable core with only bounded paths.
-    var torchWave = Math.sin(now * 0.009 + (variant & 255) * 0.17);
-    var torchX = x + torchWave * w * 0.035;
-    var torchTop = y - h * (0.65 + torchWave * 0.035);
-    ctx.globalAlpha = baseAlpha * 0.92;
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
-    ctx.beginPath(); ctx.moveTo(torchX - w * 0.24, y + h * 0.03);
-    ctx.quadraticCurveTo(torchX - w * 0.30, y - h * 0.28, torchX, torchTop);
-    ctx.quadraticCurveTo(torchX + w * 0.30, y - h * 0.25, torchX + w * 0.22, y + h * 0.03);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
-    ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.19, w * 0.16, h * 0.29, torchWave * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
-    ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.10, w * 0.07, h * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+    drawWallTorchFlame(x, y, w, h, variant, now, baseAlpha);
   } else if (type === 'shield') {
     // Heater-shield silhouette, iron rim, heraldic field and raised boss.
     ctx.globalAlpha = baseAlpha * 0.34;
@@ -570,15 +684,7 @@ function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade
     ctx.beginPath(); ctx.ellipse(x + w * 0.25, y - h * 0.02, w * 0.25, h * 0.10, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = wallPropLitColor('wallPropIron', 'lit', brightness);
     ctx.beginPath(); ctx.ellipse(x + w * 0.25, y - h * 0.06, w * 0.19, h * 0.07, 0, 0, Math.PI * 2); ctx.fill();
-    var sconceWave = Math.sin(now * 0.010 + (variant & 255) * 0.13);
-    var sconceX = x + w * 0.25 + sconceWave * w * 0.025;
-    ctx.globalAlpha = baseAlpha * 0.9;
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.25, w * 0.18, h * 0.29, sconceWave * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.19, w * 0.10, h * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.13, w * 0.045, h * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+    drawWallSconceFlame(x + w * 0.25, y, w, h, variant, now, baseAlpha);
 
   } else if (type === 'wall_crack') {
     // A real renderer for the former invisible `crack` decoration.
@@ -1506,18 +1612,38 @@ function paintFloorItem(ctx, type, variant, seed, x, y, size) {
 }
 
 // Perspective-projects all floorScatter items and draws them with drawFloorItem().
+// Phase (draw()'s sceneEntities, read from arguments so the declaration line
+// stays as the audit lab's mutations anchor it): with floorPropModels off
+// floor scatter has no model, so 'opaque' draws nothing; 'overlay' or no
+// argument draws the sprites. With it on (stage I), 'opaque' (or no
+// argument, first) draws the modelled types as depth-writing models
+// (drawFloorPropModels3D) and the sprite pass skips them.
 function drawFloorScatter3D() {
+  var _fsModels = floorPropModelsOn();
+  if (_fsModels && arguments[0] !== 'overlay') {
+    var modelMark = sceneClipMark();
+    drawFloorPropModels3D();
+    addSceneClipStat('clipScatter', modelMark);
+  }
+  if (arguments[0] === 'opaque') return;
   beginFloorArtworkFrame();
   var _fsMaxDist = viewDist * 0.75;
+  // Stage K (decorAnchorCache): only the items entityVisible3D would keep by
+  // distance and forward, in order, with their support from the anchor cache.
+  var _fsItems = decorAnchorCacheOn() ? floorScatterInView(_fsMaxDist) : floorScatter;
+  if (_fsModels) _fsItems = floorScatterSprites(_fsItems);
+  var clipMark = sceneClipMark();
   // A doorway can reveal either stratum from either camera position. The
   // actual terrain/ceiling depth clips scatter; camera state never hides it.
-  renderEntities3D(floorScatter, {maxDist: _fsMaxDist, groundAnchor: true,
+  renderEntities3D(_fsItems, {maxDist: _fsMaxDist, groundAnchor: true,
     bounds: function(item, vis) {
+      item = item._scatterItem || item;
       var size = Math.max(6, Math.min(70, Math.floor(1500 * getScale3D(FLOOR_ITEM_TIER[item.type] || 'medium') / vis.fwd)));
       // Covers the widest sticks, vertical plants, and stroked edges.
       return {x:vis.sx-size*2-2,y:vis.sy-size*2-2,width:size*4+4,height:size*4+4};
     }, fadeFraction: 0.3, sort: true, minDist: 3, mode3dOnly: true},
     function(item, vis, C, ctx, now) {
+      item = item._scatterItem || item;
       var fwd = vis.fwd;
       var tier = FLOOR_ITEM_TIER[item.type] || 'medium';
       var s3 = getScale3D(tier);
@@ -1532,12 +1658,135 @@ function drawFloorScatter3D() {
       drawFloorArtwork(ctx, item.type, item.variant, item.seed, vis.sx, vis.sy, size);
       ctx.restore();
     });
+  addSceneClipStat('clipScatter', clipMark);
+}
+
+// Stage K: the floor-scatter items entityVisible3D keeps by distance and
+// forward (the same arithmetic, before any terrain query), in their order,
+// each as its scatterAnchor stand-in. Items without support are dropped, as
+// renderEntities3D would drop them. Reuses one list.
+var _floorScatterInView = [];
+function floorScatterInView(maxDist) {
+  var list = _floorScatterInView;
+  list.length = 0;
+  if (!floorScatter || !floorScatter.length || !MODE3D) return list;
+  var C = getCam3D(), map = decorAnchorMap(), limit = maxDist || viewDist;
+  for (var i = 0; i < floorScatter.length; i++) {
+    var item = floorScatter[i], wx = item.x, wy = item.y;
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+    var dx = wx - cam.x, dy = wy - cam.y, dist = Math.hypot(dx, dy);
+    if (dist < 1) dist = 1;
+    if (dist > limit || dx * C.cosAng + dy * C.sinAng < 1) continue;
+    var a = scatterAnchor(item, map);
+    if (a !== item && !Number.isFinite(a.renderFloorZ)) continue;
+    list.push(a);
+  }
+  return list;
+}
+
+// ── Floor-prop models (integration stage I, floorPropModels) ──
+// With the switch on, the modelled scatter types (12-prop-models.js
+// FLOOR_PROP_TYPES; a type whose models were rejected stays a sprite) draw
+// in the opaque phase as depth-writing models, near to far, over the
+// sprite's range (0.75 viewDist, none nearer than 3). An item is kept while
+// its reach circle is in front of the camera and inside the horizontal view.
+// Alpha is only the last 20% range fade times the window spawn fade: colour
+// fog (drawWorldModel), not the sprite's see-through distance alpha. They
+// skip the sprite and its contact shadow. With decorAnchorCache on, an
+// item's pose and support are cached (the anchor cache's invalidation:
+// floorMesh identity, worldGeometryEpoch); items carrying their own height
+// are recomputed each frame, as scatterAnchor passes them through.
+var _floorPropEntries = [], _floorPropVisible = [], _floorPropSprites = [];
+var _floorPropCache = null, _floorPropCacheOwner = null;
+function floorPropModelsOn() {
+  return typeof floorPropTypeReady === 'function' && typeof renderFeatureOn === 'function' && renderFeatureOn('floorPropModels');
+}
+// The sprite list without the modelled types (reuses one list).
+function floorScatterSprites(items) {
+  var list = _floorPropSprites;
+  list.length = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!floorPropTypeReady((it._scatterItem || it).type)) list.push(it);
+  }
+  return list;
+}
+function floorPropCacheMap() {
+  var owner = decorAnchorCacheOn() ? decorAnchorMap() : null;
+  if (!owner) return null;
+  if (owner !== _floorPropCacheOwner) { _floorPropCache = new WeakMap(); _floorPropCacheOwner = owner; }
+  return _floorPropCache;
+}
+function floorPropOwnHeight(item) {
+  return Number.isFinite(item.renderFloorZ) || Number.isFinite(item.feetZ) || !!item.underground || !!item.caveSpawnId;
+}
+function _floorPropNearFirst(a, b) { return a.dist - b.dist; }
+function drawFloorPropModels3D() {
+  if (!floorScatter || !floorScatter.length || !MODE3D) return;
+  var C = getCam3D(), now = gameTimeNow(), map = floorPropCacheMap(), visible = _floorPropVisible;
+  var maxDist = viewDist * 0.75, fadeStart = maxDist * 0.8;
+  var tanHalf = 1 / C.invTanHalf, cosHalf = 1 / Math.sqrt(1 + tanHalf * tanHalf), sinHalf = tanHalf * cosHalf;
+  var windowed = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+  var ox = windowed && typeof windowOriginX === 'number' ? windowOriginX : 0;
+  var oy = windowed && typeof windowOriginY === 'number' ? windowOriginY : 0;
+  visible.length = 0;
+  for (var i = 0; i < floorScatter.length; i++) {
+    var item = floorScatter[i];
+    if (!floorPropTypeReady(item.type)) continue;
+    var dx = item.x - cam.x, dy = item.y - cam.y, dist = Math.hypot(dx, dy);
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng, side = Math.abs(dy * C.cosAng - dx * C.sinAng);
+    var entry = _floorPropEntries[visible.length] ||
+      (_floorPropEntries[visible.length] = {item: null, pose: null, own: {}, dist: 0, fade: 1});
+    var cacheable = map && !floorPropOwnHeight(item), cached = cacheable ? map.get(item) : null, pose;
+    if (cached && cached.x === item.x && cached.y === item.y && cached.type === item.type && cached.variant === item.variant &&
+        cached.seed === item.seed && cached.ox === ox && cached.oy === oy) {
+      pose = cached.pose;
+      if (fwd < -pose.reach || side * cosHalf - fwd * sinHalf > pose.reach) continue;
+      _decorAnchorStat('hitFloorProp');
+    } else {
+      pose = floorPropPose(item, cacheable ? null : entry.own);
+      if (!pose || fwd < -pose.reach || side * cosHalf - fwd * sinHalf > pose.reach) continue;
+      var support = floorPropSupportZ(item, pose);
+      if (!Number.isFinite(support)) continue;
+      pose.z = support - FLOOR_PROP_SINK;
+      if (cacheable) {
+        _decorAnchorStat('terrFloorProp');
+        map.set(item, {x: item.x, y: item.y, type: item.type, variant: item.variant, seed: item.seed, ox: ox, oy: oy, pose: pose});
+      }
+    }
+    var spawnFade = item.spawnMs ? Math.min(1, (now - item.spawnMs) / 500) : 1;
+    var rangeFade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    entry.item = item; entry.pose = pose; entry.dist = dist; entry.fade = rangeFade * spawnFade;
+    if (entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_floorPropNearFirst);
+  var baseAlpha = ctx.globalAlpha;
+  for (var n = 0; n < visible.length; n++) {
+    var prop = visible[n];
+    ctx.globalAlpha = baseAlpha * prop.fade;   // range and spawn fade only (1 inside the range)
+    drawWorldModel(prop.pose, prop.pose.model, C, 'opaque', null);
+  }
+  ctx.globalAlpha = baseAlpha;
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat('mdlFloorPropInstances', visible.length);
 }
 
 // Render treasure chests as billboarded sprites in the 3D view.
 // 3D projected treasure chests with lid-open animation and floating loot text.
-function drawTreasureChests3D() {
+// phase 'opaque' draws the modelled chests (chestModel) as depth-writing world
+// faces; 'overlay' draws their glow, sparkle, particles and loot label. With
+// chestModel off every chest takes the legacy path below, all of it in the
+// overlay phase. Omitted, the call draws both phases, opaque first.
+function drawTreasureChests3D(phase) {
   if (!treasureChests || !treasureChests.length || !MODE3D) return;
+  var clipMark = sceneClipMark();
+  if (typeof renderFeatureOn === 'function' && renderFeatureOn('chestModel') && typeof chestModelsReady === 'function' &&
+      chestModelsReady()) {
+    drawTreasureChestModels3D(phase);
+    addSceneClipStat('clipChest', clipMark);
+    return;
+  }
+  if (phase === 'opaque') return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonY = C.horizonY, cameraZ = C.cameraZ;
@@ -1793,84 +2042,195 @@ function drawTreasureChests3D() {
     if (ch.opened && lid > 0.3) {
       var textP = proj(ch.x, ch.y, floorZ + bodyH + lidH + 8);
       if (textP && textP.fwd > 2) {
-        var fontSize = Math.max(8, Math.min(14, Math.floor(1800 / textP.fwd)));
-        var lineH = fontSize + 2;
-        var textLines = [];
-        var textColors = [];
-
-        if (ch.relicId && RELIC_DEFS[ch.relicId]) {
-          // Relic in epic chest
-          var rDef = RELIC_DEFS[ch.relicId];
-          textLines.push(rDef.name);
-          textColors.push(RARITY_COLORS.epic);
-          textLines.push(rDef.desc);
-          textColors.push('#ddbbff');
-          if (equipment.relic) {
-            textLines.push('Replaces: ' + equipment.relic.name);
-            textColors.push('#888877');
-            textLines.push('[E] Swap');
-          } else {
-            textLines.push('[E] Take');
-          }
-          textColors.push('#c040ff');
-        } else if (ch.equipId && EQUIPMENT_DEFS[ch.equipId]) {
-          // Equipment with quality
-          var eInst = createEquipInstance(ch.equipId, ch.quality || 1.0);
-          textLines.push(eInst.displayName);
-          textColors.push(RARITY_COLORS[eInst.rarity] || '#ffffff');
-          textLines.push(eInst.desc);
-          textColors.push('#ccccbb');
-          if (eInst.quality && Math.abs(eInst.quality - 1.0) > 0.04) {
-            textLines.push('Quality: ' + Math.round(eInst.quality * 100) + '%');
-            textColors.push(eInst.quality >= 1.0 ? '#80ff80' : '#ff8080');
-          }
-          var currentItem = equipment[eInst.slot];
-          if (currentItem && currentItem.id !== eInst.id) {
-            textLines.push('Replaces: ' + (currentItem.displayName || currentItem.name));
-            textColors.push('#888877');
-            var statDelta = getEquipStatDelta(eInst, currentItem);
-            if (statDelta) { textLines.push(statDelta.text); textColors.push(statDelta.color); }
-            textLines.push('[E] Swap');
-          } else {
-            textLines.push('[E] Take');
-          }
-          textColors.push('#ffd700');
-        } else {
-          textLines.push('+' + ch.gold + ' Gold');
-          textColors.push('#ffd700');
-          textLines.push('[E] Take');
-          textColors.push('#ffd700');
-        }
-
-        // Draw backdrop
-        ctx.globalAlpha = fogAlpha * 0.85;
-        var maxTxtW = 0;
-        ctx.font = 'bold ' + fontSize + 'px Arial';
-        for (var ti = 0; ti < textLines.length; ti++) {
-          var tw = ctx.measureText(textLines[ti]).width;
-          if (tw > maxTxtW) maxTxtW = tw;
-        }
-        var bgW = maxTxtW + 12, bgH = textLines.length * lineH + 6;
-        withSceneDepthBillboard({x:textP.sx-bgW/2,y:textP.sy-bgH+2,width:bgW,height:bgH+2}, textP.fwd, function () {
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(textP.sx - bgW / 2, textP.sy - bgH + 2, bgW, bgH);
-
-        // Draw text lines
-        ctx.textAlign = 'center';
-        for (var tl = 0; tl < textLines.length; tl++) {
-          var isAction = (textLines[tl].indexOf('[E]') >= 0);
-          var pulse = isAction ? (0.7 + 0.3 * Math.sin(now * 0.005)) : 1.0;
-          ctx.globalAlpha = fogAlpha * pulse;
-          ctx.fillStyle = textColors[tl];
-          ctx.font = (tl === 0 ? 'bold ' : '') + fontSize + 'px Arial';
-          ctx.fillText(textLines[tl], textP.sx, textP.sy - bgH + 2 + (tl + 1) * lineH);
-        }
-        });
+        drawTreasureChestLabel(ch, textP, fogAlpha, now);
       }
     }
 
     ctx.restore();
   }
+  addSceneClipStat('clipChest', clipMark);
+}
+
+// The floating loot text over an open chest (legacy and model paths): the
+// lines, their backdrop and text as one scene-depth billboard at textP.
+function drawTreasureChestLabel(ch, textP, fogAlpha, now) {
+  var fontSize = Math.max(8, Math.min(14, Math.floor(1800 / textP.fwd)));
+  var lineH = fontSize + 2;
+  var textLines = [];
+  var textColors = [];
+
+  if (ch.relicId && RELIC_DEFS[ch.relicId]) {
+    // Relic in epic chest
+    var rDef = RELIC_DEFS[ch.relicId];
+    textLines.push(rDef.name);
+    textColors.push(RARITY_COLORS.epic);
+    textLines.push(rDef.desc);
+    textColors.push('#ddbbff');
+    if (equipment.relic) {
+      textLines.push('Replaces: ' + equipment.relic.name);
+      textColors.push('#888877');
+      textLines.push('[E] Swap');
+    } else {
+      textLines.push('[E] Take');
+    }
+    textColors.push('#c040ff');
+  } else if (ch.equipId && EQUIPMENT_DEFS[ch.equipId]) {
+    // Equipment with quality
+    var eInst = createEquipInstance(ch.equipId, ch.quality || 1.0);
+    textLines.push(eInst.displayName);
+    textColors.push(RARITY_COLORS[eInst.rarity] || '#ffffff');
+    textLines.push(eInst.desc);
+    textColors.push('#ccccbb');
+    if (eInst.quality && Math.abs(eInst.quality - 1.0) > 0.04) {
+      textLines.push('Quality: ' + Math.round(eInst.quality * 100) + '%');
+      textColors.push(eInst.quality >= 1.0 ? '#80ff80' : '#ff8080');
+    }
+    var currentItem = equipment[eInst.slot];
+    if (currentItem && currentItem.id !== eInst.id) {
+      textLines.push('Replaces: ' + (currentItem.displayName || currentItem.name));
+      textColors.push('#888877');
+      var statDelta = getEquipStatDelta(eInst, currentItem);
+      if (statDelta) { textLines.push(statDelta.text); textColors.push(statDelta.color); }
+      textLines.push('[E] Swap');
+    } else {
+      textLines.push('[E] Take');
+    }
+    textColors.push('#ffd700');
+  } else {
+    textLines.push('+' + ch.gold + ' Gold');
+    textColors.push('#ffd700');
+    textLines.push('[E] Take');
+    textColors.push('#ffd700');
+  }
+
+  // Draw backdrop
+  ctx.globalAlpha = fogAlpha * 0.85;
+  var maxTxtW = 0;
+  ctx.font = 'bold ' + fontSize + 'px Arial';
+  for (var ti = 0; ti < textLines.length; ti++) {
+    var tw = ctx.measureText(textLines[ti]).width;
+    if (tw > maxTxtW) maxTxtW = tw;
+  }
+  var bgW = maxTxtW + 12, bgH = textLines.length * lineH + 6;
+  withSceneDepthBillboard({x:textP.sx-bgW/2,y:textP.sy-bgH+2,width:bgW,height:bgH+2}, textP.fwd, function () {
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(textP.sx - bgW / 2, textP.sy - bgH + 2, bgW, bgH);
+
+    // Draw text lines
+    ctx.textAlign = 'center';
+    for (var tl = 0; tl < textLines.length; tl++) {
+      var isAction = (textLines[tl].indexOf('[E]') >= 0);
+      var pulse = isAction ? (0.7 + 0.3 * Math.sin(now * 0.005)) : 1.0;
+      ctx.globalAlpha = fogAlpha * pulse;
+      ctx.fillStyle = textColors[tl];
+      ctx.font = (tl === 0 ? 'bold ' : '') + fontSize + 'px Arial';
+      ctx.fillText(textLines[tl], textP.sx, textP.sy - bgH + 2 + (tl + 1) * lineH);
+    }
+  });
+}
+
+// Treasure-chest models (chestModel, integration stage G). The range, fade
+// and the dist < 3 skip are the legacy ones (0.7 viewDist, fading over its
+// last 20%, CHEST_TIER_DEFS for the overlays); a chest is kept while any of
+// it can be ahead of the camera, since its faces are clipped at the near
+// plane. Opaque phase, near to far: the model at the range fade only (no
+// see-through fog: drawWorldModel applies colour fog), writing depth.
+// Overlay phase, far to near, at the legacy overlay alpha (see-through fog
+// times the fade): the glow halo centred on the 'glow' anchor but tested at
+// a depth behind the chest's horizontal reach (open lid included, plus the
+// depth bias), so the chest hides it as the legacy underlay did while
+// anything nearer still does; the open chest's
+// interior glow (the model's translucent mouth); the sparkle and loot label
+// at their anchors; the epic particles as before.
+var CHEST_MODEL_REACH = 12;    // horizontal reach of the parts (open lid 10.6) and particles (10.5 + size)
+var CHEST_HALO_BEHIND = 11;    // > hypot(7, 8) + 0.15: the halo's test depth lies behind the body and open lid
+var _chestModelEntries = [], _chestModelVisible = [], _chestAnchor = {x: 0, y: 0, z: 0};
+function _chestModelFarFirst(a, b) { return b.dist - a.dist; }
+function drawTreasureChestModels3D(phase) {
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var C = getCam3D(), now = gameTimeNow();
+  var maxDist = viewDist * 0.7, fadeStart = maxDist * 0.8, visible = _chestModelVisible;
+  visible.length = 0;
+  for (var i = 0; i < treasureChests.length; i++) {
+    var ch = treasureChests[i];
+    if (ch.collected) continue;
+    var dx = ch.x - cam.x, dy = ch.y - cam.y, dist = Math.hypot(dx, dy);
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng;
+    if (fwd < -CHEST_MODEL_REACH) continue;
+    var entry = _chestModelEntries[visible.length] ||
+      (_chestModelEntries[visible.length] = {ch: null, model: null, dist: 0, fwd: 0, fade: 1, floorZ: 0});
+    entry.ch = ch; entry.model = chestModelFor(ch.tier || 'common');
+    entry.dist = dist; entry.fwd = fwd; entry.floorZ = getEntityRenderFloorZ(ch);
+    entry.fade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    if (entry.model && entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_chestModelFarFirst);
+  for (var n = visible.length - 1; wantOpaque && n >= 0; n--) drawTreasureChestModelOpaque(visible[n], C);
+  for (var f = 0; wantOverlay && f < visible.length; f++) drawTreasureChestModelOverlay(visible[f], C, now);
+}
+
+function drawTreasureChestModelOpaque(entry, C) {
+  var inst = chestModelInstance(entry.ch, entry.floorZ);
+  var alpha = ctx.globalAlpha;
+  if (entry.fade < 1) ctx.globalAlpha = alpha * entry.fade;
+  drawWorldModel(inst, entry.model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+function drawTreasureChestModelOverlay(entry, C, now) {
+  var ch = entry.ch, model = entry.model, inst = chestModelInstance(ch, entry.floorZ);
+  var td = CHEST_TIER_DEFS[ch.tier || 'common'] || CHEST_TIER_DEFS.common;
+  var lid = inst.joints.lid / CHEST_LID_MAX;
+  var fogAlpha = Math.max(0.5, 1.0 - Math.max(1, entry.fwd) / viewDist * 0.4) * entry.fade;
+  ctx.save(); ctx.globalAlpha = fogAlpha;
+  var a = modelAnchorWorld(model, inst, 'glow', _chestAnchor), glowP = projToScreen(a.x, a.y, a.z, C);
+  if (glowP) {
+    var glowR = Math.max(14, Math.min(70, 20 * getScale3D('lgGlow') * projScale / glowP.fwd));
+    ctx.globalAlpha = fogAlpha * td.glowA;
+    ctx.fillStyle = td.glow;
+    withSceneDepthBillboard({x: glowP.sx - glowR, y: glowP.sy - glowR, width: glowR * 2, height: glowR * 2},
+      glowP.fwd + CHEST_HALO_BEHIND, function () {
+        ctx.beginPath(); ctx.arc(glowP.sx, glowP.sy, glowR, 0, Math.PI * 2); ctx.fill();
+      });
+  }
+  if (lid >= 0.05) {
+    ctx.globalAlpha = entry.fade * (0.4 + 0.2 * Math.sin(now * 0.004));
+    drawWorldModel(inst, model, C, 'overlay', null);
+  }
+  var shimmer = 0.5 + 0.5 * Math.sin(now * 0.005 + (ch.seed || 0) * 10);
+  a = modelAnchorWorld(model, inst, 'sparkle', _chestAnchor);
+  var sparkP = projToScreen(a.x, a.y, a.z, C);
+  if (sparkP) {
+    var sparkR = Math.max(1, Math.min(3, 2 * projScale / sparkP.fwd));
+    ctx.globalAlpha = fogAlpha * shimmer * 0.5;
+    ctx.fillStyle = td.spark;
+    withSceneDepthBillboard({x: sparkP.sx - sparkR, y: sparkP.sy - sparkR, width: sparkR * 2, height: sparkR * 2}, sparkP.fwd, function () {
+      ctx.beginPath(); ctx.arc(sparkP.sx, sparkP.sy, sparkR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (ch.tier === 'epic') {
+    ctx.globalAlpha = fogAlpha * 0.8;
+    for (var k = 0; k < 4; k++) {
+      var epAng = now * 0.003 + k * Math.PI * 0.5, epR = CHEST_MODEL_DIMS.hw * 1.5;
+      var epP = projToScreen(ch.x + Math.cos(epAng) * epR, ch.y + Math.sin(epAng) * epR,
+        entry.floorZ + CHEST_MODEL_DIMS.bodyH * 0.5 + Math.sin(now * 0.005 + k) * 4, C);
+      if (!epP) continue;
+      var epSz = Math.max(1.5, Math.min(4, 2.5 * projScale / epP.fwd));
+      withSceneDepthBillboard({x: epP.sx - epSz - 12, y: epP.sy - epSz - 12, width: epSz * 2 + 24, height: epSz * 2 + 24}, epP.fwd, function () {
+        ctx.fillStyle = td.glow;
+        ctx.shadowBlur = 6; ctx.shadowColor = td.glow;
+        ctx.beginPath(); ctx.arc(epP.sx, epP.sy, epSz, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+    ctx.shadowBlur = 0;
+  }
+  if (ch.opened && lid > 0.3) {
+    a = modelAnchorWorld(model, inst, 'label', _chestAnchor);
+    var textP = projToScreen(a.x, a.y, a.z, C);
+    if (textP && textP.fwd > 2) { ctx.globalAlpha = fogAlpha; drawTreasureChestLabel(ch, textP, fogAlpha, now); }
+  }
+  ctx.restore();
 }
 
 // Compare two equipment items and return a stat delta string
@@ -1895,7 +2255,19 @@ function getEquipStatDelta(newDef, oldDef) {
 }
 
 // Render enemy spawner obelisks as dark pulsing pillars with a red glow.
+// With spawnerModel on (stage H) the obelisk is a depth-writing model
+// (drawEnemySpawnerModels3D: body in 'opaque', eye, glow and HP bar in
+// 'overlay'). Otherwise, as drawFloorScatter3D, 'opaque' draws nothing and
+// 'overlay' or no argument draws the legacy obelisks.
 function drawEnemySpawners3D() {
+  var clipMark = sceneClipMark();
+  if (typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel') &&
+      typeof spawnerModelFor === 'function' && spawnerModelFor()) {
+    drawEnemySpawnerModels3D(arguments[0]);
+    addSceneClipStat('clipSpawner', clipMark);
+    return;
+  }
+  if (arguments[0] === 'opaque') return;
   // Filter inactive spawners before passing to renderer
   var activeSpawners = [];
   if (enemySpawners) {
@@ -1903,6 +2275,13 @@ function drawEnemySpawners3D() {
       if (enemySpawners[i].active) activeSpawners.push(enemySpawners[i]);
     }
   }
+  drawLegacySpawnerBillboards(activeSpawners);
+  addSceneClipStat('clipSpawner', clipMark);
+}
+
+// The legacy obelisk billboards for a list of active spawners (also the
+// model path's fallback for a spawner whose obelisk the camera is in).
+function drawLegacySpawnerBillboards(activeSpawners) {
   renderEntities3D(activeSpawners, {maxDist: viewDist * 0.5, groundAnchor: true,
     bounds: function(sp, vis) {
       var size = Math.max(12, Math.min(120, Math.floor(40 * getScale3D('lgStructure') * projScale / vis.fwd)));
@@ -1954,10 +2333,132 @@ function drawEnemySpawners3D() {
     });
 }
 
+// Spawner obelisk models (spawnerModel, integration stage H). The range,
+// fade and dist < 3 skip are the legacy ones (0.5 viewDist, fading over its
+// last 20%); a spawner is kept while any of it can be ahead of the camera,
+// since its faces are clipped at the near plane. Opaque phase, near to far:
+// the model at the range fade only (drawWorldModel's colour fog replaces
+// the legacy see-through alpha), writing depth; its rune strips carry the
+// pulse as a tint. Overlay phase, far to near, at the legacy overlay alpha
+// and sizes: the glow, centred on the 'glow' anchor but tested behind the
+// deepest body point under it (spawnerBodyDepthRange; so the obelisk hides
+// it, as the legacy drew it first, while anything nearer still does); the
+// eye at the 'eye' anchor and the HP bar above the apex ('bar'), each
+// tested in front of the nearest body point under its own rect (or at its
+// anchor when that is nearer), so the body never hides its own eye or bar
+// but any nearer occluder does. A spawner whose obelisk the camera is in or
+// at (spawnerCameraInReach: the player can walk into a spawner) skips the
+// model and draws the legacy billboard in the overlay phase, as Legacy.
+var SPAWNER_MODEL_REACH = 25;       // hit-cylinder radius; every part lies within it
+var SPAWNER_GLOW_MARGIN = 0.4;      // glow test depth past the deepest body point under it (0.15 bias + 0.25)
+var SPAWNER_OVERLAY_BIAS = 0.25;    // eye/bar test depth before the nearest body point (0.1 rune + 0.15)
+var _spawnerModelEntries = [], _spawnerModelVisible = [], _spawnerAnchor = {x: 0, y: 0, z: 0};
+var _spawnerLegacyOne = [null], _spawnerDepthRange = {min: Infinity, max: -Infinity};
+function _spawnerModelFarFirst(a, b) { return b.dist - a.dist; }
+function spawnerPulse(sp, now) { return 0.7 + 0.3 * Math.sin(now * 0.004 + (sp.pulsePhase || 0)); }
+function drawEnemySpawnerModels3D(phase) {
+  if (!enemySpawners || !enemySpawners.length || !MODE3D) return;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var C = getCam3D(), now = gameTimeNow(), model = spawnerModelFor();
+  var maxDist = viewDist * 0.5, fadeStart = maxDist * 0.8, visible = _spawnerModelVisible;
+  visible.length = 0;
+  for (var i = 0; i < enemySpawners.length; i++) {
+    var sp = enemySpawners[i];
+    if (!sp.active) continue;
+    var dx = sp.x - cam.x, dy = sp.y - cam.y, dist = Math.max(1, Math.hypot(dx, dy));
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng;
+    if (fwd < -SPAWNER_MODEL_REACH) continue;
+    var floorZ = getEntityRenderFloorZ(sp);
+    if (!Number.isFinite(floorZ)) continue;
+    var entry = _spawnerModelEntries[visible.length] ||
+      (_spawnerModelEntries[visible.length] = {sp: null, dist: 0, fwd: 0, fade: 1, floorZ: 0, legacy: false});
+    entry.sp = sp; entry.dist = dist; entry.fwd = fwd; entry.floorZ = floorZ;
+    entry.legacy = typeof spawnerCameraInReach === 'function' && spawnerCameraInReach(spawnerModelInstance(sp, floorZ, 1), C);
+    entry.fade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    if (entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_spawnerModelFarFirst);
+  for (var n = visible.length - 1; wantOpaque && n >= 0; n--) drawEnemySpawnerModelOpaque(visible[n], C, model, now);
+  for (var f = 0; wantOverlay && f < visible.length; f++) drawEnemySpawnerModelOverlay(visible[f], C, model, now);
+}
+
+function drawEnemySpawnerModelOpaque(entry, C, model, now) {
+  if (entry.legacy) return;   // the legacy billboard, in the overlay phase
+  var inst = spawnerModelInstance(entry.sp, entry.floorZ, spawnerPulse(entry.sp, now));
+  var alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * entry.fade;   // the range fade only (1 inside the range)
+  drawWorldModel(inst, model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+// Test depth for the eye or HP bar: before the nearest body point under its
+// rect, or its anchor's depth when that is nearer (the bar above the apex).
+function spawnerOverlayTestDepth(inst, C, bounds, anchorFwd) {
+  var nearest = typeof spawnerBodyDepthRange === 'function' ? spawnerBodyDepthRange(inst, C, bounds, _spawnerDepthRange).min :
+    anchorFwd - SPAWNER_MODEL_REACH;
+  return Math.max(1, Math.min(anchorFwd, nearest) - SPAWNER_OVERLAY_BIAS);
+}
+
+function drawEnemySpawnerModelOverlay(entry, C, model, now) {
+  if (entry.legacy) {
+    _spawnerLegacyOne[0] = entry.sp;
+    try { drawLegacySpawnerBillboards(_spawnerLegacyOne); } finally { _spawnerLegacyOne[0] = null; }
+    return;
+  }
+  var sp = entry.sp, pulse = spawnerPulse(sp, now), inst = spawnerModelInstance(sp, entry.floorZ, pulse);
+  var fwd = Math.max(1, entry.fwd);
+  var size = Math.max(12, Math.min(120, Math.floor(40 * getScale3D('lgStructure') * projScale / fwd)));
+  var fogAlpha = Math.max(0.4, 1.0 - fwd / (viewDist * 0.5) * 0.5) * entry.fade;
+  ctx.save(); ctx.globalAlpha = fogAlpha;
+  var a = modelAnchorWorld(model, inst, 'glow', _spawnerAnchor), glowP = projToScreen(a.x, a.y, a.z, C);
+  if (glowP) {
+    var glowR = size * 2 * pulse;
+    var glowGrad = ctx.createRadialGradient(glowP.sx, glowP.sy, size * 0.2, glowP.sx, glowP.sy, glowR);
+    glowGrad.addColorStop(0, 'rgba(200,40,40,' + (0.3 * pulse).toFixed(2) + ')');
+    glowGrad.addColorStop(1, 'rgba(200,40,40,0)');
+    var glowBounds = {x: glowP.sx - glowR, y: glowP.sy - glowR, width: glowR * 2, height: glowR * 2};
+    var deepest = typeof spawnerBodyDepthRange === 'function' ? spawnerBodyDepthRange(inst, C, glowBounds, _spawnerDepthRange).max : glowP.fwd + SPAWNER_MODEL_REACH;
+    withSceneDepthBillboard(glowBounds,
+      Math.max(glowP.fwd, deepest) + SPAWNER_GLOW_MARGIN, function () {
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(glowP.sx - glowR, glowP.sy - glowR, glowR * 2, glowR * 2);
+      });
+  }
+  a = modelAnchorWorld(model, inst, 'eye', _spawnerAnchor);
+  var eyeP = projToScreen(a.x, a.y, a.z, C);
+  if (eyeP) {
+    var eyeR = Math.max(1, 6 * pulse * projScale / eyeP.fwd);
+    var eyeBounds = {x: eyeP.sx - eyeR, y: eyeP.sy - eyeR, width: eyeR * 2, height: eyeR * 2};
+    withSceneDepthBillboard(eyeBounds, spawnerOverlayTestDepth(inst, C, eyeBounds, eyeP.fwd), function () {
+      ctx.fillStyle = 'rgba(255,60,60,' + (pulse * 0.9).toFixed(2) + ')';
+      ctx.beginPath(); ctx.arc(eyeP.sx, eyeP.sy, eyeR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (sp.hp < sp.maxHp) {
+    a = modelAnchorWorld(model, inst, 'bar', _spawnerAnchor);
+    var barP = projToScreen(a.x, a.y, a.z, C);
+    if (barP) {
+      var hpFrac = sp.hp / sp.maxHp, barW = size * 0.8, barH = Math.max(2, size * 0.08), barY = barP.sy - barH;
+      var barBounds = {x: barP.sx - barW * 0.5, y: barY, width: barW, height: barH};
+      withSceneDepthBillboard(barBounds, spawnerOverlayTestDepth(inst, C, barBounds, barP.fwd), function () {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(barP.sx - barW * 0.5, barY, barW, barH);
+        ctx.fillStyle = hpFrac > 0.5 ? '#44cc44' : hpFrac > 0.25 ? '#ccaa22' : '#cc2222';
+        ctx.fillRect(barP.sx - barW * 0.5, barY, barW * hpFrac, barH);
+      });
+    }
+  }
+  ctx.restore();
+}
+
 // Renders breakable ore vein overlays on cave walls.
 // Attach to the same real exposed face as wall decorations; read opaque scene
 // depth so neither mineral nor glow can shine through the cave roof.
+// Phase as drawFloorScatter3D: the veins are overlays, so 'opaque' draws
+// nothing; 'overlay' or no argument draws them.
 function drawOreVeins() {
+  if (arguments[0] === 'opaque') return;
   if (!oreVeins || !oreVeins.length || !MODE3D) return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
@@ -1966,12 +2467,19 @@ function drawOreVeins() {
 
   // Collect visible ore veins and sort far-to-near for correct painter's algorithm
   var visibleOres = [];
+  // Stage K (decorAnchorCache): entityVisible3D's distance and forward
+  // rejections first (the attachment point is the face point half a unit
+  // out), then terrain from the anchor cache.
+  var early = decorAnchorCacheOn(), anchorMap = early ? decorAnchorMap() : null;
+  var clipMark = sceneClipMark();
   for (var i = 0; i < oreVeins.length; i++) {
     var ore = oreVeins[i];
     var faceX = (ore.gx + (ore.side === 'west' ? 0 : ore.side === 'east' ? 1 : 0.5)) * cell;
     var faceY = (ore.gy + (ore.side === 'north' ? 0 : ore.side === 'south' ? 1 : 0.5)) * cell;
-    var attachment = getWallDecorationAttachment({gridX:ore.gx,gridY:ore.gy,
-      worldX:faceX,worldY:faceY,side:ore.side,type:'ore'});
+    if (early && !oreFaceInView(ore.side, faceX, faceY, C)) continue;
+    var oreFace = {gridX:ore.gx,gridY:ore.gy,
+      worldX:faceX,worldY:faceY,side:ore.side,type:'ore'};
+    var attachment = getWallDecorationAttachment(oreFace, early ? wallDecorationTerrain(oreFace, anchorMap, ore, 'Ore') : undefined);
     if (!attachment || (cam.x-attachment.x)*attachment.nx+(cam.y-attachment.y)*attachment.ny <= 0) continue;
     var vis = entityVisible3D(attachment.x, attachment.y, attachment.z, C,
       { maxDist: 280, sceneDepth: true, fadeFraction: 0.8 });
@@ -2054,10 +2562,76 @@ function drawOreVeins() {
     ctx.restore();
     }, {depthBias:1.5});
   }
+  addSceneClipStat('clipOre', clipMark);
 }
 
-function drawWallDecorations() {
+// Stage K: entityVisible3D's distance and forward rejections of an ore
+// face's attachment point (the face point half a unit out of its side),
+// from the record alone. drawOreVeins keeps every other test.
+function oreFaceInView(side, faceX, faceY, C) {
+  var nx = side === 'west' ? -1 : side === 'east' ? 1 : 0;
+  var ny = side === 'north' ? -1 : side === 'south' ? 1 : 0;
+  if (!nx && !ny) return false;
+  var x = faceX + nx * 0.5, y = faceY + ny * 0.5;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  var dx = x - cam.x, dy = y - cam.y, dist = Math.hypot(dx, dy);
+  if (dist < 1) dist = 1;
+  if (dist > 280) return false;
+  return dx * C.cosAng + dy * C.sinAng >= 1;
+}
+
+// Whether a wall prop hangs in a cave, for the model's cave shading: the
+// wall renderer's cell flags, or a cave ceiling above the attachment.
+function getWallDecorationInCave(dec, attachment) {
+  var ci = dec.gridY * gridW + dec.gridX;
+  if (typeof gridCave !== 'undefined' && gridCave && gridCave[ci]) return true;
+  if (typeof deepCaveRegions !== 'undefined' && deepCaveRegions && deepCaveRegions.length &&
+      typeof isInDeepCave === 'function' && isInDeepCave((dec.gridX + 0.5) * cell, (dec.gridY + 0.5) * cell)) return true;
+  if (!attachment || !floorMesh || typeof getCaveSpaceAt !== 'function') return false;
+  return getCaveSpaceAt(attachment.x, attachment.y, getFloorHeightAt(attachment.x, attachment.y)).underground === true;
+}
+
+// Stage K: whether drawWallDecorations' collection loop can keep dec, from
+// its record alone (no terrain): the attachment point is the record's point
+// half a unit out of its side, so its distance, the sprite's forward and
+// screen-column culls are the loop's own. The model's frustum test uses the
+// largest radius any attachment can give (size at most 32 x its tier scale),
+// so it rejects only what the loop would. The loop keeps every other test.
+var _wallInViewSize = {size: 0};
+function wallDecorationInView(dec, useModels, flameK, C) {
+  var nx = dec.side === 'west' ? -1 : dec.side === 'east' ? 1 : 0;
+  var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
+  if (!nx && !ny) return false;
+  var dx = dec.worldX + nx * 0.5 - cam.x, dy = dec.worldY + ny * 0.5 - cam.y;
+  var dist = Math.hypot(dx, dy);
+  if (dist < 1 || dist > viewDist * 0.7) return false;
+  var fwd = dx * C.cosAng + dy * C.sinAng;
+  if (useModels) {
+    var type = canonicalWallDecorationType(dec.type);
+    var model = wallPropModelFor(type, getWallDecorationVariant(dec));
+    if (model) {
+      _wallInViewSize.size = 32 * getScale3D(WALL_DECOR_TIER[type] || 'smWall');
+      var r = wallPropCullRadius(model, _wallInViewSize, flameK) + 0.5, tanHalf = 1 / C.invTanHalf;
+      return !(fwd < -r || Math.abs(dx * (-C.sinAng) + dy * C.cosAng) - fwd * tanHalf > r * Math.sqrt(1 + tanHalf * tanHalf));
+    }
+  }
+  if (fwd < 1) return false;
+  var screenX = Math.floor(((dx * (-C.sinAng) + dy * C.cosAng) / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
+  return screenX >= -40 && screenX <= C.w + 40;
+}
+
+// phase 'opaque' draws the modelled wall props (wallPropModels) as
+// depth-writing world faces; 'overlay' draws their flame billboards and
+// every sprite-path decoration. Omitted, it draws both, opaque first, so a
+// nearer prop's parts hide a farther flame. Sprites stay in the overlay phase.
+// The model path has no renderX clamp and no flat quad: its frustum test uses
+// the prop's bounding circle and the parts are projected where they are.
+function drawWallDecorations(phase) {
   if (!wallDecorations || wallDecorations.length === 0) return;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var useModels = typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels') &&
+    typeof wallPropModelFor === 'function';
+  if (!wantOverlay && !useModels) return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonYd = C.horizonY, cameraZd = C.cameraZ;
@@ -2068,9 +2642,16 @@ function drawWallDecorations() {
 
   // Collect visible decorations and sort far-to-near for correct painter's algorithm
   var visibleDecors = [];
+  // World half-width per unit size of a model's flame billboard (see wallPropCullRadius).
+  var flameK = useModels ? projScale / (0.5 * w * invTanHalf) : 1;
+  // Stage K (decorAnchorCache): the same distance and view rejections first,
+  // then terrain from the anchor cache. Off: the loop below, unchanged.
+  var early = decorAnchorCacheOn(), anchorMap = early ? decorAnchorMap() : null;
+  var clipMark = sceneClipMark();
   for (var i = 0; i < wallDecorations.length; i++) {
     var dec = wallDecorations[i];
-    var attachment = getWallDecorationAttachment(dec);
+    if (early && !wallDecorationInView(dec, useModels, flameK, C)) continue;
+    var attachment = getWallDecorationAttachment(dec, early ? wallDecorationTerrain(dec, anchorMap, dec, 'Decor') : undefined);
     if (!attachment) continue;
     var dx = attachment.x - cam.x;
     var dy = attachment.y - cam.y;
@@ -2079,6 +2660,20 @@ function drawWallDecorations() {
     var _dFade = dist > viewDist * 0.56 ? Math.max(0, 1.0 - (dist - viewDist * 0.56) / (viewDist * 0.14)) : 1.0;
 
     var fwd = dx * cosAng + dy * sinAng;
+    var propType = useModels ? canonicalWallDecorationType(dec.type) : '';
+    var propVariant = useModels ? getWallDecorationVariant(dec) : 0;
+    var propModel = useModels ? wallPropModelFor(propType, propVariant) : null;
+    if (propModel) {
+      var propR = wallPropCullRadius(propModel, attachment, flameK) + 0.5, tanHalf = 1 / invTanHalf;
+      var propRgt = dx * (-sinAng) + dy * cosAng;
+      if (fwd < -propR || Math.abs(propRgt) - fwd * tanHalf > propR * Math.sqrt(1 + tanHalf * tanHalf)) { culledCount++; continue; }
+      // As the sprite: not from behind the wall plane, not below half a pixel.
+      if ((cam.x - dec.worldX) * attachment.nx + (cam.y - dec.worldY) * attachment.ny <= 0) continue;
+      if (fwd >= 1 && attachment.size / fwd * projScale < 0.5) continue;
+      visibleDecors.push({dec: dec, attachment: attachment, dx: dx, dy: dy, dist: dist, fwd: fwd, screenX: 0, _dFade: _dFade, model: propModel,
+        type: propType, variant: propVariant});
+      continue;
+    }
     if (fwd < 1) { culledCount++; continue; }
     var rgt = dx * (-sinAng) + dy * cosAng;
     var screenX = Math.floor((rgt / fwd * invTanHalf * 0.5 + 0.5) * w);
@@ -2087,7 +2682,16 @@ function drawWallDecorations() {
     visibleDecors.push({dec: dec, attachment:attachment, dx: dx, dy: dy, dist: dist, fwd: fwd, screenX: screenX, _dFade: _dFade});
   }
   visibleDecors.sort(function(a, b) { return b.dist - a.dist; });
-  for (var di = 0; di < visibleDecors.length; di++) {
+  if (useModels && wantOpaque) {
+    for (var mi = 0; mi < visibleDecors.length; mi++) {
+      if (visibleDecors[mi].model && visibleDecors[mi]._dFade > 0) drawWallPropModelOpaque(visibleDecors[mi], C);
+    }
+  }
+  for (var di = 0; wantOverlay && di < visibleDecors.length; di++) {
+    if (visibleDecors[di].model) {
+      if (visibleDecors[di]._dFade > 0) drawWallPropModelOverlay(visibleDecors[di], C, now);
+      continue;
+    }
     var dec = visibleDecors[di].dec, dist = visibleDecors[di].dist, fwd = visibleDecors[di].fwd;
     var screenX = visibleDecors[di].screenX, _dFade = visibleDecors[di]._dFade;
     visibleCount++;
@@ -2121,8 +2725,85 @@ function drawWallDecorations() {
       drawWallAlignedDecoration(dec.type, renderX, decorY, size, dist, dec.side, viewAngle, _dFade, dec, now);
     }, {depthBias:1.5});
   }
+  addSceneClipStat('clipDecor', clipMark);
   if (shouldLog) {
     //console.log('[DECOR] Summary: ' + visibleCount + ' visible, ' + occludedCount + ' occluded, ' + culledCount + ' culled'); // TEMP DISABLED
     __decorDebugLast = debugNow;
   }
+}
+
+// Model path, opaque phase: the parts at the attachment frame, faded like
+// the sprite over the last 20% of its range (drawWorldModel restores alpha).
+function drawWallPropModelOpaque(entry, C) {
+  var inst = wallPropInstance(entry.attachment, getWallDecorationInCave(entry.dec, entry.attachment));
+  var alpha = ctx.globalAlpha;
+  if (entry._dFade < 1) ctx.globalAlpha = alpha * entry._dFade;
+  drawWorldModel(inst, entry.model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+// Model path, overlay phase: the sprite's flame recipe for the prop's type at
+// the model's 'flame' anchor, a billboard at the anchor's depth, full width
+// at every view angle (an emissive volume). The point light and glow stay at
+// attachment.x/y and flameZ. Per type: the recipe origin's offset below the
+// anchor (the sprite's shaft tip or bowl rim relation) and the billboard
+// rectangle around that origin, in units of s. Shields and banners have none.
+var WALL_PROP_FLAMES = {
+  torch: {dy: 0.01, left: 0.36, width: 0.72, top: 0.72, height: 0.84},
+  sconce: {dy: 0.06, left: 0.22, width: 0.44, top: 0.56, height: 0.62}
+};
+var _wallPropFlameAnchor = {x: 0, y: 0, z: 0};
+function drawWallPropModelOverlay(entry, C, now) {
+  var recipe = WALL_PROP_FLAMES[entry.type];
+  if (!recipe) return 0;
+  var inst = wallPropInstance(entry.attachment, false);
+  var anchor = modelAnchorWorld(entry.model, inst, 'flame', _wallPropFlameAnchor);
+  if (!anchor) return 0;
+  var ax = anchor.x - cam.x, ay = anchor.y - cam.y;
+  var depth = ax * C.cosAng + ay * C.sinAng;
+  if (depth < 1) return 0;
+  var sx = ((ax * (-C.sinAng) + ay * C.cosAng) / depth * C.invTanHalf * 0.5 + 0.5) * C.w;
+  var s = entry.attachment.size / depth * projScale;
+  var sy = C.horizonY + (C.cameraZ - anchor.z) / depth * projScale + s * recipe.dy;
+  var variant = entry.variant, fade = entry._dFade, sconce = entry.type === 'sconce';
+  var x0 = sx - s * recipe.left, y0 = sy - s * recipe.top, x1 = x0 + s * recipe.width, y1 = y0 + s * recipe.height;
+  var drawFlame = function() {
+    ctx.save();
+    if (sconce) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);
+    else drawWallTorchFlame(sx, sy, s, s, variant, now, fade);
+    ctx.restore();
+  };
+  var fold = wallPropFlameFold(inst, entry.attachment.nx, entry.attachment.ny, C, depth, x0, x1, y0, y1);
+  if (!fold) return withSceneDepthBillboard({x: x0, y: y0, width: s * recipe.width, height: s * recipe.height}, depth, drawFlame);
+  return withSceneDepthClip([{x: x0, y: y0, depth: depth}, {x: x1, y: y0, depth: depth},
+    {x: x1, y: y1, depth: depth}, {x: x0, y: y1, depth: depth}], drawFlame, {depthBias: 0.15, extraPolygons: [fold]});
+}
+
+// The flame is about 0.6 S wide but hangs only 2.2 out, so off the normal the
+// wall-side half of its anchor-depth billboard lies behind its own wall and
+// was clipped (to about 25-30% at 56-80 degrees). Where the plane
+// WALL_PROP_FLAME_FOLD_OUT in front of the wall (just proud of the 0.4
+// backplate; scaled with the prop) is nearer than the anchor, the flame's
+// depth test uses that plane instead: the flame folds onto its wall. Anything
+// standing further out of the wall still hides it; the far half keeps the
+// anchor depth. Returns the screen polygon (same rows as the billboard) with
+// the fold plane's depths, or null when the plane is nowhere nearer. A ray's
+// inverse depth to a vertical plane is linear in screen x, as the scene-depth
+// rasterizer interpolates it, so the polygon's depth is exact; the fold stops
+// where that plane reaches depth 1.
+var WALL_PROP_FLAME_FOLD_OUT = 0.5;
+function wallPropFlameFold(inst, nx, ny, C, depth, x0, x1, y0, y1) {
+  var c = (cam.x - inst.x) * nx + (cam.y - inst.y) * ny - WALL_PROP_FLAME_FOLD_OUT * inst.scale;
+  if (!(c > 0) || !(x1 > x0)) return null;
+  var fn = C.cosAng * nx + C.sinAng * ny, rn = -C.sinAng * nx + C.cosAng * ny;
+  // right/depth at screen x is (2x/w - 1)/invTanHalf; inverse depth = a + b x.
+  var b = -rn * 2 / (C.w * C.invTanHalf * c), a = -(fn - rn / C.invTanHalf) / c;
+  if (!(Math.abs(b) > 1e-12)) return null;
+  var xs = (1 / depth - a) / b, xc = (1 - a) / b;
+  var lo = b > 0 ? Math.max(x0, xs) : Math.max(x0, xc), hi = b > 0 ? Math.min(x1, xc) : Math.min(x1, xs);
+  if (!(hi > lo)) return null;
+  var dLo = 1 / (a + b * lo), dHi = 1 / (a + b * hi);
+  if (!(dLo > 0 && dHi > 0 && Number.isFinite(dLo) && Number.isFinite(dHi))) return null;
+  dLo = Math.max(1, dLo); dHi = Math.max(1, dHi);   // rounding at the depth-1 end
+  return [{x: lo, y: y0, depth: dLo}, {x: hi, y: y0, depth: dHi}, {x: hi, y: y1, depth: dHi}, {x: lo, y: y1, depth: dLo}];
 }

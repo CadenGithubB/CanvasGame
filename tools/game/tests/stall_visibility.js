@@ -2,6 +2,12 @@
 // call used to ask about world height 0: stalls and tower vanished on ground
 // above ~1.6 mesh units ("below floor") and on low ground (surface/underground
 // cull), while nothing but the legacy column gate hid them behind terrain.
+// Restated in stage J1: the same checks run on both paths. Without flags the
+// legacy painters run (landmarkModels off, explicitly); --models runs the
+// landmark models (12-prop-models.js), judged by their depth-tested faces
+// (the slab, the awning, any tower face) instead of the painter's fill
+// colours, standing on getEntityRenderFloorZ. --literal-zero-tower restores
+// only the tower's call: the audit lab's _SHOP_ZERO reintroduction probe.
 (function () {
   var G=(0,eval)('this'), checked=0, errors=[], fillLog=null, projLog=null, clipLog=null, path=[];
   var output=(__engine==='node'||__engine==='deno')?console.log.bind(console):__out;
@@ -31,15 +37,17 @@
   G.hw={fetchJSON:function(){return new Promise(noop);},postFormText:function(){return new Promise(noop);},_auth401:noop};
   // Exact-once mutations of an evaluated copy restore the historical literal
   // world-Z 0 calls, with their legacy column/hill gates, at both call sites.
+  var MODELS=__argv.indexOf('--models')>=0;
   function mutate(path,source){
-    if(__argv.indexOf('--literal-zero-market')<0||path!=='src/15-render-hud-menu.js')return source;
-    var edits=[
-      ['    var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});\n',
-       '    var _sv = entityVisible3D(_ss.x, _ss.y, 0, C, {maxDist: viewDist * 0.8, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});\n'],
-      ['  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});\n',
-       '  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});\n']];
+    var market=__argv.indexOf('--literal-zero-market')>=0,tower=__argv.indexOf('--literal-zero-tower')>=0;
+    if((!market&&!tower)||path!=='src/15-render-hud-menu.js')return source;
+    var stallEdit=['    var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});\n',
+       '    var _sv = entityVisible3D(_ss.x, _ss.y, 0, C, {maxDist: viewDist * 0.8, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});\n'];
+    var towerEdit=['  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});\n',
+       '  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});\n'];
+    var edits=market?[stallEdit,towerEdit]:[towerEdit];
     edits.forEach(function(e){
-      if(source.split(e[0]).length!==2)throw Error('MUTATION_ANCHOR --literal-zero-market');
+      if(source.split(e[0]).length!==2)throw Error('MUTATION_ANCHOR '+(market?'--literal-zero-market':'--literal-zero-tower'));
       source=source.replace(e[0],e[1]);
     });
     return source;
@@ -54,7 +62,19 @@
     fillLog.length===1&&fillLog[0]==='#010203');
   fillLog=null;
 
-  var originalProj=G.projToScreen,originalClip=G.withSceneDepthClip;
+  var originalProj=G.projToScreen,originalClip=G.withSceneDepthClip,originalWorld=G.projectSceneWorldPolygon,originalFill=G.fillSceneDepthPolygon;
+  // Model faces: the world z range of the face projectSceneWorldPolygon last
+  // took, paired with its depth-tested fill's visible pixels.
+  var faceLog=null,faceZ=null;
+  G.projectSceneWorldPolygon=function(vertices,C){
+    if(faceLog){faceZ={lo:Infinity,hi:-Infinity};vertices.forEach(function(p){faceZ.lo=Math.min(faceZ.lo,p.z);faceZ.hi=Math.max(faceZ.hi,p.z);});}
+    return originalWorld(vertices,C);
+  };
+  G.fillSceneDepthPolygon=function(points){
+    var r=originalFill(points);
+    if(faceLog&&faceZ)faceLog.push({lo:faceZ.lo,hi:faceZ.hi,visible:r});
+    return r;
+  };
   G.projToScreen=function(wx,wy,wz,C){var r=originalProj(wx,wy,wz,C);if(projLog)projLog.push({x:wx,y:wy,z:wz});return r;};
   G.withSceneDepthClip=function(points,draw,options){
     var result=originalClip(points,draw,options);
@@ -70,6 +90,7 @@
   G.CAVE_TEST_MODE=true;G.running=true;G.gameOverState=false;
   Object.keys(G.caveTestFlags).forEach(function(k){G.caveTestFlags[k]=false;});
   G.resetEndlessMode();
+  G.applyRenderPreset('recommended');G.setRenderFeatures({landmarkModels:MODELS});
   var mesh=G.floorMesh;
   // Open surface: a single plain ground layer (no ceiling or cave cap) under
   // an empty wall cell, the same open-site rule the render lab uses.
@@ -102,13 +123,14 @@
     var c=site.cam;
     G.cam={x:c.x,y:c.y,z:60+40*c.h,ang:c.a,pitch:(60+25*c.h-site.h*25-10)/60,fov:Math.PI/2};
     G.depthBuffer=new Float32Array(360).fill(Infinity);G.playerUnderground=false;
-    G.beginSceneDepthFrame(360,240);
+    G.beginSceneDepthFrame(360,240);G.beginRenderFrameStats();
     if(occluderTop!==undefined)G.writeSceneDepthPolygon([{x:0,y:occluderTop,depth:5},{x:360,y:occluderTop,depth:5},
       {x:360,y:240,depth:5},{x:0,y:240,depth:5}]);
   }
   function record(draw){
-    fillLog=[];projLog=[];clipLog=[];
-    try{draw();}finally{var out={fills:fillLog,points:projLog,clips:clipLog};fillLog=projLog=clipLog=null;}
+    fillLog=[];projLog=[];clipLog=[];faceLog=[];faceZ=null;
+    try{draw();}finally{var out={fills:fillLog,points:projLog,clips:clipLog,faces:faceLog,stats:G.getRenderFeatureStats().frame};
+      fillLog=projLog=clipLog=faceLog=null;}
     return out;
   }
   function drawStallAt(site,occluderTop){
@@ -124,26 +146,41 @@
     G.shopMarker={x:site.x,y:site.y};G.marketStalls=[{x:-1e6,y:-1e6,facing:0,stallType:'weapons'}];
     try{return record(G.drawMarketStalls3D);}finally{G.shopMarker=marker;G.marketStalls=stalls;}
   }
-  function stallPainted(r){return r.fills.indexOf(TABLE_TOP)>=0&&r.fills.indexOf(AWNING)>=0;}
-  function towerPainted(r){return TOWER.some(function(c){return r.fills.indexOf(c)>=0;});}
+  // Model faces relative to the stall's support: the slab spans 16-18 and
+  // the awning 38-44 above it.
+  function faceSeen(r,ground,lo,hi){return r.faces.some(function(f){return f.visible>0&&f.lo>=ground+lo-1e-6&&f.hi<=ground+hi+1e-6;});}
+  function stallPainted(r,site){
+    if(!MODELS)return r.fills.indexOf(TABLE_TOP)>=0&&r.fills.indexOf(AWNING)>=0;
+    var ground=G.getEntityRenderFloorZ({x:site.x,y:site.y});
+    return faceSeen(r,ground,16,18)&&faceSeen(r,ground,38,44);
+  }
+  function towerPainted(r){return MODELS?(r.stats.mdlTowerDrawn||0)>0:TOWER.some(function(c){return r.fills.indexOf(c)>=0;});}
   var bands=['low','mid','high'],stalls={},towers={};
   bands.forEach(function(b){stalls[b]=drawStallAt(sites[b]);towers[b]=drawTowerAt(sites[b]);});
 
-  check('a market stall on ordinary terrain is drawn for a shopper facing it',stallPainted(stalls.mid));
-  check('a market stall on low terrain is drawn for a shopper facing it',stallPainted(stalls.low));
-  check('a market stall on high terrain is drawn for a shopper facing it',stallPainted(stalls.high));
+  check('a market stall on ordinary terrain is drawn for a shopper facing it',stallPainted(stalls.mid,sites.mid));
+  check('a market stall on low terrain is drawn for a shopper facing it',stallPainted(stalls.low,sites.low));
+  check('a market stall on high terrain is drawn for a shopper facing it',stallPainted(stalls.high,sites.high));
   check('the guard tower is drawn on low, ordinary and high terrain',bands.every(function(b){return towerPainted(towers[b]);}));
-  // The drawing itself is unchanged: its ground corners sit on the terrain it
-  // samples, not at world height 0.
+  // The legacy drawing is unchanged: its ground corners sit on the terrain it
+  // samples, not at world height 0. The models stand on the terrain surface
+  // at their centre (getEntityRenderFloorZ); these open sites have one layer.
   check('drawn stalls and tower stand on their sampled terrain height',bands.every(function(b){
-    var ground=G.getFloorHeightAt(sites[b].x,sites[b].y)*25,s=stalls[b].points,t=towers[b].points;
     function base(points){var z=Infinity;points.forEach(function(p){z=Math.min(z,p.z);});return z;}
+    if(MODELS){
+      var support=G.getEntityRenderFloorZ({x:sites[b].x,y:sites[b].y}),fs=stalls[b].faces,ft=towers[b].faces;
+      function low(faces){var z=Infinity;faces.forEach(function(f){z=Math.min(z,f.lo);});return z;}
+      return fs.length>0&&ft.length>0&&Number.isFinite(support)&&Math.abs(low(fs)-support)<1e-9&&Math.abs(low(ft)-support)<1e-9;
+    }
+    var ground=G.getFloorHeightAt(sites[b].x,sites[b].y)*25,s=stalls[b].points,t=towers[b].points;
     return s.length>0&&t.length>0&&Math.abs(base(s)-ground)<1e-9&&Math.abs(base(t)-ground)<1e-9;
   }));
 
   // Covered negative control: opaque terrain nearer than the whole stall.
   check('opaque terrain in front hides every stall and tower part at every height',bands.every(function(b){
     var s=drawStallAt(sites[b],0),t=drawTowerAt(sites[b],0);
+    if(MODELS)return !s.faces.some(function(f){return f.visible>0;})&&!towerPainted(t)&&(s.stats.mdlStallDrawn||0)===0&&
+      (s.stats.mdlStallFaces||0)+(s.stats.mdlStallRejected||0)>0&&(t.stats.mdlTowerFaces||0)+(t.stats.mdlTowerRejected||0)>0;
     return s.fills.length===0&&!towerPainted(t)&&s.clips.length>0&&t.clips.length>0;
   }));
   // Partial cover: a bank below the table top hides the lower stall per pixel
@@ -151,7 +188,9 @@
   var mid=sites.mid;view(mid);
   var awningP=originalProj(mid.x,mid.y,G.getFloorHeightAt(mid.x,mid.y)*25+18,G.getCam3D());
   var partial=drawStallAt(mid,awningP?awningP.sy:240);
-  check('a bank hiding the lower stall still leaves its awning drawn',
+  var midGround=G.getEntityRenderFloorZ({x:mid.x,y:mid.y});
+  check('a bank hiding the lower stall still leaves its awning drawn',MODELS?
+    !!awningP&&faceSeen(partial,midGround,38,44)&&partial.faces.some(function(f){return f.visible===0&&f.hi<=midGround+18+1e-6;}):
     !!awningP&&partial.clips.some(function(c){return c.result>0&&c.hidden>0;})&&partial.fills.indexOf(AWNING)>=0);
 
   check('actual generator and market renderer report no swallowed errors',errors.length===0);

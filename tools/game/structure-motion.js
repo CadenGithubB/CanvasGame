@@ -47,6 +47,7 @@ var StructureMotion = (function () {
   // including compositor rounding. No clamping or widened analysis margin.
   function material(size,axis,uniform){var c=document.createElement('canvas');c.width=c.height=size;var ctx=c.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,size,size);if(!uniform){ctx.fillStyle='#000000';ctx.fillRect(0,0,axis==='u'?size/16:size,axis==='v'?size/16:size);}var m={source:c,size:size,color:'#000000'};TexturePilot.prepareMaterial(m);return m;}
   function choose(model,kind){var selected=model.faces.filter(function(f){var b=bounds(f),n=normal(f);
+    if(kind==='chest-front'||kind==='chest-lid')return f.kind===kind;
     if(kind==='floor')return f.kind==='floor';
     if(kind==='fortress-wall')return f.kind==='wall'&&Math.abs(b.minX-b.maxX)<1e-7&&n[0]<0&&b.minX<-900&&b.maxY-b.minY>500&&b.maxZ<250;
     if(kind==='arena-wall')return f.kind==='wall'&&Math.abs(b.minX-b.maxX)<1e-7&&n[0]>0&&b.minX<-500&&b.maxY-b.minY>100&&b.maxZ>150;
@@ -55,6 +56,7 @@ var StructureMotion = (function () {
     return false;
   });selected.sort(function(a,b){var x=bounds(a),y=bounds(b);return(y.maxY-y.minY)-(x.maxY-x.minY);});if(!selected.length)throw Error('Missing authored surface '+kind);return selected[0];}
   function cameraFor(model,face,fixture){var c=centroid(face),n=normal(face),x,y,z,angle,pitch=0;
+    if(fixture.chest)return chestCamera(face,fixture);
     if(fixture.kind==='floor'){x=-model.bodyBounds.maxX*.38;y=-model.bodyBounds.maxY*.30;z=18;angle=.26;}
     else if(fixture.kind==='roof'){var radius=Math.hypot(c.x,c.y)||1;x=c.x+c.x/radius*85;y=c.y+c.y/radius*85;z=c.z+65;angle=Math.atan2(c.y-y,c.x-x);pitch=(z-c.z)/85;}
     else{var length=Math.hypot(n[0],n[1]),nx=n[0]/length,ny=n[1]/length;var travel=fixture.front?0:fixture.kind==='tower-wall'?42:fixture.kind==='arena-wall'?100:220,away=fixture.front?180:fixture.kind==='tower-wall'?65:fixture.kind==='arena-wall'?100:40;
@@ -93,7 +95,7 @@ var StructureMotion = (function () {
     // These captures are diagnostics, explicitly not benchmark measurements.
     for(var warm=0;warm<4;warm++)capture(0);
     var first=capture(0),last=capture(frames-1),fp=planeFor(face,camera,fixture.axis,width,height),lp=planeFor(face,stepped(camera,frames-1,extra.stationary),fixture.axis,width,height);
-    var roi=fixture.roi||roiFor(maskFor(fp,first),maskFor(lp,last),fixture.kind==='roof'?32:64,fixture.kind==='roof'?16:32,fixture.kind==='floor'?[180,166]:[180,120]);fixture.roi=roi;
+    var roi=fixture.roi||roiFor(maskFor(fp,first),maskFor(lp,last),fixture.roiSize?fixture.roiSize[0]:fixture.kind==='roof'?32:64,fixture.roiSize?fixture.roiSize[1]:fixture.kind==='roof'?16:32,fixture.kind==='floor'?[180,166]:[180,120]);fixture.roi=roi;
     var actual=[],expected=[],trace=[],prerequisites=[];
     for(var frame=0;frame<frames;frame++){if(hooks.cancelled())throw Error('Cancelled');if(frame%4===0)await hooks.next();var pos=stepped(camera,frame,extra.stationary),sample=frame===0?first:frame===frames-1?last:capture(frame),plane=planeFor(face,pos,fixture.axis,width,height),a=new Float64Array(roi.width*roi.height),e=new Float64Array(a.length);var missing=0,alpha=0;
       for(var y=0;y<roi.height;y++)for(var x=0;x<roi.width;x++){var sx=roi.x+x,sy=roi.y+y,index=y*roi.width+x,screen=sy*width+sx,p=hit(plane,sx+.5,sy+.5,true);if(!p||Math.abs(sample.depth[screen]-1/p.depth)>Math.max(1e-7,1/p.depth*1e-5))missing++;if(sample.pixels[screen*4+3]!==255)alpha++;a[index]=sample.pixels[screen*4]/255;e[index]=extra.uniform?1:1-StructureTemporal.coverage(sx,sy,plane);}
@@ -138,5 +140,77 @@ var StructureMotion = (function () {
       report.complete=true;report.status=report.setupFailures.length?'SETUP_FAILURE':report.temporalFailures.length||report.spatialFailures.length?'QUALITY_FAILURE':'PASS';
     }catch(e){report.status=hooks.cancelled()?'CANCELLED':'SETUP_FAILURE';report.setupFailures.push(e.message);}return report;
   }
-  return {run:run,planeFor:planeFor,hit:hit};
+  // Stage L (prop textures): the magnified band. The chest at production
+  // size (12-prop-models.js CHEST_MODEL_DIMS: 14 wide, 10 deep, body 8, lid
+  // 3, wood at uvScale 14, so one tile spans 14 units) seen from 20 to 90
+  // units. At this 360x240 view (focal 247.8 px) a 128 px texel covers about
+  // 1.35 screen pixels at 20 units and 0.30 at 90, where run() starts at
+  // about 62 units on 32-unit tiles. Two surfaces: the body front seen level
+  // from its own centre height (a vertical band, axis u, crossing under a
+  // sideways walk) and the lid top seen from the standing eye (cameraZ 60
+  // over the chest's floor, looking down with the game's y-shear pitch,
+  // within CAM_PITCH_MAX 1.4; a horizontal band, axis v, under a forward
+  // walk). Triangles only (props never use planar strips), tiles 64 and 128,
+  // with run()'s oracle, thresholds and prerequisites. Unlit diagnostic
+  // bands, not the wood art: mapping and shimmer, not the look.
+  var CHEST_PANEL=Object.freeze({hw:7,hd:5,bodyH:8,lidH:3,uvScale:14});
+  var MAGNIFIED_FRONT=Object.freeze([[20,64,32],[30,64,32],[45,48,24],[62,32,16],[90,24,12]]);
+  var MAGNIFIED_LID=Object.freeze([[45,48,24],[62,32,12],[90,24,8]]);
+  var STANDING_EYE=60,PITCH_MAX=1.4;
+  // One face per model: the body front at y=-hd facing the camera at -y,
+  // or the lid top at z=bodyH+lidH. UVs in tiles; each diagnostic band
+  // crosses the face's centre (u=0 at x=0; v=0 at the front's mid height or
+  // the lid's centre line).
+  function chestModel(kind){var D=CHEST_PANEL,S=D.uvScale,W=D.hw,L=D.hd,H=D.bodyH,top=D.bodyH+D.lidH,mid=H/2;
+    function v(x,y,z,u,w){return{x:x,y:y,z:z,u:u,v:w};}
+    var vertices=kind==='chest-front'?[v(-W,-L,0,-W/S,mid/S),v(W,-L,0,W/S,mid/S),v(W,-L,H,W/S,(mid-H)/S),v(-W,-L,H,-W/S,(mid-H)/S)]:
+      [v(-W,-L,top,-W/S,-L/S),v(W,-L,top,W/S,-L/S),v(W,L,top,W/S,L/S),v(-W,L,top,-W/S,L/S)];
+    var face={kind:kind,material:'wood',color:'#a06830',light:1,vertices:vertices},b=bounds(face);
+    return{descriptor:{type:'chest',surface:kind,dims:CHEST_PANEL},faces:[face],bounds:b,bodyBounds:b};}
+  // Camera on the -y side looking +y. Front: eye at the front's centre
+  // height, pitch 0, walking sideways (+x) 0.3 px a frame at the face. Lid:
+  // the standing eye, pitch (eye - lid)/distance to centre the lid, walking
+  // forward (+y) 1/1200 of the distance a frame (the band moves 0.1-0.2 px).
+  function chestCamera(face,fixture){var c=centroid(face),d=fixture.distance,eye=fixture.kind==='chest-front'?c.z:STANDING_EYE;
+    var pitch=fixture.kind==='chest-front'?0:Math.min(PITCH_MAX,(eye-c.z)/d);
+    return{x:c.x,y:c.y-d,z:60+(eye-60)*40/25,ang:Math.PI/2,pitch:pitch,fov:Math.PI/2.5,
+      stepX:fixture.kind==='chest-front'?d*.0012:0,stepY:fixture.kind==='chest-front'?0:d/1200,stepZ:0};}
+  function magnifiedFixtures(){var list=[];
+    MAGNIFIED_FRONT.forEach(function(f){list.push({id:'chest-front-'+f[0],kind:'chest-front',axis:'u',chest:true,distance:f[0],roiSize:[f[1],f[2]]});});
+    MAGNIFIED_LID.forEach(function(f){list.push({id:'chest-lid-'+f[0],kind:'chest-lid',axis:'v',chest:true,distance:f[0],roiSize:[f[1],f[2]]});});
+    return list;}
+  async function runMagnified(hooks){var report={kind:'native-chest-magnified-band',fixtureVersion:1,complete:false,status:'SETUP_FAILURE',chest:CHEST_PANEL,
+      thresholds:TextureTemporal.thresholds,localThresholds:TextureTemporal.lineThresholds,mapping:'triangles',tileSizes:[64,128],cases:[],controls:[],setupFailures:[],
+      limitations:'Diagnostic 1/16-tile bands on one chest-sized face at a time, unlit, in the structure study renderer (the game sink adds the wash, light and owned-pixel mask). Independent exact pixel-area oracle; not a timing claim.'};
+    try{var fixtures=magnifiedFixtures(),models={'chest-front':chestModel('chest-front'),'chest-lid':chestModel('chest-lid')};report.expectedCases=fixtures.length*2;
+      for(var fixture of fixtures)for(var size of [64,128]){hooks.progress('Magnified band: '+fixture.id+' · '+size+'px · triangles');
+        try{var result=await measure(hooks,fixture,models[fixture.kind],size,'triangles');var entry=publicResult(result);entry.distance=fixture.distance;
+          entry.screenPixelsPerTexel=Math.round(CHEST_PANEL.uvScale*width/(2*Math.tan(Math.PI/5))/(size*fixture.distance)*1000)/1000;report.cases.push(entry);
+          if(!result.analysis.valid)report.setupFailures.push(result.id+': '+result.analysis.failures.join('; '));}
+        catch(e){if(hooks.cancelled())throw e;report.setupFailures.push(fixture.id+'-'+size+'-triangles: '+e.message);}}
+      hooks.progress('Magnified band controls: stationary and uniform at 20 units');
+      var near=magnifiedFixtures()[0],nearModel=models['chest-front'];
+      var stationary=await measure(hooks,near,nearModel,128,'triangles',{stationary:true});
+      report.controls.push({id:'stationary-magnified',pass:stationary.analysis.valid&&stationary.analysis.actualMotionRms===0&&stationary.analysis.temporalResidualRms===0,analysis:stationary.analysis});
+      var uniform=await measure(hooks,near,nearModel,128,'triangles',{uniform:true});
+      report.controls.push({id:'uniform-magnified',pass:uniform.analysis.valid&&uniform.analysis.temporalResidualRms<1/160&&uniform.analysis.spatialMae<1/160,analysis:uniform.analysis});
+      if(report.controls.some(function(c){return c.pass===false;}))report.setupFailures.push('A magnified-band sensitivity control failed');
+      report.temporalFailures=report.cases.filter(function(c){var a=c.analysis;return a.valid&&(a.temporalResidualRms>.05||a.maxFrameTemporalRms>.08||a.maxLocalTemporalRms>.12);}).map(function(c){return c.id;});
+      report.spatialFailures=report.cases.filter(function(c){return c.analysis.valid&&c.analysis.spatialMae>.08;}).map(function(c){return c.id;});
+      report.passed=report.cases.filter(function(c){return c.analysis.status==='PASS';}).length;
+      if(report.cases.length!==report.expectedCases)report.setupFailures.push('Expected '+report.expectedCases+' cases, measured '+report.cases.length);
+      report.complete=true;report.status=report.setupFailures.length?'SETUP_FAILURE':report.temporalFailures.length||report.spatialFailures.length?'QUALITY_FAILURE':'PASS';
+    }catch(e){report.status=hooks.cancelled()?'CANCELLED':'SETUP_FAILURE';report.setupFailures.push(e.message);}return report;
+  }
+  // Hooks from global render, next and rayDepth, for a page that exposes
+  // them. /structures.html does not (its page script is closed over), so this
+  // throws there: run the case with its 'Test prop magnified band' button.
+  function pageHooks(){if(typeof render!=='function'||typeof rayDepth!=='function'||typeof next!=='function')throw Error('pageHooks needs global render, rayDepth and next; on /structures.html use the Test prop magnified band button');
+    var stopped=false;
+    return{next:next,rayDepth:rayDepth,cancelled:function(){return stopped;},cancel:function(){stopped=true;},
+      progress:function(text){if(typeof status==='function')status(text);},
+      capture:function(target,position,m,options){var work=render(target,true,position,m,options);
+        return{work:work,pixels:target.getContext('2d').getImageData(0,0,target.width,target.height).data,depth:_sceneDepthInv.slice(0,target.width*target.height)};}};}
+  return {run:run,planeFor:planeFor,hit:hit,runMagnified:runMagnified,magnifiedFixtures:magnifiedFixtures,chestModel:chestModel,
+    chestCamera:chestCamera,CHEST_PANEL:CHEST_PANEL,pageHooks:pageHooks};
 }());

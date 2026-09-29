@@ -1,0 +1,23 @@
+<div id='renderLab' style='margin:12px 16px;padding:10px;border:1px solid #3a4450;background:#11161b;font:12px system-ui'>
+  <h3 style='margin:0 0 6px'>Render lab (developer page, never shipped)</h3>
+  <p style='margin:0 0 6px;color:#e8c98a'>Open this page in its own fresh tab. Timing and pixel readback need separate fresh tabs: readback can move the canvas to a slower backend and taint later timings. Never run these checks in a tab with a game you care about.</p>
+  <div style='display:flex;flex-wrap:wrap;gap:6px;align-items:center'>
+    <label>Seed <input id='renderLabSeed' value='424242' size='8'></label>
+    <button class='btn' id='renderLabEndless'>Start seeded Endless</button>
+    <button class='btn' id='renderLabCave'>Start Cave Test 12345</button>
+    <select id='renderLabLandmarkType'><option value=''>Any landmark</option><option>fortress</option><option>arena</option><option>watchtower</option></select>
+    <button class='btn' id='renderLabLandmark'>Go to landmark</button>
+    <button class='btn' id='renderLabRender'>Render one frozen frame</button>
+  </div>
+  <div style='display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px'>
+    <label>A <select id='renderLabA'><option>legacy</option><option>recommended</option></select></label>
+    <label>B <select id='renderLabB'><option>legacy</option><option>recommended</option></select></label>
+    <label>Warm-up <input id='renderLabWarmup' value='20' size='3'></label>
+    <label>Measured <input id='renderLabMeasured' value='90' size='3'></label>
+    <button class='btn' id='renderLabAbba'>Time A/B/B/A</button>
+    <button class='btn' id='renderLabCapture'>Capture pixels A and B (readback tab)</button>
+    <button class='btn' id='renderLabGPress'>600 frames, G every 60</button>
+    <button class='btn' id='renderLabFullscreen'>Check fullscreen size</button>
+  </div>
+  <pre id='renderLabResult' role='log' aria-live='polite' style='white-space:pre-wrap;max-height:420px;overflow:auto;margin:6px 0 0'>Choose a scene, then a check.</pre>
+</div>

@@ -21,7 +21,7 @@
   // --keep-face-clip    planar keeps its antialiased face-outline clip
   // --drop-outline-flags tessellate emits all-false boundary flags
   // --reverse-skirt     skirts run p->q, so nonzero cancels their overlap
-  var source = slurp('tools/game/texture-mapping.js');
+  var source = slurp('assets/games/src/12-texture-mapping.js');
   source = mutate(source, '--old-clip', 'if (options && options.ownedPixels) {', 'if (false) {');
   source = mutate(source, '--keep-face-clip', 'if (options.ownedPixels !== true) {', 'if (true) {');
   source = mutate(source, '--drop-outline-flags',

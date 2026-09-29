@@ -169,7 +169,46 @@ var GAME_MATERIAL_COLORS = {
     base: '#c8c8c8', dry: '#c8b870', lit: '#e8e0c8', shadow: '#d0c8b0',
     outline: '#2a2018', cavity: '#000000', gap: '#1a1008',
     aged: '#c0b8a0', knuckle: '#b8b098'
-  }
+  },
+  // Treasure-chest models (integration stage G), one per CHEST_TIER_DEFS
+  // tier: the legacy front/lid-top/trim/lock/glow colours as albedos (the
+  // model is lit from its normals, so the legacy per-side shades are not
+  // kept) and a dark interior. CHEST_TIER_DEFS still drives the Legacy path.
+  chestCommon: {body: '#a06830', lid: '#c89848', interior: '#1a1008', trim: '#b08040', lock: '#c8a848', glow: '#ffd740'},
+  chestUncommon: {body: '#8090a0', lid: '#b0c0d0', interior: '#141a20', trim: '#a0b0c0', lock: '#c0d0e0', glow: '#40a040'},
+  chestRare: {body: '#c0a020', lid: '#e8d050', interior: '#1c1606', trim: '#e0c040', lock: '#ffe060', glow: '#6060e0'},
+  chestEpic: {body: '#6030a0', lid: '#a070e0', interior: '#160c26', trim: '#9060d0', lock: '#c080ff', glow: '#c040ff'},
+  // Spawner obelisk model (integration stage H). The body is the legacy
+  // #1a1520 lifted so the lit faces read (the legacy trapezoid was drawn
+  // 40-100% see-through); the rune is the legacy rune red, and the model's
+  // emissive rune strips pulse between body and rune as an instance tint.
+  spawnerObelisk: {body: '#2e2536', rune: '#c83232'},
+  // Floor-prop models (integration stage I). The legacy sprite colours of
+  // paintFloorItem as albedos (the model is lit from its normals): the
+  // boulder's #5a5550 with its moss, the stone column's #605850 body and
+  // #706860 break, the sand pillar's #c4a060 body and #b89050 cap, and the
+  // mesa's three layers. The barrel keeps floorPropWood's base for its
+  // staves, a lighter head, and floorPropIron hoops.
+  floorStone: {base: '#5a5550', moss: '#3c5a32', column: '#605850', broken: '#706860'},
+  sandstone: {base: '#c4a060', cap: '#b89050'},
+  mesaRock: {bottom: '#8b6040', middle: '#9b7050', top: '#a88060'},
+  barrelWood: {base: '#765238', head: '#8f6a48'},
+  // Cave floor-prop models (integration stage I2): paintFloorItem's cave rock
+  // colours as albedos, the stalagmite's #6a5848, the rock spire's three
+  // swatches, the rubble pile's mound and its rocks, and the rock arch's
+  // #585048. The tree stump and fallen log use floorPropWood.
+  caveRock: {stalagmite: '#6a5848', spire: '#5a5248', spireLit: '#685e52', spireDark: '#4e4840',
+    mound: '#504a44', rubble: '#5e5650', rubbleLit: '#686058', rubbleDark: '#3e3a36', arch: '#585048'},
+  // Landmark models (integration stage J, landmarkModels): the legacy painted
+  // colours as albedos (the models are lit from their normals, so the legacy
+  // per-side shades collapse to one base). Instance tints carry the per-record
+  // colours: a shrine's buff crystal, a stall's awning and goods.
+  landmarkShrine: {stone: '#808080', top: '#888888', crystal: '#ffffff', crystalDark: '#888888'},
+  landmarkStall: {wood: '#6b4226', woodDark: '#4a2e18', woodLit: '#8b5e3c', table: '#7a5030',
+    awning: '#886633', awningDark: '#553311', goods: '#aa8844'},
+  landmarkTower: {stone: '#9b8b7b', top: '#8b7d6b'},
+  landmarkKeep: {platform: '#333333', iron: '#444444', ironLit: '#666666', stone: '#555555',
+    book: '#8866cc', pole: '#5a4a3a', flag: '#c8a028'}
 };
 
 // Pure compiler; safe to test without a DOM or Canvas. Invalid color values

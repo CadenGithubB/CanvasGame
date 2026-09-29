@@ -98,6 +98,10 @@ function prepareGameRun() {
   dashUntil = 0; dashCooldownUntil = 0; dashFovPunch = 0;
   jumpVelZ = 0; jumpAirborne = false;
   resetSimulationFrame();
+  // Stage E: build the texture catalog before the first frame (a one-time
+  // cost); the first engaged frame builds it lazily otherwise.
+  if (typeof worldTexturesWanted === 'function' && worldTexturesWanted() &&
+      typeof ensureWorldTextureCatalog === 'function') ensureWorldTextureCatalog();
 }
 
 function startGame() {

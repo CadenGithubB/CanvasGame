@@ -165,21 +165,35 @@ function projToScreen(wx, wy, wz, C) {
 // Returns null if occluded, otherwise {sx, sy, fwd, dist, floorZ, fade}.
 // opts: { maxDist, depthOffset, checkMidpoint, fadeFraction, skipDepth, stats }
 //   stats: optional object — if provided, increments .tooFar / .behind / .depthOccl / .belowFloor / .midOccl
+// World-bounds gate (scene-depth callers only; integration stage J2,
+// landmarkBoundsGate): opts.worldRadius is the entity's horizontal bounds
+// radius r about (wx, wy), a number or a function of the entity (which
+// renderEntities3D passes as a sixth argument). The gate then rejects only
+// bounds wholly beyond range (dist - r > maxDist) or wholly behind the near
+// plane (fwd + r < 1); a centre behind the camera (fwd < 1) is kept with sx
+// and sy NaN (invalid), since its faces are near-plane clipped world faces.
+// checkMidpoint then applies only to bounds wholly beyond opts.midpointBeyond.
+// Without worldRadius, or without scene depth, the centre gate is unchanged.
 function entityVisible3D(wx, wy, wz, C, opts) {
   opts = opts || {};
   var sceneDepth = !!(opts.sceneDepth || opts.bounds);
   if (!Number.isFinite(wx) || !Number.isFinite(wy)) return null;
+  var boundR = NaN;
+  if (sceneDepth && opts.worldRadius !== undefined) {
+    boundR = typeof opts.worldRadius === 'function' ? opts.worldRadius(arguments[5]) : opts.worldRadius;
+    if (!(boundR >= 0)) boundR = 0;
+  }
   var dx = wx - cam.x, dy = wy - cam.y;
   var dist = Math.hypot(dx, dy);
   if (dist < 1) dist = 1;
   var maxDist = opts.maxDist || viewDist;
-  if (dist > maxDist) { if (opts.stats) opts.stats.tooFar++; return null; }
+  if (boundR >= 0 ? dist - boundR > maxDist : dist > maxDist) { if (opts.stats) opts.stats.tooFar++; return null; }
 
   var fwd = dx * C.cosAng + dy * C.sinAng;
-  if (fwd < 1) { if (opts.stats) opts.stats.behind++; return null; }
+  if (boundR >= 0 ? fwd + boundR < 1 : fwd < 1) { if (opts.stats) opts.stats.behind++; return null; }
 
   var rgt = dx * (-C.sinAng) + dy * C.cosAng;
-  var sx = Math.floor((rgt / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
+  var sx = fwd < 1 ? NaN : Math.floor((rgt / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
 
   // Depth buffer check — use min depth across a small column range to avoid
   // 1-pixel edge artifacts where a face boundary causes single-column occlusion flicker.
@@ -207,7 +221,7 @@ function entityVisible3D(wx, wy, wz, C, opts) {
   // Midpoint occlusion — hill between camera and entity.
   // Skip when underground (surface terrain would falsely occlude) or when the
   // entity is within ~80u (no hill physically fits between).
-  if (!sceneDepth && opts.checkMidpoint && !playerUnderground && dist > 80) {
+  if ((!sceneDepth || dist - boundR > opts.midpointBeyond) && opts.checkMidpoint && !playerUnderground && dist > 80) {
     var fhMid = floorMesh ? getFloorHeightAt((cam.x + wx) * 0.5, (cam.y + wy) * 0.5) : 0;
     if (fhMid * 25 > (C.cameraZ + floorZ) * 0.5 + 8) {
       if (opts.stats) opts.stats.midOccl++;
@@ -225,7 +239,7 @@ function entityVisible3D(wx, wy, wz, C, opts) {
   // Migrated callers supply an absolute render height. Zero is valid; bounce
   // offsets belong in their animation, not in this world-height slot.
   var renderZ = sceneDepth ? (Number.isFinite(wz) ? wz : floorZ) : (wz || floorZ);
-  var sy = Math.floor(C.horizonY + (C.cameraZ - renderZ) / fwd * projScale);
+  var sy = fwd < 1 ? NaN : Math.floor(C.horizonY + (C.cameraZ - renderZ) / fwd * projScale);
   return { sx: sx, sy: sy, fwd: fwd, dist: dist, floorZ: floorZ, renderZ:renderZ, fade: fade };
 }
 
@@ -242,7 +256,9 @@ function entityVisible3D(wx, wy, wz, C, opts) {
 //
 // visOpts: passed to entityVisible3D, plus:
 //   sort:       true = sort far-to-near (painter's order). default false.
-//   minDist:    skip entities closer than this (default 0)
+//   minDist:    skip entities closer than this (default 0); not with a
+//               world-bounds gate (sceneDepth + worldRadius), which rejects
+//               only bounds wholly behind the camera or out of range
 //   mode3dOnly: require MODE3D flag (default false)
 //
 // drawFn(entity, vis, C, ctx, now):
@@ -264,7 +280,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
   var C = getCam3D();
   var now = gameTimeNow();
   var doSort = visOpts.sort || false;
-  var minDist = visOpts.minDist || 0;
+  var minDist = (visOpts.sceneDepth || visOpts.bounds) && visOpts.worldRadius !== undefined ? 0 : visOpts.minDist || 0;
 
   // Visibility pass
   var count = 0;
@@ -274,7 +290,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
     var wz = visOpts.groundAnchor ? getEntityRenderFloorZ(e) :
       (visOpts.sceneDepth || visOpts.bounds) ? (Number.isFinite(e.wz) ? e.wz : Number.isFinite(e.z) ? e.z : getEntityRenderFloorZ(e)) : (e.wz || e.z || 0);
     if ((visOpts.sceneDepth || visOpts.bounds) && !Number.isFinite(wz)) continue;
-    var vis = entityVisible3D(wx, wy, wz, C, visOpts);
+    var vis = entityVisible3D(wx, wy, wz, C, visOpts, e);
     if (!vis) continue;
     if (visOpts.groundAnchor) vis.floorZ = wz;
     if (vis.dist < minDist) continue;
@@ -390,16 +406,46 @@ function toggleFullscreen() {
   }
 }
 
+// Fullscreen draw-buffer size: the viewport scaled by the Resolution setting,
+// then capped to `rows` canvas rows with the aspect ratio kept. 'native' (or
+// any non-positive cap) means no row cap. Pure: no DOM or canvas access.
+var FULLSCREEN_ROW_CHOICES = ['native', 360, 480, 540, 720];
+function fullscreenCanvasSize(viewW, viewH, resolution, rows) {
+  viewW = Number(viewW); viewH = Number(viewH);
+  if (!(viewW >= 1) || !(viewH >= 1)) return {width: CANVAS_BASE_W, height: CANVAS_BASE_H};
+  var res = Number(resolution);
+  res = Number.isFinite(res) && res > 0 ? Math.min(1, Math.max(0.25, res)) : 1;
+  var width = Math.max(1, Math.floor(viewW * res)), height = Math.max(1, Math.floor(viewH * res));
+  var cap = rows === 'native' ? 0 : Math.floor(Number(rows));
+  if (cap > 0 && height > cap) {
+    width = Math.max(1, Math.round(viewW * cap / viewH));
+    height = cap;
+  }
+  return {width: width, height: height};
+}
+function fullscreenCanvasTargetSize() {
+  return fullscreenCanvasSize(window.innerWidth || screen.width, window.innerHeight || screen.height,
+    settings.resolution, settings.fullscreenRows);
+}
+// Resize now when the game canvas owns fullscreen; returns whether it did.
+function applyFullscreenCanvasSize() {
+  var fs = document.fullscreenElement || document.webkitFullscreenElement
+         || document.mozFullScreenElement || document.msFullscreenElement;
+  if (fs !== canvas) return false;
+  var size = fullscreenCanvasTargetSize();
+  canvas.width = size.width;
+  canvas.height = size.height;
+  return true;
+}
+
 function onFullscreenChange() {
   var fs = document.fullscreenElement || document.webkitFullscreenElement
          || document.mozFullScreenElement || document.msFullscreenElement;
   if (fs === canvas) {
-    // Entering fullscreen — expand draw buffer to the actual screen size.
-    // A brief rAF ensures the browser has committed the new viewport size.
-    requestAnimationFrame(function() {
-      canvas.width  = window.innerWidth  || screen.width;
-      canvas.height = window.innerHeight || screen.height;
-    });
+    // Entering fullscreen — size the draw buffer from the viewport, honouring
+    // the Resolution setting and the fullscreen row cap (V01). A brief rAF
+    // ensures the browser has committed the new viewport size.
+    requestAnimationFrame(function() { applyFullscreenCanvasSize(); });
   } else {
     // Exiting fullscreen — restore authored resolution.
     canvas.width  = CANVAS_BASE_W;
@@ -410,6 +456,210 @@ document.addEventListener('fullscreenchange',       onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 document.addEventListener('mozfullscreenchange',    onFullscreenChange);
 document.addEventListener('MSFullscreenChange',     onFullscreenChange);
+
+// =============================================
+// RENDER FEATURES — in-memory A/B switches for presentation-only paths
+// =============================================
+// Fragments register switchable render paths and developer actions here.
+// 23-events-init.js builds the Graphics row from this list, G swaps the
+// Recommended and Legacy presets, and the console API below uses the same
+// functions. Nothing is persisted, so a separate test tab never changes a
+// player's game. Presets are derived from the definitions on demand, so a
+// feature registered by a later fragment is always included. A switch may
+// change drawing only: never simulation, world data or the random streams.
+var RENDER_FEATURE_DEFS = [];      // frozen definitions, registration order
+var RENDER_FEATURES = {};          // live values by key
+var RENDER_ACTIONS = [];           // frozen {key, label, title, run}
+var _renderFeatureIndex = {}, _renderActionIndex = {};
+var _renderPresetSelected = 'recommended'; // last applied preset
+var _renderPresetCache = null;
+var _renderFeatureListeners = [];
+var _renderFeatureUnknownReads = 0;
+// Per-frame render counters (numbers only). draw() resets them right after
+// beginSceneDepthFrame(); the HUD, Perf HUD and console read them.
+var _renderFrameStats = {frame: 0};
+
+function _renderFeatureError(message) { return new Error('render features: ' + message); }
+function _renderRegistryKey(key) {
+  if (typeof key !== 'string' || !/^[a-z][A-Za-z0-9]*$/.test(key)) throw _renderFeatureError('invalid key ' + key);
+  if (_renderFeatureIndex[key] || _renderActionIndex[key]) throw _renderFeatureError('duplicate key ' + key);
+  return key;
+}
+function _renderFeatureAllows(def, value) {
+  return def.type === 'bool' ? value === true || value === false : def.values.indexOf(value) >= 0;
+}
+function defineRenderFeature(def) {
+  if (!def || typeof def !== 'object') throw _renderFeatureError('a definition object is required');
+  var key = _renderRegistryKey(def.key);
+  if (typeof def.label !== 'string' || !def.label) throw _renderFeatureError(key + ': label required');
+  var out = {key: key, label: def.label, type: def.type, title: typeof def.title === 'string' ? def.title : ''};
+  if (def.type === 'bool') {
+    // Legacy is the pre-integration reference path, so every switch is off there.
+    if (def.legacy !== false) throw _renderFeatureError(key + ': a bool feature must be false in Legacy');
+    out.values = [false, true];
+  } else if (def.type === 'enum') {
+    if (!Array.isArray(def.values) || def.values.length < 2) throw _renderFeatureError(key + ': an enum needs two or more values');
+    var seen = {};
+    def.values.forEach(function(v) {
+      if (!(typeof v === 'string' && v) && !(typeof v === 'number' && Number.isFinite(v)))
+        throw _renderFeatureError(key + ': enum values must be strings or finite numbers');
+      if (seen[String(v)]) throw _renderFeatureError(key + ': duplicate enum value ' + v);
+      seen[String(v)] = true;
+    });
+    out.values = def.values.slice();
+  } else {
+    throw _renderFeatureError(key + ': type must be bool or enum');
+  }
+  if (!_renderFeatureAllows(out, def.default)) throw _renderFeatureError(key + ': default is not an allowed value');
+  if (!_renderFeatureAllows(out, def.legacy)) throw _renderFeatureError(key + ': legacy is not an allowed value');
+  out.default = def.default; out.legacy = def.legacy;
+  Object.freeze(out.values); Object.freeze(out);
+  RENDER_FEATURE_DEFS.push(out); _renderFeatureIndex[key] = out;
+  RENDER_FEATURES[key] = _renderPresetSelected === 'legacy' ? out.legacy : out.default;
+  _renderPresetCache = null;
+  _notifyRenderFeatures('define', key);
+  return out;
+}
+function defineRenderAction(def) {
+  if (!def || typeof def !== 'object') throw _renderFeatureError('an action object is required');
+  var key = _renderRegistryKey(def.key);
+  if (typeof def.label !== 'string' || !def.label) throw _renderFeatureError(key + ': label required');
+  if (typeof def.run !== 'function') throw _renderFeatureError(key + ': run must be a function');
+  var out = Object.freeze({key: key, label: def.label, title: typeof def.title === 'string' ? def.title : '', run: def.run});
+  RENDER_ACTIONS.push(out); _renderActionIndex[key] = out;
+  _notifyRenderFeatures('action', key);
+  return out;
+}
+function renderFeaturePreset(name) {
+  if (name !== 'recommended' && name !== 'legacy') throw _renderFeatureError('unknown preset ' + name);
+  if (!_renderPresetCache) {
+    var recommended = {}, legacy = {};
+    RENDER_FEATURE_DEFS.forEach(function(def) { recommended[def.key] = def.default; legacy[def.key] = def.legacy; });
+    _renderPresetCache = {recommended: Object.freeze(recommended), legacy: Object.freeze(legacy)};
+  }
+  return _renderPresetCache[name];
+}
+function _renderFeaturesEqual(values) {
+  for (var i = 0; i < RENDER_FEATURE_DEFS.length; i++) {
+    var key = RENDER_FEATURE_DEFS[i].key;
+    if (RENDER_FEATURES[key] !== values[key]) return false;
+  }
+  return true;
+}
+// 'recommended', 'legacy', or 'custom' after a single switch differs.
+function renderPresetName() {
+  var other = _renderPresetSelected === 'legacy' ? 'recommended' : 'legacy';
+  if (_renderFeaturesEqual(renderFeaturePreset(_renderPresetSelected))) return _renderPresetSelected;
+  return _renderFeaturesEqual(renderFeaturePreset(other)) ? other : 'custom';
+}
+// Guarded hot-path read: an unknown key is counted and reads as off. For an
+// enum it means "not the Legacy value"; read enums with renderFeatureValue.
+function renderFeatureOn(key) {
+  var def = _renderFeatureIndex[key];
+  if (!def) { _renderFeatureUnknownReads++; return false; }
+  return def.type === 'bool' ? RENDER_FEATURES[key] === true : RENDER_FEATURES[key] !== def.legacy;
+}
+function renderFeatureValue(key, fallback) {
+  if (!_renderFeatureIndex[key]) { _renderFeatureUnknownReads++; return fallback; }
+  return RENDER_FEATURES[key];
+}
+function renderFeatureSnapshot() {
+  var out = {};
+  RENDER_FEATURE_DEFS.forEach(function(def) { out[def.key] = RENDER_FEATURES[def.key]; });
+  return out;
+}
+// Validates every entry before applying any, so a typo changes nothing.
+function setRenderFeatures(values) {
+  if (!values || typeof values !== 'object') throw _renderFeatureError('an object of feature values is required');
+  var keys = Object.keys(values), changed = [];
+  keys.forEach(function(key) {
+    var def = _renderFeatureIndex[key];
+    if (!def) throw _renderFeatureError('unknown feature ' + key);
+    if (!_renderFeatureAllows(def, values[key]))
+      throw _renderFeatureError(key + ': ' + JSON.stringify(values[key]) + ' is not one of ' + JSON.stringify(def.values));
+  });
+  keys.forEach(function(key) {
+    if (RENDER_FEATURES[key] !== values[key]) { RENDER_FEATURES[key] = values[key]; changed.push(key); }
+  });
+  if (changed.length) _notifyRenderFeatures('set', changed.join(','));
+  return renderFeatureSnapshot();
+}
+function setRenderFeature(key, value) {
+  var values = {};
+  values[key] = value;
+  return setRenderFeatures(values);
+}
+function applyRenderPreset(name) {
+  var values = renderFeaturePreset(name);
+  _renderPresetSelected = name;
+  RENDER_FEATURE_DEFS.forEach(function(def) { RENDER_FEATURES[def.key] = values[def.key]; });
+  _notifyRenderFeatures('preset', name);
+  return name;
+}
+function toggleRenderPreset() {
+  return applyRenderPreset(renderPresetName() === 'legacy' ? 'recommended' : 'legacy');
+}
+function onRenderFeaturesChange(listener) {
+  _renderFeatureListeners.push(listener);
+  return function() {
+    var at = _renderFeatureListeners.indexOf(listener);
+    if (at >= 0) _renderFeatureListeners.splice(at, 1);
+  };
+}
+function _notifyRenderFeatures(kind, detail) {
+  _renderFeatureListeners.slice().forEach(function(listener) {
+    try { listener(kind, detail); }
+    catch (e) { console.error('[RENDER FEATURES] listener failed:', e && e.message); }
+  });
+}
+function runRenderAction(key, options) {
+  var action = _renderActionIndex[key];
+  if (!action) throw _renderFeatureError('unknown action ' + key);
+  return action.run(options || {});
+}
+function beginRenderFrameStats() {
+  for (var key in _renderFrameStats) if (key !== 'frame') _renderFrameStats[key] = 0;
+  _renderFrameStats.frame++;
+}
+function addRenderFrameStat(name, amount) {
+  _renderFrameStats[name] = (_renderFrameStats[name] || 0) + (amount === undefined ? 1 : amount);
+}
+function getRenderFeatureStats() {
+  var frame = {};
+  for (var key in _renderFrameStats) frame[key] = _renderFrameStats[key];
+  return {preset: renderPresetName(), features: renderFeatureSnapshot(), textures: USE_TEXTURES === true,
+    fullscreenRows: settings.fullscreenRows, canvas: canvas.width + 'x' + canvas.height,
+    actions: RENDER_ACTIONS.map(function(action) { return action.key; }),
+    unknownReads: _renderFeatureUnknownReads, frame: frame};
+}
+// Compact HUD line "R:<preset> TEX <prims>/<budget> fb <fallbacks>". The
+// texture pass fills texPrims/texBudget/texFallbacks; until it does, or with
+// the texture master off, TEX reads '-' or 'off' rather than an invented 0/0.
+// Stage E2 adds the pass's counters: an engaged frame appends f<textured
+// faces> m<mean faces> (and x<failed draws> when any failed); a frame that
+// stayed flat reads 'flat:<reason>' (rows, catalog, transform, debug, ...).
+function renderHudStatusLine() {
+  var preset = renderPresetName(), s = _renderFrameStats;
+  var tex = USE_TEXTURES !== true ? 'off' : s.texBudget > 0 ? (s.texPrims || 0) + '/' + s.texBudget :
+    s.texFlat > 0 ? 'flat:' + _renderHudFlatReason(s) : '-';
+  var line = 'R:' + (preset === 'recommended' ? 'Rec' : preset === 'legacy' ? 'Legacy' : 'Custom') +
+    ' TEX ' + tex + ' fb ' + (s.texFallbacks || 0);
+  if (USE_TEXTURES === true && s.texBudget > 0) {
+    line += ' f' + (s.texFaces || 0) + ' m' + (s.texMean || 0) + (s.texFailedDraws > 0 ? ' x' + s.texFailedDraws : '');
+  }
+  return line;
+}
+function _renderHudFlatReason(s) {
+  for (var key in s) {
+    if (key.length > 7 && key.indexOf('texFlat') === 0 && s[key] > 0) return key.charAt(7).toLowerCase() + key.slice(8);
+  }
+  return '?';
+}
+// Console API: the classic-script declarations setRenderFeatures(),
+// getRenderFeatureStats() and runRenderAction() are already window
+// properties (wrapping them under the same name would recurse).
+// renderPreset() reads the preset; renderPreset('legacy') applies one.
+window.renderPreset = function(name) { if (name !== undefined) applyRenderPreset(name); return renderPresetName(); };
 
 // =============================================
 // GAME STATE
@@ -891,7 +1141,12 @@ var QUALITY_PRESETS = {
   high:   {viewDist: 1300, chunkWindow: 7, particles: 40, resolution: 1.0},
   ultra:  {viewDist: 1800, chunkWindow: 9, particles: 60, resolution: 1.0}
 };
+// fullscreenRows caps fullscreen canvas rows (FULLSCREEN_ROW_CHOICES); set from
+// the Graphics row, not the in-canvas overlay, so it has no staged copy.
+// Stage E: 360 by default (the structure textures' textureMaxRows); Native
+// stays selectable.
 var settings = {viewDist: 900, chunkWindow: 5, particles: 25, resolution: 0.75, showFPS: false, dayNight: true,
+  fullscreenRows: 360,
   castingStyle: typeof getSelectedCastingStyle === 'function' ? getSelectedCastingStyle() : 'arcane'};
 // Staging copy — holds uncommitted edits while settings overlay is open.
 // Written to by all slider/toggle/preset interactions.

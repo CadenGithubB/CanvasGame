@@ -38,7 +38,7 @@
   G.setTimeout=function(callback){timeouts++;callback();return 1;};
   (0,eval)('var canvas, ctx;');
   (0,eval)(slurp('assets/games/src/12-scene-depth.js'));
-  (0,eval)(slurp('tools/game/texture-mapping.js'));
+  (0,eval)(slurp('assets/games/src/12-texture-mapping.js'));
   var source=slurp('tools/game/edge-coverage.js');
   source=mutate(source,'--measure-red-only',
     'value = Math.min(data[o], data[o + 1], data[o + 2])','value = data[o]');

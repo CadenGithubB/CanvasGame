@@ -2,11 +2,22 @@
 
 These are isolated experiments, not shipping renderer integration or a complete
 shared object/model system. The small material study uses `texture-preview.html`,
-`texture-mapping.js` and the isolated `texture-temporal.js` regression harness.
+the mapper and the isolated `texture-temporal.js` regression harness.
 The production-size structure study uses `structure-preview.html` and
 `structure-model.js`, sharing the material mapper. `structure-motion.js` and
 `structure-temporal.js` provide its native motion replay and independent
-projected-stripe oracle. All stay outside the game manifest and generated header.
+projected-stripe oracle.
+
+The mapper (`TexturePilot`) now ships as the game fragment
+`assets/games/src/12-texture-mapping.js`, listed in MAIN after
+`12-scene-depth.js`. Loading it defines one global and creates no canvases;
+the only game caller is the structure model's texture pass (see "In the game"
+below). Both study pages inject that one
+source, so after editing it run `python3 tools/game/dev.py build` before the
+study pages will serve again. The study-only harnesses and models
+(`texture-temporal.js`, `edge-coverage.js`, `structure-model.js`,
+`structure-motion.js`, `structure-temporal.js`) stay outside the game manifest
+and generated header, and `test_dev.py` checks that.
 
 Current status: the directional planar candidate passes all 20 selected
 structure-motion cases, but stays experimental and off by default because of
@@ -870,7 +881,9 @@ textured faces and at pillar/object corners. Evidence is native Chromium 152
 pages, plus a jsc replay that reproduces the native motion workload and all 40
 verdicts. Raw data, the chart generator and per-case results are in
 `docs/game_audit_handoff/evidence/texture_edge_coverage/`. Nothing here changes
-the production game; `texture-mapping.js` remains the isolated pilot.
+the production game; the mapper was then an isolated pilot in
+`tools/game/texture-mapping.js`. It has since moved, unchanged in code, to the
+inert game fragment `assets/games/src/12-texture-mapping.js`.
 
 ### Outline coverage under the owner mask
 
@@ -1113,6 +1126,214 @@ cannot reach the roof-walk limit at walking speed; with the hybrid default that
 roof is drawn by strips and passes at both sizes. The suite has no fixture
 under ~62 world units, where the sizes differ most; add a near-wall fixture
 before judging 64px on detail against stability.
+
+## In the game (integration stage E)
+
+The structure model (fortress, arena, watchtower; `src/12-structure-models.js`)
+paints its opaque faces through `src/12-world-textures.js`, which calls the
+mapper with the structure study's verified optimum. It is a pure colour
+change: each face calls `withSceneDepthClip` with exactly
+`fillSceneDepthPolygon`'s options, so the face masks and `_sceneDepthInv` are
+identical with textures on or off, and every fill stays inside the face's
+integer mask.
+
+**Switches** (Graphics row under the game, G for Recommended/Legacy, console
+`setRenderFeatures({...})`; in memory only):
+
+| Switch | Default | Other values |
+| --- | --- | --- |
+| `structureTextures` | ON in Recommended, OFF in Legacy | |
+| Toggle Textures button (`USE_TEXTURES`) | on | master: off makes every frame flat |
+| `textureMapping` | `hybrid` | `triangles`, `planar` (experimental) |
+| `textureTile` | 128 | 64 (its own catalog, built once) |
+| `textureOwnedEdges` | ON | off |
+| `textureBudget` | 2,048 primitives per frame | 4,096 and 8,192, for comparison only |
+| `textureMaxRows` | 360 | 540, 720, unlimited |
+| `textureMinPixels` | 64 (leave at 48) | 0 disables |
+| Texture debug checkbox | unchecked | tints each face by its path |
+
+`WORLD_TEXTURE_DEFAULTS` equals `structure-preview.html`'s selected controls,
+its 384-strip cap, `STRUCTURE_TESSELLATION` and the 'stable' filter;
+`test_dev.py` checks that parity. The fullscreen row cap
+(`settings.fullscreenRows`) now defaults to 360, so a fullscreen canvas stays
+within `textureMaxRows`; Native remains selectable.
+
+**Whole-frame engage rules.** A frame textures only when all hold:
+`USE_TEXTURES`, `structureTextures`, the catalog is ready, the context
+transform is identity, source-over, no filter or shadow, canvas height ≤
+`textureMaxRows`, and none of `DEBUG_POLY_TYPES`, `DEBUG_CAVE_COLORS` or
+`DEBUG_LAYER_TYPES`. Otherwise the frame paints the flat model colours and
+counts `texFlat` plus its reason (`texFlatMaster`, `texFlatRows`,
+`texFlatCatalog`, `texFlatTransform`, `texFlatDebug`, `texFlatComposite`,
+`texFlatFilter`, `texFlatShadow`).
+
+**Per face.** Near to far, skip-not-stop: a face paints its prepared mean
+colour instead of texture when it owns fewer than 64 pixels (48 to leave),
+is at or beyond 0.82 × viewDist (crossfade from 0.72), does not fit the
+remaining budget, is declined by the mappers, or a draw fails (counted, never
+thrown). Horizontal faces take planar row strips in `hybrid`; other faces take
+tie-broken triangles. Colour is a 32% tint wash, then the production light as
+one 'multiply' fill (plus one 'lighter' fill where the light exceeds 1),
+luma-normalised to the flat model's colour.
+
+**Counters** (Perf HUD, `getRenderFeatureStats().frame`): `texFaces`,
+`texMean` and `texMeanBudget/Small/Fade/Decline/Failed`, `texFallbacks`
+(budget + decline + failed), `texTriangles`, `texStrips`, `texPatternFills`,
+`texClips`, `texCapped`, `texPlanarDeclines` and `texDecl<Reason>`,
+`texFailedDraws`, `texMappingMs`, `texPrims`, `texBudget`, `texCatalogBytes`,
+`texCatalogMs` (the build frame), `texDebugTints`, and the flat-frame keys
+above. With Show FPS on, the line under the FPS counter (visible in
+fullscreen) reads `R:Rec TEX <prims>/<budget> fb <fallbacks> f<textured
+faces> m<mean faces>` (plus `x<failed draws>` when any failed), `TEX
+flat:<reason>` for a flat frame, `TEX off` with Toggle Textures off, and
+`TEX -` when no texture pass ran.
+
+**Texture debug** tints each face of an engaged frame over its own mask:
+cyan `rgb(0,200,255)` planar strips, magenta `rgb(255,60,200)` triangles,
+amber `rgb(255,190,0)` mean colour (budget, small, fade, decline or failure).
+A flat frame has no tint; read its reason on the HUD line.
+
+**Catalog.** `prepareGameRun` builds stone, wood and iron once per tile size
+(a one-time cost; the study measured about 35–39 ms for 128 px); otherwise
+the first engaged frame builds it. A failed build sets a session flag, warns
+once, and leaves the structures flat; switching `structureTextures` off and on
+retries. Headless hosts whose `getImageData` returns alpha 0 (the tools/webui
+audit lab) always fail it, so the audit lab never exercises the textured path.
+
+**Cost is textured against the flat model, per view.** The study's +9.3% is
+the hybrid against the older textured-triangle setting, not against flat
+colours. Against flat, the material study measured 2.9 ms p50 textured
+versus 1.0 ms flat, and the planar arena exterior reached 6.9 ms p50 with
+10–13 of 90 frames over 8.33 ms. The in-game A/B/B/A (flat model, hybrid,
+triangles; 360×240 windowed and 640×360 under the fullscreen cap; p50/p95/max
+of `draw()`, `walls3D` and `structureModels3D`, frames over 16.7 ms, rAF vsync
+class) is run in the render lab (`tools/game/render-lab/20-textures.js`:
+`RenderLabTextures.timeView('hybrid' | 'triangles')` in a fresh tab, and
+`RenderLabTextures.runAll()` for S1-S7 and brightness in a separate readback
+tab) and recorded in the integration notes. The
+default stays ON only if the median rAF cadence keeps flat's vsync class at
+typical views and, at the arena exterior and fortress gate, textures do not
+add frames over 16.7 ms beyond the flat-model count by more than the noise
+floor.
+
+**Known limits.** The game's pixels are not square, so textures look about
+16–29% squashed vertically. Readback-context compositing differences are
+unresolved. The first textured frame creates the cached patterns, so it
+records differently from later frames. Tests:
+`tools/game/tests/world_textures.js` (coverage identity, containment, engage
+rules, budget, fade, strips, failure, colour, determinism, catalog, registry,
+debug tint, HUD line; eight plus three mutations) and `test_dev.py`
+(defaults parity). Pixel, brightness and timing checks need a real browser
+(render lab).
+
+## Prop textures (integration stage L)
+
+`propTextures` (Graphics row, **default ON** since the native evidence below,
+OFF in Legacy) sends model props through the same sink (`12-world-textures.js`, called from
+`drawWorldModel` in `12-prop-models.js`):
+
+| Material | Roles | Texture | Tile length | Wash |
+|---|---|---|---|---|
+| `chestCommon`, `chestUncommon`, `chestRare`, `chestEpic` | `body`, `lid` | wood | 14 units | 0.32 (as structures) |
+| `spawnerObelisk` | `body` | stone | 32 units | 0.5 of the dark violet albedo |
+
+Trim, strap, lock, interior, runes and the translucent mouth stay flat.
+The tile length is world units per tile, independent of the model's own UV
+authoring: the obelisk's parts carry 24, so their UVs are rescaled by 24/32.
+"Dark wash" is read as a heavier wash toward the obelisk's dark albedo, so
+the stone keeps its colour; the mean brightness is still normalised to the
+flat face. That value was a starting point and is still not a measured
+choice: the native obelisk A/B below shows containment and brightness, but
+in Chromium the stone replaces most of the obelisk's purple, so the intent
+that the stone keeps the obelisk's colour is not met at 0.5.
+
+**Rules.** Triangles only: a prop face is never offered to the planar mapper,
+whatever `textureMapping` says. The engage rules, parameters (tile, owned
+edges, budget, max rows, min pixels) and Toggle Textures master are the
+structure pass's. One primitive budget per frame (`_renderFrameStats.frame`):
+the structure pass draws first, and each prop pass continues from the
+primitives already used, so structures are admitted first and then each prop
+family near to far. The counters are the same (`texFaces`, `texMean`,
+`texPrims`, ...) plus `texPropFaces`, `texPropMean`, `texPropPrims`,
+`texPropDraws` and `texPropFlat`; `texBudget` is published once per frame and
+a flat frame's reason once. A prop face drawn at a fade alpha below 1 (the
+chest and obelisk range fade, 0.56-0.7 of the view distance) paints the
+prepared mean, because a textured face composites wash and light fills that
+cannot fade. The owned-pixel hysteresis is keyed per chest or spawner face
+(`inst.texOwner`).
+
+**The magnified band.** The structure motion suite never covered it:
+its cases start at about 62 units on 32-unit tiles, while a chest's 128 px
+tile spans 14 units, so at 20 units one texel covers about 1.35 screen
+pixels (0.30 at 90 units, at the study's 360×240 view).
+`StructureMotion.runMagnified(hooks)` (`tools/game/structure-motion.js`) adds
+that case: the body front seen level from 20, 30, 45, 62 and 90 units under a
+sideways walk, and the lid top seen from the standing eye (cameraZ 60,
+pitch within 1.4) from 45, 62 and 90 units under a forward walk; triangles,
+tiles 64 and 128, 16 cases plus stationary and uniform controls, with the
+full-structure suite's oracle and thresholds. Run it on `/structures.html`
+with the **Test prop magnified band** button. The page script is closed over
+(`render`, `rayDepth` and `next` are not globals), so the button builds the
+hooks itself; `StructureMotion.pageHooks()` throws there and names the button.
+The headless contract (`tools/game/tests/magnified_band.js`) proves only the
+fixture and wiring (an exact stand-in renderer passes; a wrong tile length
+or a frozen camera does not). The render-lab A/B is
+`tools/game/render-lab/45-prop-textures.js` (`band('near' | 'far')`, `ab()`
+for P1 pixel containment, P2 depth identity, P3 counters and luma in a
+readback tab, `timeView()` in a fresh tab). `frame()` renders one warm-up
+frame per state and measures the second: the first frame after a switch
+differs while patterns are created, and P1 counted that as leaks. Cost is
+stated textured against flat per view, as for structures.
+
+**Native evidence and the flip (Chromium, 2026-09-28).** The default went
+from OFF to ON on this evidence; Legacy stays OFF and byte-identical.
+
+- Magnified band (`/structures.html`, the button above): **PASS 16/16**
+  (chest front at 20, 30, 45, 62 and 90 units and lid at 45, 62 and 90 units,
+  tiles 64 and 128), both controls pass. Worst local temporal RMS 0.0873
+  (limit 0.12); up to 2.71 screen pixels per texel.
+- Lab A/B, near (25-40 units) and far (55-90 units) chests, one warm-up
+  frame per state: 0 changed pixels outside the prop masks, masks identical
+  on and off, depth identical, luma within 2%.
+- Timing, fresh visible tab, 40 interleaved frames at 360×240, chests at
+  25-40 units: Recommended with `propTextures` off p50/p95/max 9.4/10.3/15.4
+  ms, on 10.8/11.8/12.4 ms (+1.4 ms at p50, +1.5 ms at p95); 0 frames over
+  16.7 ms in either.
+- Obelisk A/B (recorded after the flip): seed 7 spawner row, `propTextures`
+  on against off, one warm-up frame per state. At 120 units, 0 changed
+  pixels outside the obelisk masks; 23,400 of the 27,161 mask pixels
+  changed, luma ratio on/off 1.004. At 45 units, 1 pixel outside the masks
+  differed by 1 level, inside another overlay's clip (the eye glow), not a
+  prop mask; luma ratio 1.033. The lab's strict P1 rule (`leaks === 0`)
+  counts that pixel as 1 leak, so P1 reads FAIL for the 45-unit view; the
+  leak is attributed to the eye glow's clip. Visually: stone blocks with the
+  red rune bands and the eye intact, and the obelisk's purple tint mostly
+  replaced by grey stone (see the wash note above).
+
+Not measured natively: timing with the obelisk in view, and scenes with
+many chests in view. The obelisk's wash value is looked at but not tuned.
+
+Tests: `tools/game/tests/prop_textures.js` (parity with the stage-K pins,
+coverage identity, containment, faces and roles, UV scale, triangles only,
+shared budget, engage, fade, counters, Texture debug tints, one real frame,
+lab smoke; ten mutations) and `tools/game/tests/magnified_band.js` (three
+mutations). The debug check turns Texture debug on with prop textures on:
+every chest and obelisk face that owns pixels ends with exactly one
+translucent tint over its own mask, in the triangle or mean colour (never
+strip), and no tint lands on a flat prop face or outside the prop masks. It
+runs on every scene, the row under a 40-primitive budget, and a chest and the
+obelisk each in its range fade band, and requires chest and obelisk faces
+each to take both the triangle and the mean path (`--props-fade-textured`
+also fails it: the faded obelisk supplies its only mean-path obelisk faces). At
+the flip, the prop_textures load check was restated (ON in Recommended, OFF in
+Legacy); its parity pins switch `propTextures` OFF explicitly and are
+unchanged. `world_textures.js` switches `propTextures` OFF around its
+structure-only checks (mask-log containment, catalog retry, debug tints),
+since prop faces share the counters, the sink and the retry listener. Its
+face-span containment check and its debug tint check were renamed to say
+that they cover the structure pass: the face-span wrapper marks spans only
+inside `drawStructureModels3D`.
+`test_dev.py` checks the button, its handler and `lock()`.
 
 ## Before shipping integration
 

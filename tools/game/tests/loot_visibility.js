@@ -1,7 +1,7 @@
 // Exercise production loot draw functions and their actual depth clips. The
 // browser host is inert; geometry/anchors/bounds/rendering are game source.
 (function () {
-  var G=(0,eval)('this'), checked=0, paints=0, saves=0, errors=[], fillLog=null;
+  var G=(0,eval)('this'), checked=0, paints=0, saves=0, texts=0, errors=[], fillLog=null;
   var output=(__engine==='node'||__engine==='deno')?console.log.bind(console):__out;
   function noop() {}
   function stub(values) {return new Proxy(values||{}, {get:function(o,k){return k==='then'?undefined:k in o?o[k]:noop;}});}
@@ -9,7 +9,7 @@
   function paintFill(){paints++;if(fillLog)fillLog.push(context.fillStyle);}
   function gradient(){return {addColorStop:noop};}
   var context=stub({save:function(){saves++;},restore:function(){saves--;},
-    fill:paintFill,stroke:paint,fillRect:paint,strokeRect:paint,fillText:paint,drawImage:paint,
+    fill:paintFill,stroke:paint,fillRect:paint,strokeRect:paint,fillText:function(){paints++;texts++;},drawImage:paint,
     measureText:function(s){return {width:String(s).length*8};},
     createLinearGradient:gradient,createRadialGradient:gradient,createPattern:function(){return {};},
     createImageData:function(w,h){return {data:new Uint8ClampedArray(w*h*4)};},
@@ -34,7 +34,7 @@
   JSON.parse(slurp('assets/games/manifest.json')).parts.MAIN.forEach(function(path){(0,eval)(mutate(path,slurp('assets/games/'+path)));});
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
   function quad(x0,y0,x1,y1,depth){return [{x:x0,y:y0,depth:depth},{x:x1,y:y0,depth:depth},{x:x1,y:y1,depth:depth},{x:x0,y:y1,depth:depth}];}
-  function frame(){G.beginSceneDepthFrame(360,240);paints=0;saves=0;}
+  function frame(){G.beginSceneDepthFrame(360,240);G.beginRenderFrameStats();paints=0;saves=0;texts=0;}
   function cover(){G.writeSceneDepthPolygon(quad(0,0,360,240,10));}
   function mesh(heights,cap){
     var m={w:2,h:2,gridSize:200,layerCount:[cap?2:1,cap?2:1,cap?2:1,cap?2:1],
@@ -62,8 +62,12 @@
     ['companions','companions','drawCompanions3D',entity({type:compType,z:3,squash:1,lastAttackMs:0})],
     ['fortress allies','fortressAllies','drawFortressAllies3D',entity({phase:0,health:10,maxHealth:10})],
     ['floor scatter','floorScatter','drawFloorScatter3D',entity({type:'bones',variant:0,seed:0.4})],
-    ['spawners','enemySpawners','drawEnemySpawners3D',entity({active:true,hp:5,maxHp:10,pulsePhase:0})]
+    ['legacy spawners','enemySpawners','drawEnemySpawners3D',entity({active:true,hp:5,maxHp:10,pulsePhase:0})]
   ];
+  // Stage H: the spawner has two paths. This loop runs its legacy one
+  // (spawnerModel off; renamed 'legacy spawners ...', contracts unchanged,
+  // the (180,150) bounds check included); the model cases follow the loop.
+  G.setRenderFeatures({spawnerModel:false});
   cases.forEach(function(c){
     G[c[1]]=[c[3]];G.playerUnderground=false;
     frame();cover();clips=[];G[c[2]]();
@@ -72,6 +76,42 @@
     check(c[0]+' remains visible through an unobstructed doorway',paints>0&&clips.some(function(c){return c.result>0;})&&saves===0);
     check(c[0]+' transparent bounds do not write opaque depth',G.sceneDepthAt(180,150)===Infinity);
   });
+  // Spawner model path (stage H). The obelisk writes opaque depth at
+  // (180,150), so the loop's bounds check is restated at a pixel analytically
+  // outside it: every obelisk point lies within 25 of (120,0) (the hit
+  // cylinder), so its columns satisfy |sx-180| <= 25/(120-25) of the half
+  // screen at this camera. That pixel must lie in the glow's painted bounds
+  // and keep no depth. The hidden and doorway cases keep their contracts.
+  // Stage K restatement: modelEarlyReject (default ON) skips a fully hidden
+  // model before building faces, so the per-face rejection is checked with
+  // the switch off, and the early reject (no faces; the three billboards
+  // still depth-tested and hidden) with it on.
+  G.setRenderFeatures({spawnerModel:true,modelEarlyReject:false});
+  G.enemySpawners=[entity({active:true,hp:5,maxHp:10,pulsePhase:0})];G.playerUnderground=false;
+  frame();cover();clips=[];G.drawEnemySpawners3D();
+  var sstat=G.getRenderFeatureStats().frame, semitted=(sstat.mdlSpawnerFaces||0)-(sstat.mdlSpawnerCulled||0);
+  check('spawner model (modelEarlyReject off): hidden obelisk rejects every emitted face and its glow, eye and HP bar and paints nothing',
+    paints===0&&saves===0&&semitted>=9&&(sstat.mdlSpawnerDrawn||0)===0&&clips.length===semitted+3&&clips.every(function(c){return c.result===0;}));
+  G.setRenderFeatures({modelEarlyReject:true});
+  frame();cover();clips=[];G.drawEnemySpawners3D();
+  sstat=G.getRenderFeatureStats().frame;
+  check('spawner model (modelEarlyReject on): hidden obelisk builds no faces (one early reject), its glow, eye and HP bar are rejected and it paints nothing',
+    paints===0&&saves===0&&(sstat.mdlSpawnerRejected||0)===1&&!sstat.mdlSpawnerFaces&&clips.length===3&&clips.every(function(c){return c.result===0;}));
+  frame();clips=[];G.drawEnemySpawners3D();
+  check('spawner model: remains visible through an unobstructed doorway',paints>0&&clips.some(function(c){return c.result>0;})&&saves===0);
+  var C0=G.getCam3D(), outsideX=Math.ceil(180+25/(120-25)*C0.invTanHalf*0.5*C0.w)+6;
+  // The glow is the first of the three overlay billboards (glow, eye, bar),
+  // an axis-aligned rect at one depth behind the centre. (H fix round 1: its
+  // test depth is the deepest body point under it + 0.4, no longer a fixed
+  // centre + 25.5, so a 'depth > 145' filter no longer finds it.)
+  var glowClip=clips[clips.length-3], gp=glowClip&&glowClip.points;
+  if(!(gp&&gp.length===4&&gp[0].depth>120&&gp.every(function(p){return p.depth===gp[0].depth;})&&
+    gp[0].y===gp[1].y&&gp[1].x===gp[2].x))glowClip=null;
+  check('spawner model: transparent glow bounds do not write opaque depth at a pixel analytically outside the obelisk',
+    !!glowClip&&glowClip.result>0&&outsideX>=glowClip.points[0].x&&outsideX<glowClip.points[1].x&&
+    150>=glowClip.points[0].y&&150<glowClip.points[2].y&&G.sceneDepthAt(outsideX,150)===Infinity);
+  check('spawner model: the obelisk body writes opaque depth at (180,150), where the legacy bounds wrote none',
+    Number.isFinite(G.sceneDepthAt(180,150))&&G.sceneDepthAt(180,150)>=120-25);
   G.floorMesh=mesh([-2,-2,-2,-2],true);
   var loot={x:120,y:50,caveSpawnId:'seed:chamber:chest'};
   G.playerUnderground=false;var outside=G.getEntityRenderFloorZ(loot);
@@ -122,6 +162,10 @@
   frame();clips=[];G.drawOreVeins();
   check('ore renders on the actual exposed wall face not its cell center',paints>0&&clips.length===1&&Math.abs(clips[0].points[0].depth-119.5)<1e-8&&saves===0);
   G.cam.y=0;
+  // Stage G1: the chest has two paths. The checks below up to the painter
+  // order run the legacy path explicitly (chestModel off; contracts
+  // unchanged); the model path has its own cases after them.
+  G.setRenderFeatures({chestModel:false});
   G.treasureChests=[entity({tier:'epic',facing:0,lidAngle:0.5,opened:true,gold:10,seed:0.2})];
   frame();cover();clips=[];G.drawTreasureChests3D();
   check('hidden chest suppresses every box face glow sparkle lock and loot label',paints===0&&clips.length>=12&&saves===0);
@@ -134,8 +178,10 @@
   G.treasureChests=[entity({x:4,renderFloorZ:55,tier:'common',facing:0,lidAngle:0})];
   frame();clips=[];G.drawTreasureChests3D();
   check('near-plane chest keeps clipped faces when back corners are behind camera',paints>0&&clips.some(function(c){return c.points.some(function(p){return p.depth===1;});})&&clips.every(function(c){return c.points.every(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>=1;});})&&saves===0);
-  // Chest faces neither write nor test depth against each other, so paint
-  // order alone hides the far side. Oracle: authored face centres (half-extents
+  // Legacy chest faces neither write nor test depth against each other, so paint
+  // order alone hides the far side. Restated in stage G1: renamed 'legacy
+  // chest painter order: ...' and run with chestModel off (the contract is
+  // unchanged; the model path is depth-tested and has its own cases below). Oracle: authored face centres (half-extents
   // 5 along facing, 7 across) and plain Euclidean distance from the camera; the
   // renderer's own dot products are never reused. Each check first requires the
   // faces it compares to have painted pixels, so an empty draw cannot pass.
@@ -157,24 +203,57 @@
       anyDetail:log.indexOf(chestTier.trim)>=0||log.indexOf(chestTier.lock)>=0};
   }
   var lockSide=chestView(240,0,0);
-  check('chest viewed from its lock side paints the far back face before the near front face',
+  check('legacy chest painter order: chest viewed from its lock side paints the far back face before the near front face',
     lockSide.frontNear&&lockSide.after(chestTier.body,chestTier.bodyDk));
-  check('chest viewed from its lock side shows its trim strap and lock',lockSide.drawn(chestTier.body)&&lockSide.details);
+  check('legacy chest painter order: chest viewed from its lock side shows its trim strap and lock',lockSide.drawn(chestTier.body)&&lockSide.details);
   var backSide=chestView(0,0,0);
-  check('chest viewed from behind paints the far front face before the near back face',
+  check('legacy chest painter order: chest viewed from behind paints the far front face before the near back face',
     !backSide.frontNear&&backSide.after(chestTier.bodyDk,chestTier.body));
-  check('chest viewed from behind cannot show trim or lock through its back',
+  check('legacy chest painter order: chest viewed from behind cannot show trim or lock through its back',
     backSide.drawn(chestTier.body)&&backSide.drawn(chestTier.bodyDk)&&!backSide.anyDetail);
   var rightSide=chestView(170,200,0);
-  check('chest viewed from its right paints the far left face before the near right face',
+  check('legacy chest painter order: chest viewed from its right paints the far left face before the near right face',
     rightSide.rightNear&&rightSide.after(chestTier.bodyR,chestTier.bodyL));
   var leftSide=chestView(170,-200,0);
-  check('chest viewed from its left paints the far right face before the near left face',
+  check('legacy chest painter order: chest viewed from its left paints the far right face before the near left face',
     !leftSide.rightNear&&leftSide.after(chestTier.bodyL,chestTier.bodyR));
   var turned=chestView(70,200,Math.PI*0.5);
-  check('turned chest keeps its lock and near front face toward a camera on its facing side',
+  check('legacy chest painter order: turned chest keeps its lock and near front face toward a camera on its facing side',
     turned.frontNear&&turned.details&&turned.after(chestTier.body,chestTier.bodyDk));
   G.cam.x=0;G.cam.y=0;G.cam.ang=0;
+  // Chest model path (stage G1). Restated from the legacy 'hidden chest
+  // suppresses every box face ... (clips >= 12)': the model emits one
+  // scene-depth test per face that survives the back-face cull, plus the
+  // halo, sparkle, 4 epic particles and the label, and every one of them is
+  // rejected, so nothing paints. The doorway, slope and near-plane cases
+  // keep their legacy contracts; model faces also write depth.
+  // Stage K restatement: with modelEarlyReject (default ON) the hidden chest
+  // builds no faces, so the per-face rejection is checked with it off and
+  // the early reject (opaque and overlay calls; the 7 billboards still
+  // depth-tested and hidden) with it on.
+  G.setRenderFeatures({chestModel:true,modelEarlyReject:false});
+  G.treasureChests=[entity({tier:'epic',facing:0,lidAngle:0.5,opened:true,gold:10,seed:0.2})];
+  frame();cover();clips=[];G.drawTreasureChests3D();
+  var mstat=G.getRenderFeatureStats().frame, emitted=(mstat.mdlChestFaces||0)-(mstat.mdlChestCulled||0);
+  check('chest model (modelEarlyReject off): hidden chest rejects every emitted face and billboard and paints nothing',
+    paints===0&&saves===0&&emitted>10&&(mstat.mdlChestDrawn||0)===0&&clips.length===emitted+7&&clips.every(function(c){return c.result===0;}));
+  G.setRenderFeatures({modelEarlyReject:true});
+  frame();cover();clips=[];G.drawTreasureChests3D();
+  mstat=G.getRenderFeatureStats().frame;
+  check('chest model (modelEarlyReject on): hidden chest builds no faces (opaque and overlay calls early-rejected), its 7 billboards are rejected and it paints nothing',
+    paints===0&&saves===0&&(mstat.mdlChestRejected||0)===2&&!mstat.mdlChestFaces&&clips.length===7&&clips.every(function(c){return c.result===0;}));
+  frame();clips=[];G.drawTreasureChests3D();
+  check('chest model: open doorway preserves the chest and its floating loot label',
+    paints>10&&texts===2&&clips.some(function(c){return c.result>0;})&&saves===0);
+  check('chest model: faces are depth-tested world polygons with distinct corner depths that write depth',
+    clips.some(function(c){return c.points.length>2&&c.points.some(function(p){return Math.abs(p.depth-c.points[0].depth)>0.1;});})&&
+    Number.isFinite(G.sceneDepthAt(180,Math.floor(G.projToScreen(120,0,4,G.getCam3D()).sy))));
+  frame();G.writeSceneDepthPolygon(quad(0,202,360,240,40));clips=[];G.drawTreasureChests3D();
+  check('chest model: foreground slope clips the buried portion without hiding the exposed lid',paints>0&&clips.some(function(c){return c.hidden>0&&c.result>0;})&&saves===0);
+  G.treasureChests=[entity({x:4,renderFloorZ:55,tier:'common',facing:0,lidAngle:0})];
+  frame();clips=[];G.drawTreasureChests3D();
+  check('chest model: near-plane chest still draws, its faces clipped at depth 1 and finite',paints>0&&clips.some(function(c){return c.points.some(function(p){return p.depth===1;});})&&clips.every(function(c){return c.points.every(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>=1;});})&&saves===0);
+  G.setRenderFeatures({chestModel:false});
   var high=G.lootPickupRenderLayout('tome',{bob:0},{sx:180,sy:800,fwd:120},G.getCam3D(),0);
   check('offscreen loot stays anchored instead of being clamped back onto screen',high.centerY>600);
   check('tome depth bounds include its wide label',high.bounds.width>=context.measureText('Arcane Tome').width);

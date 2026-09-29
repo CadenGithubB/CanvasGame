@@ -808,17 +808,39 @@ function draw() {
     _floorCacheTick = (_floorCacheTick + 1) | 0;  // invalidate floor cache each frame
     _pt('lightGrid', function(){ if ((++_lightGridFrameCount) % 5 === 0) updateLightGrid(); });
     beginSceneDepthFrame(canvas.width, canvas.height);
+    if (typeof beginRenderFrameStats === 'function') beginRenderFrameStats();
     _pt('skybox3D', function(){ drawSkybox3D(); });
     _pt('ceiling3D', function(){ if (!DEBUG_HIDE_CEIL) drawLayersCeiling3D(); });
     _pt('platforms3D', function(){ if (!DEBUG_HIDE_PLATS) drawLayersFloor3D(); });
+    // Structure models (12-structure-models.js): opaque and depth-writing,
+    // before walls3D paints its canopies and fade band over them.
+    if (typeof structureModelsPassWanted === 'function' && structureModelsPassWanted())
+      _pt('structureModels3D', function(){ if (!DEBUG_HIDE_WALLS) drawStructureModels3D(); });
     _pt('walls3D', function(){ if (!DEBUG_HIDE_WALLS) drawWalls3D(); });
     _pt('caveEntrance3D', function(){ drawCaveEntrance3D(); });
+    // landmarkOpaqueEarly (12-prop-models.js): ruin faces and structure
+    // shells write depth here, before any prop or sprite; the late ruins3D
+    // and structures3D stages then draw only their depth-clipped overlays.
+    // With landmarkModels (stage J1) the stall, guard tower, shrine and keep
+    // prop models draw here too, and marketStalls3D and shrines3D keep only
+    // their overlays.
+    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())
+      _pt('landmarkOpaque3D', function(){ drawLandmarkOpaque3D(); });
+    // Opaque first: every family's depth-writing model parts, then every
+    // family's billboards and legacy sprites in the same order. A family
+    // whose model feature is off draws nothing in the opaque phase and all
+    // of its legacy work in the overlay phase, in today's order.
     _pt('sceneEntities', function(){
-      drawFloorScatter3D();
-      drawTreasureChests3D();
-      drawEnemySpawners3D();
-      drawOreVeins();
-      drawWallDecorations();
+      drawFloorScatter3D('opaque');
+      drawTreasureChests3D('opaque');
+      drawEnemySpawners3D('opaque');
+      drawOreVeins('opaque');
+      drawWallDecorations('opaque');
+      drawFloorScatter3D('overlay');
+      drawTreasureChests3D('overlay');
+      drawEnemySpawners3D('overlay');
+      drawOreVeins('overlay');
+      drawWallDecorations('overlay');
     });
     _pt('goalMarker3D', function(){ drawGoalMarker3D(); });
   } else {

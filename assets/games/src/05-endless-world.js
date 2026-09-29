@@ -2186,6 +2186,39 @@ function chunkWallDecorationInWindow(d, chunkWindowX, chunkWindowY) {
     gridY: d.gridY + chunkWindowY * CHUNK_CELLS};
 }
 
+// Stage H: the window copies carry their chunk's pulsePhase only while
+// spawnerModel is on (assembleWindow copies it then). Called when the
+// switch or preset changes, so the current window follows at once: on, the
+// copies take the chunk phase; off, the field is removed and the records
+// are the pre-integration ones again (Legacy pulses in phase, as before).
+// Fixed-level spawners (no _chunkKey) own their phase and are left alone.
+function syncWindowSpawnerPulsePhases() {
+  if (!enemySpawners) return;
+  var on = typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel');
+  for (var i = 0; i < enemySpawners.length; i++) {
+    var sp = enemySpawners[i];
+    if (!sp || !sp._chunkKey) continue;
+    var ch = chunks[sp._chunkKey], src = ch && ch.enemySpawners ? ch.enemySpawners[sp._chunkIdx] : null;
+    if (on && src) sp.pulsePhase = src.pulsePhase;
+    else if ('pulsePhase' in sp) delete sp.pulsePhase;
+  }
+}
+
+// Stage K (decorAnchorCache): props cache the terrain heights they stand on
+// or hang from (07-decorations-lighting.js), keyed on the floorMesh object
+// and this epoch. Every window assembly ends by moving it, so heights read
+// while a window was being built never outlive it; code that edits floorMesh
+// in place must call noteWorldGeometryEdit() afterwards (as it must call
+// invalidateNpcNavigation() for routes). It also retires this frame's
+// getFloorHeightAt cache entries, which would otherwise serve the old heights
+// until the next frame.
+var worldGeometryEpoch = 0;
+function noteWorldGeometryEdit() {
+  worldGeometryEpoch = (worldGeometryEpoch + 1) | 0;
+  if (typeof _floorCacheTick === 'number') _floorCacheTick = (_floorCacheTick + 1) | 0;
+  return worldGeometryEpoch;
+}
+
 function assembleWindow(centerCX, centerCY) {
   var half = Math.floor(WINDOW_CHUNKS / 2);
   var newWCX = centerCX - half;
@@ -2839,6 +2872,10 @@ function assembleWindow(centerCX, centerCY) {
           hp: sp.hp, maxHp: sp.maxHp, cooldownMs: sp.cooldownMs, lastSpawn: sp.lastSpawn,
           spawnCount: sp.spawnCount, maxSpawns: sp.maxSpawns, active: sp.active, type: sp.type,
           _chunkKey: (windowCX + dx5) + ',' + (windowCY + dy5), _chunkIdx: sp2});
+        // Stage H: the obelisk model pulses each spawner at its own phase;
+        // Legacy keeps the in-phase copy (see syncWindowSpawnerPulsePhases).
+        if (typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel'))
+          enemySpawners[enemySpawners.length - 1].pulsePhase = sp.pulsePhase;
       }
       for (var ei2 = 0; ei2 < ch5.enemies.length; ei2++) {
         var en = ch5.enemies[ei2];
@@ -3067,6 +3104,9 @@ function assembleWindow(centerCX, centerCY) {
     console.log('[STRUCTURE] none in current window');
   }
 
+  // Structure render models (12-structure-models.js): built here only while
+  // that render feature is on, otherwise cleared so none outlives its window.
+  if (typeof buildStructureModels === 'function') buildStructureModels();
   buildPointLights();
 
   // Assemble minimap explored cells
@@ -3139,6 +3179,7 @@ function assembleWindow(centerCX, centerCY) {
 
   // Evict distant chunks
   evictDistantChunks(centerCX, centerCY);
+  noteWorldGeometryEdit();   // Stage K: drop cached prop anchors
 
   console.log('[ENDLESS] Window assembled at chunk (' + windowCX + ',' + windowCY + ') → (' +
     (windowCX + WINDOW_CHUNKS - 1) + ',' + (windowCY + WINDOW_CHUNKS - 1) + ')' +
@@ -3390,6 +3431,7 @@ function resetEndlessMode() {
   shrines = [];
   ruins = [];
   largeStructures = [];
+  if (typeof resetLandmarkFinder === 'function') resetLandmarkFinder();   // a new run cycles landmarks afresh
   discoveredMarkets = [];
   discoveredShrines = [];
   discoveredRuins = [];

@@ -1,5 +1,5 @@
-// Development-only Canvas texture pilot. This file is deliberately absent from
-// the shipping game manifest. UV coordinates are measured in tile repeats.
+// Canvas texture mapper (TexturePilot), shipped in MAIN and also injected into
+// the texture/structure studies. Inert at load. UV units are tile repeats.
 // The scene owns lighting, culling and the production opaque depth/pixel mask.
 var TexturePilot = (function () {
   var patternCaches = new WeakMap();

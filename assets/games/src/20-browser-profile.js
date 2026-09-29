@@ -231,7 +231,9 @@ async function startCaveBrowserProfile(mode) {
       'Stage times are inclusive; do not add parent draw() to its children.',
       'Ambient particles, exploration and lighting are canonical temporary inputs; real-world references are restored afterward.',
       job.verifyPixels?'Pixel verification can change the browser Canvas backend; reload before a fresh performance comparison.':'Pixel verification is disabled; no main-canvas readback is performed.',
-      mode==='viewport-size'?'Viewport-size fallback is not native fullscreen.':'No resolution or quality reduction was applied.'];
+      mode==='viewport-size'?'Viewport-size fallback is not native fullscreen.':
+        mode==='fullscreen'?'Native fullscreen follows the Resolution setting ('+settings.resolution+') and the fullscreen row cap ('+settings.fullscreenRows+').':
+        'No resolution or quality reduction was applied.'];
   }catch(error){
     result.status=job.cancelReason?'cancelled':'failed';result.reason=error.message||String(error);
     result.completedSamples=job.renderMs.length;

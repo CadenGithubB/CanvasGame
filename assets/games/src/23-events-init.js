@@ -22,6 +22,17 @@ function isGamePageControlTarget(target) {
     !!(target.closest && target.closest('[contenteditable="true"],button,a'));
 }
 
+function handleRenderPresetHotkey(e) {
+  if (e.key !== 'g' && e.key !== 'G') return false;
+  if (e.defaultPrevented || isGamePageControlTarget(e.target)) return false;
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || shopOpen || settingsOpen) return false;
+  if (typeof toggleRenderPreset !== 'function') return false;
+  var preset = toggleRenderPreset();
+  pushToast('Render: ' + (preset === 'legacy' ? 'Legacy (reference)' : 'Recommended') + ' \u00b7 G to switch', '#9fd0ff', 1800);
+  e.preventDefault();
+  return true;
+}
+
 function requestGamePointerLock() {
   if (!canvas.requestPointerLock) return;
   try {
@@ -239,10 +250,139 @@ function previewCaveView(view) {
 
 document.getElementById('btnView2D').addEventListener('click', function() { MODE3D = false; if (overviewActive) toggleOverview(); });
 document.getElementById('btnView3D').addEventListener('click', function() { MODE3D = true; if (overviewActive) toggleOverview(); });
+// Texture master: textured render paths engage only while USE_TEXTURES is on.
 document.getElementById('btnToggleTex').addEventListener('click', function() {
   USE_TEXTURES = !USE_TEXTURES;
   this.textContent = USE_TEXTURES ? 'Disable Textures' : 'Enable Textures';
+  if (typeof _notifyRenderFeatures === 'function') _notifyRenderFeatures('textures', USE_TEXTURES ? 'on' : 'off');
 });
+
+// ── Graphics row, generated from the render-feature registry ──
+// Features and actions registered by any fragment appear here, so later
+// stages never edit page.html. Values live in memory only (see 01-config).
+var _renderFeaturesRowControls = null;
+function renderFeatureControlValue(def, raw) {
+  // DOM controls report strings; map back to the declared value.
+  for (var i = 0; i < def.values.length; i++) if (String(def.values[i]) === String(raw)) return def.values[i];
+  return undefined;
+}
+function renderFeatureStatus(text) {
+  var status = _renderFeaturesRowControls && _renderFeaturesRowControls.status;
+  if (status) status.textContent = text;
+}
+// Hand keyboard focus back to the game after a Graphics-row control is used.
+// A focused control swallows game keys, and Space would re-click a focused
+// action button (the landmark finder would teleport again on every jump).
+function releaseGamePageControl(control) {
+  if (control && typeof control.blur === 'function') control.blur();
+}
+function runRenderActionFromUi(key) {
+  var result;
+  try { result = runRenderAction(key); }
+  catch (e) { result = {ok: false, reason: e && e.message || String(e)}; }
+  var text = result && result.ok ? (result.message || 'Done.') : 'Not done: ' + (result && result.reason || 'no result');
+  renderFeatureStatus(text);
+  if (!(result && result.ok)) pushToast(text, '#ffb080', 3500);
+  return result;
+}
+function buildRenderFeaturesRow() {
+  var row = document.getElementById('renderFeaturesRow');
+  if (!row || typeof RENDER_FEATURE_DEFS === 'undefined') return null;
+  row.textContent = '';
+  function make(tag, text) { var node = document.createElement(tag); if (text !== undefined) node.textContent = text; return node; }
+  function labelled(text, control, title) {
+    var label = make('label');
+    label.title = title || '';
+    label.style.cssText = 'display:inline-flex;align-items:center;gap:4px;cursor:pointer';
+    label.appendChild(make('span', text)); label.appendChild(control);
+    row.appendChild(label);
+    return control;
+  }
+  function option(select, value, text) {
+    var node = make('option', text); node.value = String(value); select.appendChild(node); return node;
+  }
+  var controls = {features: {}, custom: null, preset: null, rows: null, status: null};
+  var heading = make('strong', 'Graphics');
+  row.appendChild(heading);
+  controls.preset = labelled('Render', make('select'), 'Recommended uses every verified render path; Legacy is the pre-integration reference. G toggles them.');
+  option(controls.preset, 'recommended', 'Recommended');
+  option(controls.preset, 'legacy', 'Legacy');
+  controls.custom = option(controls.preset, 'custom', 'Custom');
+  controls.custom.disabled = true;
+  controls.preset.addEventListener('change', function() {
+    if (this.value === 'recommended' || this.value === 'legacy') applyRenderPreset(this.value);
+    releaseGamePageControl(this);
+  });
+  RENDER_FEATURE_DEFS.forEach(function(def) {
+    var control;
+    if (def.type === 'bool') {
+      control = make('input'); control.type = 'checkbox';
+      var box = make('label');
+      box.title = def.title;
+      box.style.cssText = 'display:inline-flex;align-items:center;gap:4px;cursor:pointer';
+      box.appendChild(control); box.appendChild(make('span', def.label));
+      row.appendChild(box);
+      control.addEventListener('change', function() { setRenderFeature(def.key, !!this.checked); releaseGamePageControl(this); });
+    } else {
+      control = labelled(def.label, make('select'), def.title);
+      def.values.forEach(function(value) { option(control, value, String(value)); });
+      control.addEventListener('change', function() {
+        var value = renderFeatureControlValue(def, this.value);
+        if (value !== undefined) setRenderFeature(def.key, value);
+        releaseGamePageControl(this);
+      });
+    }
+    controls.features[def.key] = control;
+  });
+  if (!RENDER_FEATURE_DEFS.length) row.appendChild(make('span', '(no switchable render paths yet)'));
+  controls.rows = labelled('Fullscreen rows', make('select'), 'Caps the fullscreen canvas height after the Resolution setting; Native keeps the scaled screen size.');
+  FULLSCREEN_ROW_CHOICES.forEach(function(value) { option(controls.rows, value, value === 'native' ? 'Native' : String(value)); });
+  controls.rows.addEventListener('change', function() {
+    var value = this.value === 'native' ? 'native' : Number(this.value);
+    if (FULLSCREEN_ROW_CHOICES.indexOf(value) < 0) return;
+    settings.fullscreenRows = value;
+    applyFullscreenCanvasSize();
+    syncRenderFeaturesRow();
+    releaseGamePageControl(this);
+  });
+  RENDER_ACTIONS.forEach(function(action) {
+    var button = make('button', action.label);
+    button.className = 'btn btn-small'; button.title = action.title;
+    button.addEventListener('click', function() { releaseGamePageControl(this); runRenderActionFromUi(action.key); });
+    row.appendChild(button);
+  });
+  controls.status = make('output');
+  controls.status.style.cssText = 'color:#b9c8d8';
+  row.appendChild(controls.status);
+  _renderFeaturesRowControls = controls;
+  syncRenderFeaturesRow();
+  return controls;
+}
+function syncRenderFeaturesRow() {
+  var controls = _renderFeaturesRowControls;
+  if (!controls) return;
+  var preset = renderPresetName();
+  controls.custom.disabled = preset !== 'custom';
+  controls.preset.value = preset;
+  RENDER_FEATURE_DEFS.forEach(function(def) {
+    var control = controls.features[def.key];
+    if (!control) return;
+    if (def.type === 'bool') control.checked = RENDER_FEATURES[def.key] === true;
+    else control.value = String(RENDER_FEATURES[def.key]);
+  });
+  controls.rows.value = String(settings.fullscreenRows);
+}
+if (typeof onRenderFeaturesChange === 'function') {
+  onRenderFeaturesChange(function(kind) {
+    // A definition or action added after the row exists rebuilds it.
+    if (kind === 'define' || kind === 'action') { if (_renderFeaturesRowControls) buildRenderFeaturesRow(); return; }
+    syncRenderFeaturesRow();
+    // A render switch invalidates a running profile, and paused fixtures redraw.
+    if (typeof cancelCaveBrowserProfile === 'function') cancelCaveBrowserProfile();
+    if (caveVisibilityFixturesEnabled()) drawCaveVisibilityFixtures();
+  });
+  buildRenderFeaturesRow();
+}
 document.getElementById('btnOverview').addEventListener('click', function() { toggleOverview(); });
 document.getElementById('btnEndless').addEventListener('click', function() {
   prepareGameRun();
@@ -414,6 +554,10 @@ document.getElementById('chkPolyTypes').addEventListener('change', function() { 
     if (isGamePageControlTarget(e.target)) return;
     if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); e.preventDefault(); }
   });
+
+  // G — Recommended/Legacy render A/B at the current view. Presentation only:
+  // never world data, simulation, resolution or the random streams.
+  document.addEventListener('keydown', handleRenderPresetHotkey);
 
   document.addEventListener('keydown', function(e) {
     if (isGamePageControlTarget(e.target)) return;
@@ -626,7 +770,7 @@ if (chkTextures) { USE_TEXTURES = true; chkTextures.textContent = 'Disable Textu
 var chk3dDebug = document.getElementById('chk3dDebug');
 if (chk3dDebug) { chk3dDebug.checked = false; DEBUG_3D = false; }
 var chkTexDebug = document.getElementById('chkTexDebug');
-if (chkTexDebug) { chkTexDebug.checked = true; DEBUG_TEXTURE = true; }
+if (chkTexDebug) { chkTexDebug.checked = false; DEBUG_TEXTURE = false; }
 var chkFloorDebug = document.getElementById('chkFloorDebug');
 if (chkFloorDebug) { chkFloorDebug.checked = false; DEBUG_FLOOR = false; }
 var chkDecorDebug = document.getElementById('chkDecorDebug');

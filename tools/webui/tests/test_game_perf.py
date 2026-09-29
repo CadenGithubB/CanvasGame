@@ -112,10 +112,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "G7/N1, gamepad path: " + _FPS_WHY + "; Stick Aim X adds a velocity impulse per call (L19180-19185), "
         "a separate code path from applyGamepad: 41.0 u vs 20.7 u in 1 s",
         r"30 fps [\d.]+ u \(ratio 0\.[3-6]\d*\)"),
-    _FS: (
-        "audit G4: onFullscreenChange's rAF (L690-693) sets the canvas to innerWidth x innerHeight and ignores "
-        "settings.resolution, which only applySettings honours (L17773-17777)",
-        r"resolution 0\.5: canvas 1280x720, want 640x360"),
+    # _FS (audit G4, V01) was repaired by the 3D-integration Stage B: entering
+    # fullscreen now sizes the canvas with fullscreenCanvasSize (Resolution,
+    # then the fullscreen row cap). Its FIX probe became the BREAK probe below.
     _N11: (
         "N11: gpLast starts {buttons:0, valid:false} (L998); buttons are active-low, so handleInput reads SELECT "
         "as held (L19000) without checking gpLast.valid, and the first loop() frame for a keyboard player toggles "
@@ -205,12 +204,13 @@ PROBES: list = [
        "      _pt('handleInput', function(){ handleInput(FIXED_DT); });\n"
        "      _pt('gameUpdate', function(){ gameUpdate(FIXED_DT); });")], None,
      {_TURN: "PASS", _WALK: "PASS", _GPTURN: "PASS", _GPWALK: "PASS"}),
-    ("FIX G4: fullscreen rAF scales by settings.resolution",
+    ("BREAK G4 (repaired): the fullscreen rAF goes back to innerWidth x innerHeight, ignoring Resolution",
+     "    requestAnimationFrame(function() { applyFullscreenCanvasSize(); });",
+     "    requestAnimationFrame(function() {\n"
      "      canvas.width  = window.innerWidth  || screen.width;\n"
-     "      canvas.height = window.innerHeight || screen.height;",
-     "      canvas.width  = Math.floor((window.innerWidth  || screen.width) * settings.resolution);\n"
-     "      canvas.height = Math.floor((window.innerHeight || screen.height) * settings.resolution);",
-     {_FS: "PASS"}),
+     "      canvas.height = window.innerHeight || screen.height;\n"
+     "    });",
+     {_FS: "FAIL"}),
     ("FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
      _RGB_CAP_4096[0], _RGB_CAP_4096[1],
      {_RGB: "PASS"}),
@@ -331,8 +331,9 @@ PROBES: list = [
 
 # Checks whose ONLY flipping probe is a FIX of the known bug (no BREAK possible
 # while the bug is present), for the record:
-#   _FS, _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _L4, _JITTER, _SPAM, _RGB
-# each has a FIX above (plus a GUARD where a vacuous pass was possible).
+#   _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _L4, _JITTER, _SPAM, _RGB
+# each has a FIX above (plus a GUARD where a vacuous pass was possible). _FS is
+# repaired and now has the BREAK probe that reintroduces the viewport size.
 
 PerfSuite = suite_testcase("perf", KNOWN_BUGS, min_checks=20)
 PerfProbes = probe_testcase("perf", PROBES)

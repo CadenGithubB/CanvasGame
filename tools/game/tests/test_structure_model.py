@@ -61,7 +61,18 @@ class StructureModelTests(unittest.TestCase):
 
 
 class StructurePreviewAssemblyTests(unittest.TestCase):
-    """Reject stale/unsafe imports instead of serving a misleading partial scene."""
+    """Reject stale/unsafe imports instead of serving a misleading partial scene.
+
+    The mapper ships as src/12-texture-mapping.js and is copied from the
+    source root. Each negative case starts from a fixture that builds and
+    requires the SourceError to name the injected defect, so a missing import
+    cannot satisfy an unrelated failure check.
+    """
+
+    MARKER_ERROR = ("structure preview must contain each production, mapping, model, temporal, "
+                    "and edge-coverage marker exactly once")
+    TOOLING = ("structure-preview.html", "structure-model.js", "texture-temporal.js",
+               "structure-temporal.js", "structure-motion.js", "edge-coverage.js")
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="hw1_structure_source_")
@@ -72,15 +83,20 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         (self.source / "src").mkdir(parents=True)
         self.tooling.mkdir()
         for name in ("01-config-state.js", "01-materials.js", "05-endless-world.js",
-                     "12-scene-depth.js", "15-render-hud-menu.js"):
+                     "12-scene-depth.js", "12-texture-mapping.js", "15-render-hud-menu.js"):
             shutil.copyfile(dev.SOURCE_ROOT / "src" / name, self.source / "src" / name)
         shutil.copyfile(dev.SOURCE_ROOT / "page.html", self.source / "page.html")
-        for name in ("structure-preview.html", "structure-model.js", "texture-mapping.js",
-                     "texture-temporal.js", "structure-temporal.js", "structure-motion.js", "edge-coverage.js"):
+        for name in self.TOOLING:
             shutil.copyfile(dev.REPO_ROOT / "tools/game" / name, self.tooling / name)
+        # Precondition for every negative case below: the unmodified fixture builds.
+        self.good = self.preview()
 
     def preview(self):
         return dev.structure_preview_html(self.source, self.tooling).decode("utf-8")
+
+    def assertPreviewFails(self, message):
+        with self.assertRaisesRegex(dev.SourceError, re.escape(message)):
+            self.preview()
 
     def replace_once(self, path, before, after):
         text = path.read_text(encoding="utf-8")
@@ -95,7 +111,7 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         for forbidden in ("function generateChunk(", "requestAnimationFrame", "document.", "hw.fetchJSON",
                           "function resetEndlessMode(", "function loop("):
             self.assertNotIn(forbidden, script)
-        page = self.preview()
+        page = self.good
         for expected in ("var StructureProduction =", "var StructureModel =", "var TexturePilot =",
                          "function getCam3D()", "function beginSceneDepthFrame("):
             self.assertIn(expected, page)
@@ -104,6 +120,17 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         self.assertNotRegex(page, r"@[A-Za-z_][A-Za-z_0-9]*@")
         self.assertNotIn("function resetEndlessMode(", page)
         self.assertNotIn("function generateChunk(", page)
+
+    def test_mapper_is_read_from_the_shipping_source_not_a_tooling_copy(self):
+        """Contract since the mapper shipped: /structures.html injects src/12-texture-mapping.js."""
+        mapping = (self.source / "src/12-texture-mapping.js").read_text(encoding="utf-8")
+        (self.tooling / "texture-mapping.js").write_text("var TexturePilot = {staleToolingCopy: true};\n",
+                                                         encoding="utf-8")
+        page = self.preview()
+        self.assertEqual(1, page.count(mapping))
+        self.assertNotIn("staleToolingCopy", page)
+        (self.source / "src/12-texture-mapping.js").unlink()
+        self.assertPreviewFails("cannot read src/12-texture-mapping.js")
 
     def test_missing_duplicate_and_unknown_page_markers_fail_closed(self):
         path = self.tooling / "structure-preview.html"
@@ -114,42 +141,52 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
             for replacement in ("", marker + marker):
                 with self.subTest(marker=marker, replacement=replacement):
                     path.write_text(original.replace(marker, replacement), encoding="utf-8")
-                    with self.assertRaises(dev.SourceError):
-                        self.preview()
+                    self.assertPreviewFails(self.MARKER_ERROR)
         path.write_text(original + "/* @UNKNOWN_SOURCE@ */", encoding="utf-8")
-        with self.assertRaises(dev.SourceError):
-            self.preview()
+        self.assertPreviewFails(self.MARKER_ERROR)
 
     def test_changed_missing_or_duplicated_production_extraction_anchors_fail_closed(self):
+        camera = "structure preview camera anchors must be unique and ordered"
+        stamp = ("  if (cStructure) {\n    var sWX = cStructure.centerWX", "  // ── Underground cave network carving")
+        palette = ("      var sPalette;", "      // Layout variations")
+        box = ("function drawRuinDecorBox(", "function drawRuins3D()")
+        shell = ("function getStructureShellMetrics(", "function drawStructures3D()")
+
+        def section(pair):
+            return f"structure preview requires unique ordered source anchors: {pair[0]!r}, {pair[1]!r}"
+
         anchors = {
-            "01-config-state.js": ["function getCam3D() {", "// Projects a world point to screen coordinates."],
-            "05-endless-world.js": ["  if (cStructure) {\n    var sWX = cStructure.centerWX",
-                                    "  // ── Underground cave network carving", "      var sPalette;", "      // Layout variations"],
-            "15-render-hud-menu.js": ["function drawRuinDecorBox(", "function drawRuins3D()",
-                                      "function getStructureShellMetrics(", "function drawStructures3D()"],
+            "01-config-state.js": {"function getCam3D() {": camera,
+                                   "// Projects a world point to screen coordinates.": camera},
+            "05-endless-world.js": {stamp[0]: section(stamp), stamp[1]: section(stamp),
+                                    palette[0]: section(palette), palette[1]: section(palette)},
+            "15-render-hud-menu.js": {box[0]: section(box), box[1]: section(box),
+                                      shell[0]: section(shell), shell[1]: section(shell)},
         }
         for filename, candidates in anchors.items():
             path = self.source / "src" / filename
             original = path.read_text(encoding="utf-8")
-            for anchor in candidates:
+            for anchor, message in candidates.items():
                 self.assertEqual(1, original.count(anchor))
                 for altered in (original.replace(anchor, "/* missing original anchor */"), original + "\n" + anchor):
                     with self.subTest(file=filename, anchor=anchor):
                         path.write_text(altered, encoding="utf-8")
-                        with self.assertRaises(dev.SourceError):
-                            self.preview()
+                        self.assertPreviewFails(message)
             path.write_text(original, encoding="utf-8")
 
     def test_mismatched_duplicate_and_nonpositive_dimensions_fail_closed(self):
         config = self.source / "src/01-config-state.js"
         original = config.read_text(encoding="utf-8")
         field = re.search(r"^\s*cellSize:\s*12\s*,", original, re.M).group()
-        variants = [original.replace(field, field.replace("12", "13")),
-                    original.replace(field, field.replace("12", "0")), original + "\ncellSize: 12,\n"]
-        for variant in variants:
-            config.write_text(variant, encoding="utf-8")
-            with self.assertRaises(dev.SourceError):
-                self.preview()
+        variants = [(original.replace(field, field.replace("12", "13")),
+                     "structure preview requires matching production cell/chunk dimensions"),
+                    (original.replace(field, field.replace("12", "0")),
+                     "structure preview requires one positive production cellSize"),
+                    (original + "\ncellSize: 12,\n", "structure preview requires one positive production cellSize")]
+        for variant, message in variants:
+            with self.subTest(message=message):
+                config.write_text(variant, encoding="utf-8")
+                self.assertPreviewFails(message)
         config.write_text(original, encoding="utf-8")
         html = self.source / "page.html"
         page = html.read_text(encoding="utf-8")
@@ -159,19 +196,22 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         for variant in (page.replace(canvas, zero_canvas),
                         page + canvas + "></canvas>"):
             html.write_text(variant, encoding="utf-8")
-            with self.assertRaises(dev.SourceError):
-                self.preview()
+            self.assertPreviewFails("structure preview requires the unique authored maze canvas height")
 
     def test_script_terminators_and_leftover_injection_tokens_fail_closed(self):
-        for name in ("structure-model.js", "texture-mapping.js", "texture-temporal.js",
-                     "structure-temporal.js", "structure-motion.js", "edge-coverage.js"):
-            path = self.tooling / name
+        markers = {"structure-model.js": "/* @STRUCTURE_MODEL@ */",
+                   "src/12-texture-mapping.js": "/* @TEXTURE_MAPPING@ */",
+                   "texture-temporal.js": "/* @TEXTURE_TEMPORAL@ */",
+                   "structure-temporal.js": "/* @STRUCTURE_TEMPORAL@ */",
+                   "structure-motion.js": "/* @STRUCTURE_MOTION@ */",
+                   "edge-coverage.js": "/* @EDGE_COVERAGE@ */"}
+        for name, marker in markers.items():
+            path = self.source / name if name.startswith("src/") else self.tooling / name
             original = path.read_text(encoding="utf-8")
             for suffix in ("\n</ScRiPt>", "\n/* @UNRESOLVED_FRAGMENT@ */"):
                 with self.subTest(name=name, suffix=suffix):
                     path.write_text(original + suffix, encoding="utf-8")
-                    with self.assertRaises(dev.SourceError):
-                        self.preview()
+                    self.assertPreviewFails(f"structure preview {marker}: unsafe script or unresolved injection marker")
             path.write_text(original, encoding="utf-8")
 
 

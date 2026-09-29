@@ -392,6 +392,12 @@ function drawWalls3D() {
   // Initialize depth buffer
   if (!depthBuffer || depthBuffer.length !== w) depthBuffer = new Array(w);
   for (var di = 0; di < w; di++) depthBuffer[di] = 9999;
+  // Structure models (12-structure-models.js) drew their owned cells before
+  // this pass: take their legacy column depth and skip those cells. null
+  // unless this frame's model pass drew (Legacy, a failure, a harness), so
+  // every cell is drawn here as before.
+  var _smPass = typeof takeStructureModelWallPass === 'function' ? takeStructureModelWallPass(depthBuffer, w) : null;
+  var _smOwner = _smPass !== null ? _smPass.owner : null;
 
   // Spatial culling — only iterate wall cells within view distance
   var camGX = cam.x / cell, camGY = cam.y / cell;
@@ -593,6 +599,7 @@ function drawWalls3D() {
   for (var gy = gyMin; gy <= gyMax; gy++) {
     for (var gx = gxMin; gx <= gxMax; gx++) {
       if (!grid[gy * gridW + gx]) continue; // Not a wall cell
+      if (_smOwner !== null && _smOwner[gy * gridW + gx]) continue; // drawn by its structure model
 
       // Quick distance check
       var centerX = (gx + 0.5) * cell, centerY = (gy + 0.5) * cell;
@@ -807,6 +814,19 @@ function drawWalls3D() {
 
   // Forest canopy dedup — draw one canopy per tree cell, inline with painter's order
   var _forestCanopyDrawn = {};
+  // Canopies are arcs that write no depth. When structure models drew this
+  // frame (before this pass), a canopy over the model's painted screen box
+  // reads the scene depth at its cell's camera depth, so a nearer structure
+  // wall hides it; the bias of one cell keeps its own trunk from clipping it.
+  // Otherwise (Legacy) it paints unclipped in painter's order as before.
+  function _paintCanopy(paint, px, py, radius, depth) {
+    var bx = px - radius - 1, by = py - radius * 1.2 - 1, bs = radius * 2 + 2;
+    if (_smPass !== null && bx < _smPass.maxX && bx + bs > _smPass.minX && by < _smPass.maxY && by + bs > _smPass.minY) {
+      withSceneDepthBillboard({x: bx, y: by, width: bs, height: bs}, depth, paint, {depthBias: cell});
+    } else {
+      paint();
+    }
+  }
 
   // Render all faces in single sorted pass
   ctx.save();
@@ -871,23 +891,26 @@ function drawWalls3D() {
               var cHash = ((Math.floor(cmx * 0.2) * 7919 + Math.floor(cmy * 0.2) * 104729) >>> 0) % 100;
               var gv = 0.75 + cHash * 0.005;
               var savedA = ctx.globalAlpha;
-              // Dark base
-              ctx.globalAlpha = savedA * 0.9;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(csx, csy - crad * 0.2, crad, 0, Math.PI * 2); ctx.fill();
-              // Light highlight
-              ctx.globalAlpha = savedA * 0.6;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(csx - crad * 0.15, csy - crad * 0.45, crad * 0.6, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = savedA;
+              var _paintTopCanopy = function() {
+                // Dark base
+                ctx.globalAlpha = savedA * 0.9;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(csx, csy - crad * 0.2, crad, 0, Math.PI * 2); ctx.fill();
+                // Light highlight
+                ctx.globalAlpha = savedA * 0.6;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(csx - crad * 0.15, csy - crad * 0.45, crad * 0.6, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = savedA;
+              };
+              _paintCanopy(_paintTopCanopy, csx, csy, crad, cFwd);
             }
           }
         }
@@ -931,21 +954,24 @@ function drawWalls3D() {
                 cAlpha = Math.max(0, 1.0 - (f.dist - fadeStart) / fadeRange);
                 cAlpha *= cAlpha;
               }
-              ctx.globalAlpha = cAlpha * 0.9;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(cSX, cSY - cRadius * 0.2, cRadius, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = cAlpha * 0.6;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(cSX - cRadius * 0.15, cSY - cRadius * 0.45, cRadius * 0.6, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = 1.0;
+              var _paintSideCanopy = function() {
+                ctx.globalAlpha = cAlpha * 0.9;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(cSX, cSY - cRadius * 0.2, cRadius, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = cAlpha * 0.6;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(cSX - cRadius * 0.15, cSY - cRadius * 0.45, cRadius * 0.6, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 1.0;
+              };
+              _paintCanopy(_paintSideCanopy, cSX, cSY, cRadius, cFwd);
             }
           }
         }

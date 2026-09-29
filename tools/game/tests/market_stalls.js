@@ -39,6 +39,10 @@
   }
   JSON.parse(slurp('assets/games/manifest.json')).parts.MAIN.forEach(function(path){(0,eval)(mutate(path,slurp('assets/games/'+path)));});
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
+  // Restated in Stage J2: landmarkModels is default ON. These checks judge
+  // the legacy painter's fills and projected corners, so they pin the models off; the model's footprint against the
+  // collision box is landmark_models.js 'footprint' and stall_visibility.js --models.
+  G.setRenderFeatures({landmarkModels:false});
   function finite(v){return typeof v==='number'&&isFinite(v);}
   fillLog=[];
   context.fillStyle='#010203';context.beginPath();context.moveTo(0,0);context.lineTo(4,0);context.lineTo(0,4);context.fill();

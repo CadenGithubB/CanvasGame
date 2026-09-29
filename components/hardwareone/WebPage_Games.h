@@ -180,6 +180,7 @@ canvas#maze{background:#000;border:1px solid var(--border);border-radius:4px}
           <label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer' title='Experimental bounded artwork cache for ferns, logs, skulls and rubble; compare on/off'>
             <input type='checkbox' id='chkArtworkCache'/> Prop cache (pilot)
           </label>
+          <div id='renderFeaturesRow' style='display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0'></div>
           <span class='space-left-md'></span>
           <label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer' title='Overlay cave debug info: floor height, ceiling height, ambient light, underground state'>
             <input type='checkbox' id='chkCaveDbg'/> Cave Debug
@@ -436,7 +437,46 @@ var GAME_MATERIAL_COLORS = {
     base: '#c8c8c8', dry: '#c8b870', lit: '#e8e0c8', shadow: '#d0c8b0',
     outline: '#2a2018', cavity: '#000000', gap: '#1a1008',
     aged: '#c0b8a0', knuckle: '#b8b098'
-  }
+  },
+  // Treasure-chest models (integration stage G), one per CHEST_TIER_DEFS
+  // tier: the legacy front/lid-top/trim/lock/glow colours as albedos (the
+  // model is lit from its normals, so the legacy per-side shades are not
+  // kept) and a dark interior. CHEST_TIER_DEFS still drives the Legacy path.
+  chestCommon: {body: '#a06830', lid: '#c89848', interior: '#1a1008', trim: '#b08040', lock: '#c8a848', glow: '#ffd740'},
+  chestUncommon: {body: '#8090a0', lid: '#b0c0d0', interior: '#141a20', trim: '#a0b0c0', lock: '#c0d0e0', glow: '#40a040'},
+  chestRare: {body: '#c0a020', lid: '#e8d050', interior: '#1c1606', trim: '#e0c040', lock: '#ffe060', glow: '#6060e0'},
+  chestEpic: {body: '#6030a0', lid: '#a070e0', interior: '#160c26', trim: '#9060d0', lock: '#c080ff', glow: '#c040ff'},
+  // Spawner obelisk model (integration stage H). The body is the legacy
+  // #1a1520 lifted so the lit faces read (the legacy trapezoid was drawn
+  // 40-100% see-through); the rune is the legacy rune red, and the model's
+  // emissive rune strips pulse between body and rune as an instance tint.
+  spawnerObelisk: {body: '#2e2536', rune: '#c83232'},
+  // Floor-prop models (integration stage I). The legacy sprite colours of
+  // paintFloorItem as albedos (the model is lit from its normals): the
+  // boulder's #5a5550 with its moss, the stone column's #605850 body and
+  // #706860 break, the sand pillar's #c4a060 body and #b89050 cap, and the
+  // mesa's three layers. The barrel keeps floorPropWood's base for its
+  // staves, a lighter head, and floorPropIron hoops.
+  floorStone: {base: '#5a5550', moss: '#3c5a32', column: '#605850', broken: '#706860'},
+  sandstone: {base: '#c4a060', cap: '#b89050'},
+  mesaRock: {bottom: '#8b6040', middle: '#9b7050', top: '#a88060'},
+  barrelWood: {base: '#765238', head: '#8f6a48'},
+  // Cave floor-prop models (integration stage I2): paintFloorItem's cave rock
+  // colours as albedos, the stalagmite's #6a5848, the rock spire's three
+  // swatches, the rubble pile's mound and its rocks, and the rock arch's
+  // #585048. The tree stump and fallen log use floorPropWood.
+  caveRock: {stalagmite: '#6a5848', spire: '#5a5248', spireLit: '#685e52', spireDark: '#4e4840',
+    mound: '#504a44', rubble: '#5e5650', rubbleLit: '#686058', rubbleDark: '#3e3a36', arch: '#585048'},
+  // Landmark models (integration stage J, landmarkModels): the legacy painted
+  // colours as albedos (the models are lit from their normals, so the legacy
+  // per-side shades collapse to one base). Instance tints carry the per-record
+  // colours: a shrine's buff crystal, a stall's awning and goods.
+  landmarkShrine: {stone: '#808080', top: '#888888', crystal: '#ffffff', crystalDark: '#888888'},
+  landmarkStall: {wood: '#6b4226', woodDark: '#4a2e18', woodLit: '#8b5e3c', table: '#7a5030',
+    awning: '#886633', awningDark: '#553311', goods: '#aa8844'},
+  landmarkTower: {stone: '#9b8b7b', top: '#8b7d6b'},
+  landmarkKeep: {platform: '#333333', iron: '#444444', ironLit: '#666666', stone: '#555555',
+    book: '#8866cc', pole: '#5a4a3a', flag: '#c8a028'}
 };
 
 // Pure compiler; safe to test without a DOM or Canvas. Invalid color values
@@ -765,21 +805,35 @@ function projToScreen(wx, wy, wz, C) {
 // Returns null if occluded, otherwise {sx, sy, fwd, dist, floorZ, fade}.
 // opts: { maxDist, depthOffset, checkMidpoint, fadeFraction, skipDepth, stats }
 //   stats: optional object — if provided, increments .tooFar / .behind / .depthOccl / .belowFloor / .midOccl
+// World-bounds gate (scene-depth callers only; integration stage J2,
+// landmarkBoundsGate): opts.worldRadius is the entity's horizontal bounds
+// radius r about (wx, wy), a number or a function of the entity (which
+// renderEntities3D passes as a sixth argument). The gate then rejects only
+// bounds wholly beyond range (dist - r > maxDist) or wholly behind the near
+// plane (fwd + r < 1); a centre behind the camera (fwd < 1) is kept with sx
+// and sy NaN (invalid), since its faces are near-plane clipped world faces.
+// checkMidpoint then applies only to bounds wholly beyond opts.midpointBeyond.
+// Without worldRadius, or without scene depth, the centre gate is unchanged.
 function entityVisible3D(wx, wy, wz, C, opts) {
   opts = opts || {};
   var sceneDepth = !!(opts.sceneDepth || opts.bounds);
   if (!Number.isFinite(wx) || !Number.isFinite(wy)) return null;
+  var boundR = NaN;
+  if (sceneDepth && opts.worldRadius !== undefined) {
+    boundR = typeof opts.worldRadius === 'function' ? opts.worldRadius(arguments[5]) : opts.worldRadius;
+    if (!(boundR >= 0)) boundR = 0;
+  }
   var dx = wx - cam.x, dy = wy - cam.y;
   var dist = Math.hypot(dx, dy);
   if (dist < 1) dist = 1;
   var maxDist = opts.maxDist || viewDist;
-  if (dist > maxDist) { if (opts.stats) opts.stats.tooFar++; return null; }
+  if (boundR >= 0 ? dist - boundR > maxDist : dist > maxDist) { if (opts.stats) opts.stats.tooFar++; return null; }
 
   var fwd = dx * C.cosAng + dy * C.sinAng;
-  if (fwd < 1) { if (opts.stats) opts.stats.behind++; return null; }
+  if (boundR >= 0 ? fwd + boundR < 1 : fwd < 1) { if (opts.stats) opts.stats.behind++; return null; }
 
   var rgt = dx * (-C.sinAng) + dy * C.cosAng;
-  var sx = Math.floor((rgt / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
+  var sx = fwd < 1 ? NaN : Math.floor((rgt / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
 
   // Depth buffer check — use min depth across a small column range to avoid
   // 1-pixel edge artifacts where a face boundary causes single-column occlusion flicker.
@@ -807,7 +861,7 @@ function entityVisible3D(wx, wy, wz, C, opts) {
   // Midpoint occlusion — hill between camera and entity.
   // Skip when underground (surface terrain would falsely occlude) or when the
   // entity is within ~80u (no hill physically fits between).
-  if (!sceneDepth && opts.checkMidpoint && !playerUnderground && dist > 80) {
+  if ((!sceneDepth || dist - boundR > opts.midpointBeyond) && opts.checkMidpoint && !playerUnderground && dist > 80) {
     var fhMid = floorMesh ? getFloorHeightAt((cam.x + wx) * 0.5, (cam.y + wy) * 0.5) : 0;
     if (fhMid * 25 > (C.cameraZ + floorZ) * 0.5 + 8) {
       if (opts.stats) opts.stats.midOccl++;
@@ -825,7 +879,7 @@ function entityVisible3D(wx, wy, wz, C, opts) {
   // Migrated callers supply an absolute render height. Zero is valid; bounce
   // offsets belong in their animation, not in this world-height slot.
   var renderZ = sceneDepth ? (Number.isFinite(wz) ? wz : floorZ) : (wz || floorZ);
-  var sy = Math.floor(C.horizonY + (C.cameraZ - renderZ) / fwd * projScale);
+  var sy = fwd < 1 ? NaN : Math.floor(C.horizonY + (C.cameraZ - renderZ) / fwd * projScale);
   return { sx: sx, sy: sy, fwd: fwd, dist: dist, floorZ: floorZ, renderZ:renderZ, fade: fade };
 }
 
@@ -842,7 +896,9 @@ function entityVisible3D(wx, wy, wz, C, opts) {
 //
 // visOpts: passed to entityVisible3D, plus:
 //   sort:       true = sort far-to-near (painter's order). default false.
-//   minDist:    skip entities closer than this (default 0)
+//   minDist:    skip entities closer than this (default 0); not with a
+//               world-bounds gate (sceneDepth + worldRadius), which rejects
+//               only bounds wholly behind the camera or out of range
 //   mode3dOnly: require MODE3D flag (default false)
 //
 // drawFn(entity, vis, C, ctx, now):
@@ -864,7 +920,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
   var C = getCam3D();
   var now = gameTimeNow();
   var doSort = visOpts.sort || false;
-  var minDist = visOpts.minDist || 0;
+  var minDist = (visOpts.sceneDepth || visOpts.bounds) && visOpts.worldRadius !== undefined ? 0 : visOpts.minDist || 0;
 
   // Visibility pass
   var count = 0;
@@ -874,7 +930,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
     var wz = visOpts.groundAnchor ? getEntityRenderFloorZ(e) :
       (visOpts.sceneDepth || visOpts.bounds) ? (Number.isFinite(e.wz) ? e.wz : Number.isFinite(e.z) ? e.z : getEntityRenderFloorZ(e)) : (e.wz || e.z || 0);
     if ((visOpts.sceneDepth || visOpts.bounds) && !Number.isFinite(wz)) continue;
-    var vis = entityVisible3D(wx, wy, wz, C, visOpts);
+    var vis = entityVisible3D(wx, wy, wz, C, visOpts, e);
     if (!vis) continue;
     if (visOpts.groundAnchor) vis.floorZ = wz;
     if (vis.dist < minDist) continue;
@@ -990,16 +1046,46 @@ function toggleFullscreen() {
   }
 }
 
+// Fullscreen draw-buffer size: the viewport scaled by the Resolution setting,
+// then capped to `rows` canvas rows with the aspect ratio kept. 'native' (or
+// any non-positive cap) means no row cap. Pure: no DOM or canvas access.
+var FULLSCREEN_ROW_CHOICES = ['native', 360, 480, 540, 720];
+function fullscreenCanvasSize(viewW, viewH, resolution, rows) {
+  viewW = Number(viewW); viewH = Number(viewH);
+  if (!(viewW >= 1) || !(viewH >= 1)) return {width: CANVAS_BASE_W, height: CANVAS_BASE_H};
+  var res = Number(resolution);
+  res = Number.isFinite(res) && res > 0 ? Math.min(1, Math.max(0.25, res)) : 1;
+  var width = Math.max(1, Math.floor(viewW * res)), height = Math.max(1, Math.floor(viewH * res));
+  var cap = rows === 'native' ? 0 : Math.floor(Number(rows));
+  if (cap > 0 && height > cap) {
+    width = Math.max(1, Math.round(viewW * cap / viewH));
+    height = cap;
+  }
+  return {width: width, height: height};
+}
+function fullscreenCanvasTargetSize() {
+  return fullscreenCanvasSize(window.innerWidth || screen.width, window.innerHeight || screen.height,
+    settings.resolution, settings.fullscreenRows);
+}
+// Resize now when the game canvas owns fullscreen; returns whether it did.
+function applyFullscreenCanvasSize() {
+  var fs = document.fullscreenElement || document.webkitFullscreenElement
+         || document.mozFullScreenElement || document.msFullscreenElement;
+  if (fs !== canvas) return false;
+  var size = fullscreenCanvasTargetSize();
+  canvas.width = size.width;
+  canvas.height = size.height;
+  return true;
+}
+
 function onFullscreenChange() {
   var fs = document.fullscreenElement || document.webkitFullscreenElement
          || document.mozFullScreenElement || document.msFullscreenElement;
   if (fs === canvas) {
-    // Entering fullscreen — expand draw buffer to the actual screen size.
-    // A brief rAF ensures the browser has committed the new viewport size.
-    requestAnimationFrame(function() {
-      canvas.width  = window.innerWidth  || screen.width;
-      canvas.height = window.innerHeight || screen.height;
-    });
+    // Entering fullscreen — size the draw buffer from the viewport, honouring
+    // the Resolution setting and the fullscreen row cap (V01). A brief rAF
+    // ensures the browser has committed the new viewport size.
+    requestAnimationFrame(function() { applyFullscreenCanvasSize(); });
   } else {
     // Exiting fullscreen — restore authored resolution.
     canvas.width  = CANVAS_BASE_W;
@@ -1010,6 +1096,210 @@ document.addEventListener('fullscreenchange',       onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 document.addEventListener('mozfullscreenchange',    onFullscreenChange);
 document.addEventListener('MSFullscreenChange',     onFullscreenChange);
+
+// =============================================
+// RENDER FEATURES — in-memory A/B switches for presentation-only paths
+// =============================================
+// Fragments register switchable render paths and developer actions here.
+// 23-events-init.js builds the Graphics row from this list, G swaps the
+// Recommended and Legacy presets, and the console API below uses the same
+// functions. Nothing is persisted, so a separate test tab never changes a
+// player's game. Presets are derived from the definitions on demand, so a
+// feature registered by a later fragment is always included. A switch may
+// change drawing only: never simulation, world data or the random streams.
+var RENDER_FEATURE_DEFS = [];      // frozen definitions, registration order
+var RENDER_FEATURES = {};          // live values by key
+var RENDER_ACTIONS = [];           // frozen {key, label, title, run}
+var _renderFeatureIndex = {}, _renderActionIndex = {};
+var _renderPresetSelected = 'recommended'; // last applied preset
+var _renderPresetCache = null;
+var _renderFeatureListeners = [];
+var _renderFeatureUnknownReads = 0;
+// Per-frame render counters (numbers only). draw() resets them right after
+// beginSceneDepthFrame(); the HUD, Perf HUD and console read them.
+var _renderFrameStats = {frame: 0};
+
+function _renderFeatureError(message) { return new Error('render features: ' + message); }
+function _renderRegistryKey(key) {
+  if (typeof key !== 'string' || !/^[a-z][A-Za-z0-9]*$/.test(key)) throw _renderFeatureError('invalid key ' + key);
+  if (_renderFeatureIndex[key] || _renderActionIndex[key]) throw _renderFeatureError('duplicate key ' + key);
+  return key;
+}
+function _renderFeatureAllows(def, value) {
+  return def.type === 'bool' ? value === true || value === false : def.values.indexOf(value) >= 0;
+}
+function defineRenderFeature(def) {
+  if (!def || typeof def !== 'object') throw _renderFeatureError('a definition object is required');
+  var key = _renderRegistryKey(def.key);
+  if (typeof def.label !== 'string' || !def.label) throw _renderFeatureError(key + ': label required');
+  var out = {key: key, label: def.label, type: def.type, title: typeof def.title === 'string' ? def.title : ''};
+  if (def.type === 'bool') {
+    // Legacy is the pre-integration reference path, so every switch is off there.
+    if (def.legacy !== false) throw _renderFeatureError(key + ': a bool feature must be false in Legacy');
+    out.values = [false, true];
+  } else if (def.type === 'enum') {
+    if (!Array.isArray(def.values) || def.values.length < 2) throw _renderFeatureError(key + ': an enum needs two or more values');
+    var seen = {};
+    def.values.forEach(function(v) {
+      if (!(typeof v === 'string' && v) && !(typeof v === 'number' && Number.isFinite(v)))
+        throw _renderFeatureError(key + ': enum values must be strings or finite numbers');
+      if (seen[String(v)]) throw _renderFeatureError(key + ': duplicate enum value ' + v);
+      seen[String(v)] = true;
+    });
+    out.values = def.values.slice();
+  } else {
+    throw _renderFeatureError(key + ': type must be bool or enum');
+  }
+  if (!_renderFeatureAllows(out, def.default)) throw _renderFeatureError(key + ': default is not an allowed value');
+  if (!_renderFeatureAllows(out, def.legacy)) throw _renderFeatureError(key + ': legacy is not an allowed value');
+  out.default = def.default; out.legacy = def.legacy;
+  Object.freeze(out.values); Object.freeze(out);
+  RENDER_FEATURE_DEFS.push(out); _renderFeatureIndex[key] = out;
+  RENDER_FEATURES[key] = _renderPresetSelected === 'legacy' ? out.legacy : out.default;
+  _renderPresetCache = null;
+  _notifyRenderFeatures('define', key);
+  return out;
+}
+function defineRenderAction(def) {
+  if (!def || typeof def !== 'object') throw _renderFeatureError('an action object is required');
+  var key = _renderRegistryKey(def.key);
+  if (typeof def.label !== 'string' || !def.label) throw _renderFeatureError(key + ': label required');
+  if (typeof def.run !== 'function') throw _renderFeatureError(key + ': run must be a function');
+  var out = Object.freeze({key: key, label: def.label, title: typeof def.title === 'string' ? def.title : '', run: def.run});
+  RENDER_ACTIONS.push(out); _renderActionIndex[key] = out;
+  _notifyRenderFeatures('action', key);
+  return out;
+}
+function renderFeaturePreset(name) {
+  if (name !== 'recommended' && name !== 'legacy') throw _renderFeatureError('unknown preset ' + name);
+  if (!_renderPresetCache) {
+    var recommended = {}, legacy = {};
+    RENDER_FEATURE_DEFS.forEach(function(def) { recommended[def.key] = def.default; legacy[def.key] = def.legacy; });
+    _renderPresetCache = {recommended: Object.freeze(recommended), legacy: Object.freeze(legacy)};
+  }
+  return _renderPresetCache[name];
+}
+function _renderFeaturesEqual(values) {
+  for (var i = 0; i < RENDER_FEATURE_DEFS.length; i++) {
+    var key = RENDER_FEATURE_DEFS[i].key;
+    if (RENDER_FEATURES[key] !== values[key]) return false;
+  }
+  return true;
+}
+// 'recommended', 'legacy', or 'custom' after a single switch differs.
+function renderPresetName() {
+  var other = _renderPresetSelected === 'legacy' ? 'recommended' : 'legacy';
+  if (_renderFeaturesEqual(renderFeaturePreset(_renderPresetSelected))) return _renderPresetSelected;
+  return _renderFeaturesEqual(renderFeaturePreset(other)) ? other : 'custom';
+}
+// Guarded hot-path read: an unknown key is counted and reads as off. For an
+// enum it means "not the Legacy value"; read enums with renderFeatureValue.
+function renderFeatureOn(key) {
+  var def = _renderFeatureIndex[key];
+  if (!def) { _renderFeatureUnknownReads++; return false; }
+  return def.type === 'bool' ? RENDER_FEATURES[key] === true : RENDER_FEATURES[key] !== def.legacy;
+}
+function renderFeatureValue(key, fallback) {
+  if (!_renderFeatureIndex[key]) { _renderFeatureUnknownReads++; return fallback; }
+  return RENDER_FEATURES[key];
+}
+function renderFeatureSnapshot() {
+  var out = {};
+  RENDER_FEATURE_DEFS.forEach(function(def) { out[def.key] = RENDER_FEATURES[def.key]; });
+  return out;
+}
+// Validates every entry before applying any, so a typo changes nothing.
+function setRenderFeatures(values) {
+  if (!values || typeof values !== 'object') throw _renderFeatureError('an object of feature values is required');
+  var keys = Object.keys(values), changed = [];
+  keys.forEach(function(key) {
+    var def = _renderFeatureIndex[key];
+    if (!def) throw _renderFeatureError('unknown feature ' + key);
+    if (!_renderFeatureAllows(def, values[key]))
+      throw _renderFeatureError(key + ': ' + JSON.stringify(values[key]) + ' is not one of ' + JSON.stringify(def.values));
+  });
+  keys.forEach(function(key) {
+    if (RENDER_FEATURES[key] !== values[key]) { RENDER_FEATURES[key] = values[key]; changed.push(key); }
+  });
+  if (changed.length) _notifyRenderFeatures('set', changed.join(','));
+  return renderFeatureSnapshot();
+}
+function setRenderFeature(key, value) {
+  var values = {};
+  values[key] = value;
+  return setRenderFeatures(values);
+}
+function applyRenderPreset(name) {
+  var values = renderFeaturePreset(name);
+  _renderPresetSelected = name;
+  RENDER_FEATURE_DEFS.forEach(function(def) { RENDER_FEATURES[def.key] = values[def.key]; });
+  _notifyRenderFeatures('preset', name);
+  return name;
+}
+function toggleRenderPreset() {
+  return applyRenderPreset(renderPresetName() === 'legacy' ? 'recommended' : 'legacy');
+}
+function onRenderFeaturesChange(listener) {
+  _renderFeatureListeners.push(listener);
+  return function() {
+    var at = _renderFeatureListeners.indexOf(listener);
+    if (at >= 0) _renderFeatureListeners.splice(at, 1);
+  };
+}
+function _notifyRenderFeatures(kind, detail) {
+  _renderFeatureListeners.slice().forEach(function(listener) {
+    try { listener(kind, detail); }
+    catch (e) { console.error('[RENDER FEATURES] listener failed:', e && e.message); }
+  });
+}
+function runRenderAction(key, options) {
+  var action = _renderActionIndex[key];
+  if (!action) throw _renderFeatureError('unknown action ' + key);
+  return action.run(options || {});
+}
+function beginRenderFrameStats() {
+  for (var key in _renderFrameStats) if (key !== 'frame') _renderFrameStats[key] = 0;
+  _renderFrameStats.frame++;
+}
+function addRenderFrameStat(name, amount) {
+  _renderFrameStats[name] = (_renderFrameStats[name] || 0) + (amount === undefined ? 1 : amount);
+}
+function getRenderFeatureStats() {
+  var frame = {};
+  for (var key in _renderFrameStats) frame[key] = _renderFrameStats[key];
+  return {preset: renderPresetName(), features: renderFeatureSnapshot(), textures: USE_TEXTURES === true,
+    fullscreenRows: settings.fullscreenRows, canvas: canvas.width + 'x' + canvas.height,
+    actions: RENDER_ACTIONS.map(function(action) { return action.key; }),
+    unknownReads: _renderFeatureUnknownReads, frame: frame};
+}
+// Compact HUD line "R:<preset> TEX <prims>/<budget> fb <fallbacks>". The
+// texture pass fills texPrims/texBudget/texFallbacks; until it does, or with
+// the texture master off, TEX reads '-' or 'off' rather than an invented 0/0.
+// Stage E2 adds the pass's counters: an engaged frame appends f<textured
+// faces> m<mean faces> (and x<failed draws> when any failed); a frame that
+// stayed flat reads 'flat:<reason>' (rows, catalog, transform, debug, ...).
+function renderHudStatusLine() {
+  var preset = renderPresetName(), s = _renderFrameStats;
+  var tex = USE_TEXTURES !== true ? 'off' : s.texBudget > 0 ? (s.texPrims || 0) + '/' + s.texBudget :
+    s.texFlat > 0 ? 'flat:' + _renderHudFlatReason(s) : '-';
+  var line = 'R:' + (preset === 'recommended' ? 'Rec' : preset === 'legacy' ? 'Legacy' : 'Custom') +
+    ' TEX ' + tex + ' fb ' + (s.texFallbacks || 0);
+  if (USE_TEXTURES === true && s.texBudget > 0) {
+    line += ' f' + (s.texFaces || 0) + ' m' + (s.texMean || 0) + (s.texFailedDraws > 0 ? ' x' + s.texFailedDraws : '');
+  }
+  return line;
+}
+function _renderHudFlatReason(s) {
+  for (var key in s) {
+    if (key.length > 7 && key.indexOf('texFlat') === 0 && s[key] > 0) return key.charAt(7).toLowerCase() + key.slice(8);
+  }
+  return '?';
+}
+// Console API: the classic-script declarations setRenderFeatures(),
+// getRenderFeatureStats() and runRenderAction() are already window
+// properties (wrapping them under the same name would recurse).
+// renderPreset() reads the preset; renderPreset('legacy') applies one.
+window.renderPreset = function(name) { if (name !== undefined) applyRenderPreset(name); return renderPresetName(); };
 
 // =============================================
 // GAME STATE
@@ -1491,7 +1781,12 @@ var QUALITY_PRESETS = {
   high:   {viewDist: 1300, chunkWindow: 7, particles: 40, resolution: 1.0},
   ultra:  {viewDist: 1800, chunkWindow: 9, particles: 60, resolution: 1.0}
 };
+// fullscreenRows caps fullscreen canvas rows (FULLSCREEN_ROW_CHOICES); set from
+// the Graphics row, not the in-canvas overlay, so it has no staged copy.
+// Stage E: 360 by default (the structure textures' textureMaxRows); Native
+// stays selectable.
 var settings = {viewDist: 900, chunkWindow: 5, particles: 25, resolution: 0.75, showFPS: false, dayNight: true,
+  fullscreenRows: 360,
   castingStyle: typeof getSelectedCastingStyle === 'function' ? getSelectedCastingStyle() : 'arcane'};
 // Staging copy — holds uncommitted edits while settings overlay is open.
 // Written to by all slider/toggle/preset interactions.
@@ -6985,6 +7280,39 @@ function chunkWallDecorationInWindow(d, chunkWindowX, chunkWindowY) {
     gridY: d.gridY + chunkWindowY * CHUNK_CELLS};
 }
 
+// Stage H: the window copies carry their chunk's pulsePhase only while
+// spawnerModel is on (assembleWindow copies it then). Called when the
+// switch or preset changes, so the current window follows at once: on, the
+// copies take the chunk phase; off, the field is removed and the records
+// are the pre-integration ones again (Legacy pulses in phase, as before).
+// Fixed-level spawners (no _chunkKey) own their phase and are left alone.
+function syncWindowSpawnerPulsePhases() {
+  if (!enemySpawners) return;
+  var on = typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel');
+  for (var i = 0; i < enemySpawners.length; i++) {
+    var sp = enemySpawners[i];
+    if (!sp || !sp._chunkKey) continue;
+    var ch = chunks[sp._chunkKey], src = ch && ch.enemySpawners ? ch.enemySpawners[sp._chunkIdx] : null;
+    if (on && src) sp.pulsePhase = src.pulsePhase;
+    else if ('pulsePhase' in sp) delete sp.pulsePhase;
+  }
+}
+
+// Stage K (decorAnchorCache): props cache the terrain heights they stand on
+// or hang from (07-decorations-lighting.js), keyed on the floorMesh object
+// and this epoch. Every window assembly ends by moving it, so heights read
+// while a window was being built never outlive it; code that edits floorMesh
+// in place must call noteWorldGeometryEdit() afterwards (as it must call
+// invalidateNpcNavigation() for routes). It also retires this frame's
+// getFloorHeightAt cache entries, which would otherwise serve the old heights
+// until the next frame.
+var worldGeometryEpoch = 0;
+function noteWorldGeometryEdit() {
+  worldGeometryEpoch = (worldGeometryEpoch + 1) | 0;
+  if (typeof _floorCacheTick === 'number') _floorCacheTick = (_floorCacheTick + 1) | 0;
+  return worldGeometryEpoch;
+}
+
 function assembleWindow(centerCX, centerCY) {
   var half = Math.floor(WINDOW_CHUNKS / 2);
   var newWCX = centerCX - half;
@@ -7638,6 +7966,10 @@ function assembleWindow(centerCX, centerCY) {
           hp: sp.hp, maxHp: sp.maxHp, cooldownMs: sp.cooldownMs, lastSpawn: sp.lastSpawn,
           spawnCount: sp.spawnCount, maxSpawns: sp.maxSpawns, active: sp.active, type: sp.type,
           _chunkKey: (windowCX + dx5) + ',' + (windowCY + dy5), _chunkIdx: sp2});
+        // Stage H: the obelisk model pulses each spawner at its own phase;
+        // Legacy keeps the in-phase copy (see syncWindowSpawnerPulsePhases).
+        if (typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel'))
+          enemySpawners[enemySpawners.length - 1].pulsePhase = sp.pulsePhase;
       }
       for (var ei2 = 0; ei2 < ch5.enemies.length; ei2++) {
         var en = ch5.enemies[ei2];
@@ -7866,6 +8198,9 @@ function assembleWindow(centerCX, centerCY) {
     console.log('[STRUCTURE] none in current window');
   }
 
+  // Structure render models (12-structure-models.js): built here only while
+  // that render feature is on, otherwise cleared so none outlives its window.
+  if (typeof buildStructureModels === 'function') buildStructureModels();
   buildPointLights();
 
   // Assemble minimap explored cells
@@ -7938,6 +8273,7 @@ function assembleWindow(centerCX, centerCY) {
 
   // Evict distant chunks
   evictDistantChunks(centerCX, centerCY);
+  noteWorldGeometryEdit();   // Stage K: drop cached prop anchors
 
   console.log('[ENDLESS] Window assembled at chunk (' + windowCX + ',' + windowCY + ') → (' +
     (windowCX + WINDOW_CHUNKS - 1) + ',' + (windowCY + WINDOW_CHUNKS - 1) + ')' +
@@ -8189,6 +8525,7 @@ function resetEndlessMode() {
   shrines = [];
   ruins = [];
   largeStructures = [];
+  if (typeof resetLandmarkFinder === 'function') resetLandmarkFinder();   // a new run cycles landmarks afresh
   discoveredMarkets = [];
   discoveredShrines = [];
   discoveredRuins = [];
@@ -9244,7 +9581,9 @@ function createWallDecorations() {
 // The decoration owns an actual wall face, not merely a ground coordinate.
 // Match drawWalls3D's center-based top and its per-face base, then fit the
 // sprite inside the exposed span. A collapsed/missing wall cannot hold a torch.
-function getWallDecorationAttachment(dec) {
+// terrain, when given, is wallDecorationTerrain(dec): its three terrain
+// heights replace the three live queries (the wall arrays are read live).
+function getWallDecorationAttachment(dec, terrain) {
   if (dec.gridX < 0 || dec.gridY < 0 || dec.gridX >= gridW || dec.gridY >= gridH) return null;
   var ci = dec.gridY * gridW + dec.gridX;
   if (!grid || !grid[ci]) return null;
@@ -9252,15 +9591,17 @@ function getWallDecorationAttachment(dec) {
   var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
   if (!nx && !ny) return null;
   var centerX = (dec.gridX + 0.5) * cell, centerY = (dec.gridY + 0.5) * cell;
-  var centerH = floorMesh ? getFloorHeightAt(centerX, centerY) : 0;
+  var centerH = terrain ? terrain.centerH : floorMesh ? getFloorHeightAt(centerX, centerY) : 0;
   var topH = centerH + (CANVAS_BASE_H / 25) * (wallHeights ? wallHeights[ci] : 1);
   if (wallMaxTopZ && isFinite(wallMaxTopZ[ci])) topH = Math.min(topH, wallMaxTopZ[ci]);
   var face = dec.side === 'west' ? 0 : dec.side === 'east' ? 1 : dec.side === 'north' ? 2 : 3;
   var baseH = wallFaceBase ? wallFaceBase[ci * 4 + face] : centerH;
   var x = dec.worldX + nx * 0.5, y = dec.worldY + ny * 0.5;
-  var openH = floorMesh ? getFloorHeightAt(x, y) : 0;
+  var openH = terrain ? terrain.openH : floorMesh ? getFloorHeightAt(x, y) : 0;
   baseH = Math.max(baseH, openH);
-  if (floorMesh && typeof getCaveSpaceAt === 'function') {
+  if (terrain) {
+    topH = Math.min(topH, terrain.ceilingH);
+  } else if (floorMesh && typeof getCaveSpaceAt === 'function') {
     topH = Math.min(topH, getCaveSpaceAt(x, y, openH).ceilingH);
   }
   var span = (topH - baseH) * 25;
@@ -9277,6 +9618,78 @@ function getWallDecorationAttachment(dec) {
 function getWallDecorationRenderZ(dec) {
   var attachment = getWallDecorationAttachment(dec);
   return attachment ? attachment.z : NaN;
+}
+
+// ── decorAnchorCache (integration stage K; exact, kept for bisecting) ──
+// With the switch on, the scatter, wall-decoration and ore loops first reject
+// by distance and view, in the same arithmetic as entityVisible3D and the
+// loops' own culls, and only then query terrain. The heights a prop stands on
+// or hangs from are cached per record: scatter support (getEntityRenderFloorZ)
+// and the three terrain queries of getWallDecorationAttachment (centre floor,
+// open floor, cave ceiling). Wall arrays (grid, heights, caps, face bases)
+// stay live reads. The cache is dropped when floorMesh changes identity or
+// worldGeometryEpoch moves (05-endless-world.js: every window assembly, and
+// noteWorldGeometryEdit() after any in-place mesh edit). Records are keys of
+// a WeakMap and each entry re-checks the fields it was computed from.
+// DECOR_ANCHOR_STORE = false keeps the early rejection with live queries.
+var DECOR_ANCHOR_STORE = true;
+var _decorAnchors = null, _decorAnchorMesh = null, _decorAnchorEpoch = 0;
+function decorAnchorCacheOn() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('decorAnchorCache');
+}
+// The current anchor map, or null (store off or no WeakMap: live queries).
+function decorAnchorMap() {
+  if (!DECOR_ANCHOR_STORE || typeof WeakMap !== 'function') return null;
+  var epoch = typeof worldGeometryEpoch === 'number' ? worldGeometryEpoch : 0;
+  if (!_decorAnchors || _decorAnchorMesh !== floorMesh || _decorAnchorEpoch !== epoch) {
+    _decorAnchors = new WeakMap(); _decorAnchorMesh = floorMesh; _decorAnchorEpoch = epoch;
+  }
+  return _decorAnchors;
+}
+function _decorAnchorStat(name) {
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat(name, 1);
+}
+// getWallDecorationAttachment's three terrain heights for dec (a wall
+// decoration, or an ore face record keyed by its ore), cached under key when
+// map is given. family names the terr<family>/hit<family> frame counters.
+function wallDecorationTerrain(dec, map, key, family) {
+  var t = map ? map.get(key) : null;
+  if (t && t.gridX === dec.gridX && t.gridY === dec.gridY && t.side === dec.side &&
+      t.worldX === dec.worldX && t.worldY === dec.worldY) {
+    _decorAnchorStat('hit' + family);
+    return t;
+  }
+  _decorAnchorStat('terr' + family);
+  var nx = dec.side === 'west' ? -1 : dec.side === 'east' ? 1 : 0;
+  var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
+  var x = dec.worldX + nx * 0.5, y = dec.worldY + ny * 0.5;
+  t = {gridX: dec.gridX, gridY: dec.gridY, side: dec.side, worldX: dec.worldX, worldY: dec.worldY,
+    centerH: floorMesh ? getFloorHeightAt((dec.gridX + 0.5) * cell, (dec.gridY + 0.5) * cell) : 0,
+    openH: floorMesh ? getFloorHeightAt(x, y) : 0, ceilingH: Infinity};
+  if (floorMesh && typeof getCaveSpaceAt === 'function') t.ceilingH = getCaveSpaceAt(x, y, t.openH).ceilingH;
+  if (map) map.set(key, t);
+  return t;
+}
+// A floor-scatter record for renderEntities3D whose support is cached: a
+// stand-in {x, y, renderFloorZ, _scatterItem} (getEntityRenderFloorZ then
+// reads renderFloorZ), or the item itself when it carries its own height.
+function scatterAnchor(item, map) {
+  if (Number.isFinite(item.renderFloorZ) || Number.isFinite(item.feetZ) || item.underground || item.caveSpawnId) return item;
+  var a = map ? map.get(item) : null;
+  if (a && a.x === item.x && a.y === item.y) { _decorAnchorStat('hitScatter'); return a; }
+  _decorAnchorStat('terrScatter');
+  a = {x: item.x, y: item.y, renderFloorZ: getEntityRenderFloorZ(item), _scatterItem: item};
+  if (map) map.set(item, a);
+  return a;
+}
+// Per-family depth-clip counters, read-only: every withSceneDepthClip call
+// (billboards and model faces included) advances the clip generation.
+function sceneClipMark() {
+  return typeof _sceneDepthClipGeneration === 'number' ? _sceneDepthClipGeneration : 0;
+}
+function addSceneClipStat(name, mark) {
+  if (typeof addRenderFrameStat === 'function' && typeof _sceneDepthClipGeneration === 'number')
+    addRenderFrameStat(name, (_sceneDepthClipGeneration - mark) >>> 0);
 }
 
 // Upper terrain owns a separate, static receiver bake. The legacy XY light
@@ -9581,11 +9994,28 @@ function isDecorationOccluded(decorX, decorY, camX, camY) {
   return false;
 }
 
+// Keyed on the absolute supporting cell: window-local worldX/Y plus the
+// window origin, stepped half a cell back into the wall along the face
+// normal. gridX/Y are window-relative in Endless, so keying on them re-rolled
+// heraldry and flame sway whenever the window re-centred. The origin is used
+// only in Endless mode (as in 06-spatial-queries): it is not reset when a
+// fixed level starts, and fixed-level records are already absolute. At origin
+// 0 this is the old key. Records without world coordinates keep gridX/Y.
 function getWallDecorationVariant(dec) {
   if (!dec) return 0;
   var sideCode = dec.side === 'north' ? 11 : dec.side === 'south' ? 23 : dec.side === 'west' ? 37 : 53;
-  var h = Math.imul((dec.gridX | 0) + 4099, 73856093) ^
-          Math.imul((dec.gridY | 0) + 8191, 19349663) ^ sideCode;
+  var cellX = dec.gridX | 0, cellY = dec.gridY | 0;
+  if (Number.isFinite(dec.worldX) && Number.isFinite(dec.worldY) && typeof cell === 'number' && cell > 0) {
+    var endless = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+    var ox = endless && typeof windowOriginX === 'number' && isFinite(windowOriginX) ? windowOriginX : 0;
+    var oy = endless && typeof windowOriginY === 'number' && isFinite(windowOriginY) ? windowOriginY : 0;
+    var inX = dec.side === 'west' ? 0.5 : dec.side === 'east' ? -0.5 : 0;
+    var inY = dec.side === 'north' ? 0.5 : dec.side === 'south' ? -0.5 : 0;
+    cellX = Math.floor((dec.worldX + ox) / cell + inX);
+    cellY = Math.floor((dec.worldY + oy) / cell + inY);
+  }
+  var h = Math.imul(cellX + 4099, 73856093) ^
+          Math.imul(cellY + 8191, 19349663) ^ sideCode;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return (h ^ (h >>> 16)) >>> 0;
 }
@@ -9616,6 +10046,40 @@ function traceWallBannerCloth(x, y, w, h) {
   ctx.lineTo(x, y + h * 0.28);
   ctx.lineTo(x - w * 0.36, y + h * 0.42);
   ctx.closePath();
+}
+
+// Three flat flame layers give a readable core with only bounded paths.
+// (x, y) is the torch sprite's origin, 0.01 h below the top of its shaft.
+// Shared by the sprite and by the modelled torch's overlay-phase billboard.
+function drawWallTorchFlame(x, y, w, h, variant, now, baseAlpha) {
+  var torchWave = Math.sin(now * 0.009 + (variant & 255) * 0.17);
+  var torchX = x + torchWave * w * 0.035;
+  var torchTop = y - h * (0.65 + torchWave * 0.035);
+  ctx.globalAlpha = baseAlpha * 0.92;
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
+  ctx.beginPath(); ctx.moveTo(torchX - w * 0.24, y + h * 0.03);
+  ctx.quadraticCurveTo(torchX - w * 0.30, y - h * 0.28, torchX, torchTop);
+  ctx.quadraticCurveTo(torchX + w * 0.30, y - h * 0.25, torchX + w * 0.22, y + h * 0.03);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
+  ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.19, w * 0.16, h * 0.29, torchWave * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
+  ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.10, w * 0.07, h * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+}
+
+// The sconce's three flame ellipses. cx is the flame's centre (the sprite's
+// bowl, x + 0.25 w) and y the sprite's origin, 0.06 h below the bowl's rim.
+// Shared by the sprite and by the modelled sconce's overlay-phase billboard.
+function drawWallSconceFlame(cx, y, w, h, variant, now, baseAlpha) {
+  var sconceWave = Math.sin(now * 0.010 + (variant & 255) * 0.13);
+  var sconceX = cx + sconceWave * w * 0.025;
+  ctx.globalAlpha = baseAlpha * 0.9;
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.25, w * 0.18, h * 0.29, sconceWave * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.19, w * 0.10, h * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
+  ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.13, w * 0.045, h * 0.09, 0, 0, Math.PI * 2); ctx.fill();
 }
 
 function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade, dec, now) {
@@ -9652,20 +10116,7 @@ function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade
     ctx.fillStyle = wallPropLitColor('wallPropIron', 'deep', brightness);
     ctx.fillRect(x - w * 0.14, y + h * 0.02, w * 0.28, Math.max(1, h * 0.07));
     ctx.fillRect(x - w * 0.12, y + h * 0.17, w * 0.24, Math.max(1, h * 0.06));
-    // Three flat flame layers give a readable core with only bounded paths.
-    var torchWave = Math.sin(now * 0.009 + (variant & 255) * 0.17);
-    var torchX = x + torchWave * w * 0.035;
-    var torchTop = y - h * (0.65 + torchWave * 0.035);
-    ctx.globalAlpha = baseAlpha * 0.92;
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
-    ctx.beginPath(); ctx.moveTo(torchX - w * 0.24, y + h * 0.03);
-    ctx.quadraticCurveTo(torchX - w * 0.30, y - h * 0.28, torchX, torchTop);
-    ctx.quadraticCurveTo(torchX + w * 0.30, y - h * 0.25, torchX + w * 0.22, y + h * 0.03);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
-    ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.19, w * 0.16, h * 0.29, torchWave * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
-    ctx.beginPath(); ctx.ellipse(torchX, y - h * 0.10, w * 0.07, h * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+    drawWallTorchFlame(x, y, w, h, variant, now, baseAlpha);
   } else if (type === 'shield') {
     // Heater-shield silhouette, iron rim, heraldic field and raised boss.
     ctx.globalAlpha = baseAlpha * 0.34;
@@ -9740,15 +10191,7 @@ function drawWallAlignedDecoration(type, x, y, size, dist, side, viewAngle, fade
     ctx.beginPath(); ctx.ellipse(x + w * 0.25, y - h * 0.02, w * 0.25, h * 0.10, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = wallPropLitColor('wallPropIron', 'lit', brightness);
     ctx.beginPath(); ctx.ellipse(x + w * 0.25, y - h * 0.06, w * 0.19, h * 0.07, 0, 0, Math.PI * 2); ctx.fill();
-    var sconceWave = Math.sin(now * 0.010 + (variant & 255) * 0.13);
-    var sconceX = x + w * 0.25 + sconceWave * w * 0.025;
-    ctx.globalAlpha = baseAlpha * 0.9;
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.outer;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.25, w * 0.18, h * 0.29, sconceWave * 0.08, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.inner;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.19, w * 0.10, h * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = GAME_MATERIALS.wallFlame.hex.core;
-    ctx.beginPath(); ctx.ellipse(sconceX, y - h * 0.13, w * 0.045, h * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+    drawWallSconceFlame(x + w * 0.25, y, w, h, variant, now, baseAlpha);
 
   } else if (type === 'wall_crack') {
     // A real renderer for the former invisible `crack` decoration.
@@ -10676,18 +11119,38 @@ function paintFloorItem(ctx, type, variant, seed, x, y, size) {
 }
 
 // Perspective-projects all floorScatter items and draws them with drawFloorItem().
+// Phase (draw()'s sceneEntities, read from arguments so the declaration line
+// stays as the audit lab's mutations anchor it): with floorPropModels off
+// floor scatter has no model, so 'opaque' draws nothing; 'overlay' or no
+// argument draws the sprites. With it on (stage I), 'opaque' (or no
+// argument, first) draws the modelled types as depth-writing models
+// (drawFloorPropModels3D) and the sprite pass skips them.
 function drawFloorScatter3D() {
+  var _fsModels = floorPropModelsOn();
+  if (_fsModels && arguments[0] !== 'overlay') {
+    var modelMark = sceneClipMark();
+    drawFloorPropModels3D();
+    addSceneClipStat('clipScatter', modelMark);
+  }
+  if (arguments[0] === 'opaque') return;
   beginFloorArtworkFrame();
   var _fsMaxDist = viewDist * 0.75;
+  // Stage K (decorAnchorCache): only the items entityVisible3D would keep by
+  // distance and forward, in order, with their support from the anchor cache.
+  var _fsItems = decorAnchorCacheOn() ? floorScatterInView(_fsMaxDist) : floorScatter;
+  if (_fsModels) _fsItems = floorScatterSprites(_fsItems);
+  var clipMark = sceneClipMark();
   // A doorway can reveal either stratum from either camera position. The
   // actual terrain/ceiling depth clips scatter; camera state never hides it.
-  renderEntities3D(floorScatter, {maxDist: _fsMaxDist, groundAnchor: true,
+  renderEntities3D(_fsItems, {maxDist: _fsMaxDist, groundAnchor: true,
     bounds: function(item, vis) {
+      item = item._scatterItem || item;
       var size = Math.max(6, Math.min(70, Math.floor(1500 * getScale3D(FLOOR_ITEM_TIER[item.type] || 'medium') / vis.fwd)));
       // Covers the widest sticks, vertical plants, and stroked edges.
       return {x:vis.sx-size*2-2,y:vis.sy-size*2-2,width:size*4+4,height:size*4+4};
     }, fadeFraction: 0.3, sort: true, minDist: 3, mode3dOnly: true},
     function(item, vis, C, ctx, now) {
+      item = item._scatterItem || item;
       var fwd = vis.fwd;
       var tier = FLOOR_ITEM_TIER[item.type] || 'medium';
       var s3 = getScale3D(tier);
@@ -10702,12 +11165,135 @@ function drawFloorScatter3D() {
       drawFloorArtwork(ctx, item.type, item.variant, item.seed, vis.sx, vis.sy, size);
       ctx.restore();
     });
+  addSceneClipStat('clipScatter', clipMark);
+}
+
+// Stage K: the floor-scatter items entityVisible3D keeps by distance and
+// forward (the same arithmetic, before any terrain query), in their order,
+// each as its scatterAnchor stand-in. Items without support are dropped, as
+// renderEntities3D would drop them. Reuses one list.
+var _floorScatterInView = [];
+function floorScatterInView(maxDist) {
+  var list = _floorScatterInView;
+  list.length = 0;
+  if (!floorScatter || !floorScatter.length || !MODE3D) return list;
+  var C = getCam3D(), map = decorAnchorMap(), limit = maxDist || viewDist;
+  for (var i = 0; i < floorScatter.length; i++) {
+    var item = floorScatter[i], wx = item.x, wy = item.y;
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+    var dx = wx - cam.x, dy = wy - cam.y, dist = Math.hypot(dx, dy);
+    if (dist < 1) dist = 1;
+    if (dist > limit || dx * C.cosAng + dy * C.sinAng < 1) continue;
+    var a = scatterAnchor(item, map);
+    if (a !== item && !Number.isFinite(a.renderFloorZ)) continue;
+    list.push(a);
+  }
+  return list;
+}
+
+// ── Floor-prop models (integration stage I, floorPropModels) ──
+// With the switch on, the modelled scatter types (12-prop-models.js
+// FLOOR_PROP_TYPES; a type whose models were rejected stays a sprite) draw
+// in the opaque phase as depth-writing models, near to far, over the
+// sprite's range (0.75 viewDist, none nearer than 3). An item is kept while
+// its reach circle is in front of the camera and inside the horizontal view.
+// Alpha is only the last 20% range fade times the window spawn fade: colour
+// fog (drawWorldModel), not the sprite's see-through distance alpha. They
+// skip the sprite and its contact shadow. With decorAnchorCache on, an
+// item's pose and support are cached (the anchor cache's invalidation:
+// floorMesh identity, worldGeometryEpoch); items carrying their own height
+// are recomputed each frame, as scatterAnchor passes them through.
+var _floorPropEntries = [], _floorPropVisible = [], _floorPropSprites = [];
+var _floorPropCache = null, _floorPropCacheOwner = null;
+function floorPropModelsOn() {
+  return typeof floorPropTypeReady === 'function' && typeof renderFeatureOn === 'function' && renderFeatureOn('floorPropModels');
+}
+// The sprite list without the modelled types (reuses one list).
+function floorScatterSprites(items) {
+  var list = _floorPropSprites;
+  list.length = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!floorPropTypeReady((it._scatterItem || it).type)) list.push(it);
+  }
+  return list;
+}
+function floorPropCacheMap() {
+  var owner = decorAnchorCacheOn() ? decorAnchorMap() : null;
+  if (!owner) return null;
+  if (owner !== _floorPropCacheOwner) { _floorPropCache = new WeakMap(); _floorPropCacheOwner = owner; }
+  return _floorPropCache;
+}
+function floorPropOwnHeight(item) {
+  return Number.isFinite(item.renderFloorZ) || Number.isFinite(item.feetZ) || !!item.underground || !!item.caveSpawnId;
+}
+function _floorPropNearFirst(a, b) { return a.dist - b.dist; }
+function drawFloorPropModels3D() {
+  if (!floorScatter || !floorScatter.length || !MODE3D) return;
+  var C = getCam3D(), now = gameTimeNow(), map = floorPropCacheMap(), visible = _floorPropVisible;
+  var maxDist = viewDist * 0.75, fadeStart = maxDist * 0.8;
+  var tanHalf = 1 / C.invTanHalf, cosHalf = 1 / Math.sqrt(1 + tanHalf * tanHalf), sinHalf = tanHalf * cosHalf;
+  var windowed = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+  var ox = windowed && typeof windowOriginX === 'number' ? windowOriginX : 0;
+  var oy = windowed && typeof windowOriginY === 'number' ? windowOriginY : 0;
+  visible.length = 0;
+  for (var i = 0; i < floorScatter.length; i++) {
+    var item = floorScatter[i];
+    if (!floorPropTypeReady(item.type)) continue;
+    var dx = item.x - cam.x, dy = item.y - cam.y, dist = Math.hypot(dx, dy);
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng, side = Math.abs(dy * C.cosAng - dx * C.sinAng);
+    var entry = _floorPropEntries[visible.length] ||
+      (_floorPropEntries[visible.length] = {item: null, pose: null, own: {}, dist: 0, fade: 1});
+    var cacheable = map && !floorPropOwnHeight(item), cached = cacheable ? map.get(item) : null, pose;
+    if (cached && cached.x === item.x && cached.y === item.y && cached.type === item.type && cached.variant === item.variant &&
+        cached.seed === item.seed && cached.ox === ox && cached.oy === oy) {
+      pose = cached.pose;
+      if (fwd < -pose.reach || side * cosHalf - fwd * sinHalf > pose.reach) continue;
+      _decorAnchorStat('hitFloorProp');
+    } else {
+      pose = floorPropPose(item, cacheable ? null : entry.own);
+      if (!pose || fwd < -pose.reach || side * cosHalf - fwd * sinHalf > pose.reach) continue;
+      var support = floorPropSupportZ(item, pose);
+      if (!Number.isFinite(support)) continue;
+      pose.z = support - FLOOR_PROP_SINK;
+      if (cacheable) {
+        _decorAnchorStat('terrFloorProp');
+        map.set(item, {x: item.x, y: item.y, type: item.type, variant: item.variant, seed: item.seed, ox: ox, oy: oy, pose: pose});
+      }
+    }
+    var spawnFade = item.spawnMs ? Math.min(1, (now - item.spawnMs) / 500) : 1;
+    var rangeFade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    entry.item = item; entry.pose = pose; entry.dist = dist; entry.fade = rangeFade * spawnFade;
+    if (entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_floorPropNearFirst);
+  var baseAlpha = ctx.globalAlpha;
+  for (var n = 0; n < visible.length; n++) {
+    var prop = visible[n];
+    ctx.globalAlpha = baseAlpha * prop.fade;   // range and spawn fade only (1 inside the range)
+    drawWorldModel(prop.pose, prop.pose.model, C, 'opaque', null);
+  }
+  ctx.globalAlpha = baseAlpha;
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat('mdlFloorPropInstances', visible.length);
 }
 
 // Render treasure chests as billboarded sprites in the 3D view.
 // 3D projected treasure chests with lid-open animation and floating loot text.
-function drawTreasureChests3D() {
+// phase 'opaque' draws the modelled chests (chestModel) as depth-writing world
+// faces; 'overlay' draws their glow, sparkle, particles and loot label. With
+// chestModel off every chest takes the legacy path below, all of it in the
+// overlay phase. Omitted, the call draws both phases, opaque first.
+function drawTreasureChests3D(phase) {
   if (!treasureChests || !treasureChests.length || !MODE3D) return;
+  var clipMark = sceneClipMark();
+  if (typeof renderFeatureOn === 'function' && renderFeatureOn('chestModel') && typeof chestModelsReady === 'function' &&
+      chestModelsReady()) {
+    drawTreasureChestModels3D(phase);
+    addSceneClipStat('clipChest', clipMark);
+    return;
+  }
+  if (phase === 'opaque') return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonY = C.horizonY, cameraZ = C.cameraZ;
@@ -10963,84 +11549,195 @@ function drawTreasureChests3D() {
     if (ch.opened && lid > 0.3) {
       var textP = proj(ch.x, ch.y, floorZ + bodyH + lidH + 8);
       if (textP && textP.fwd > 2) {
-        var fontSize = Math.max(8, Math.min(14, Math.floor(1800 / textP.fwd)));
-        var lineH = fontSize + 2;
-        var textLines = [];
-        var textColors = [];
-
-        if (ch.relicId && RELIC_DEFS[ch.relicId]) {
-          // Relic in epic chest
-          var rDef = RELIC_DEFS[ch.relicId];
-          textLines.push(rDef.name);
-          textColors.push(RARITY_COLORS.epic);
-          textLines.push(rDef.desc);
-          textColors.push('#ddbbff');
-          if (equipment.relic) {
-            textLines.push('Replaces: ' + equipment.relic.name);
-            textColors.push('#888877');
-            textLines.push('[E] Swap');
-          } else {
-            textLines.push('[E] Take');
-          }
-          textColors.push('#c040ff');
-        } else if (ch.equipId && EQUIPMENT_DEFS[ch.equipId]) {
-          // Equipment with quality
-          var eInst = createEquipInstance(ch.equipId, ch.quality || 1.0);
-          textLines.push(eInst.displayName);
-          textColors.push(RARITY_COLORS[eInst.rarity] || '#ffffff');
-          textLines.push(eInst.desc);
-          textColors.push('#ccccbb');
-          if (eInst.quality && Math.abs(eInst.quality - 1.0) > 0.04) {
-            textLines.push('Quality: ' + Math.round(eInst.quality * 100) + '%');
-            textColors.push(eInst.quality >= 1.0 ? '#80ff80' : '#ff8080');
-          }
-          var currentItem = equipment[eInst.slot];
-          if (currentItem && currentItem.id !== eInst.id) {
-            textLines.push('Replaces: ' + (currentItem.displayName || currentItem.name));
-            textColors.push('#888877');
-            var statDelta = getEquipStatDelta(eInst, currentItem);
-            if (statDelta) { textLines.push(statDelta.text); textColors.push(statDelta.color); }
-            textLines.push('[E] Swap');
-          } else {
-            textLines.push('[E] Take');
-          }
-          textColors.push('#ffd700');
-        } else {
-          textLines.push('+' + ch.gold + ' Gold');
-          textColors.push('#ffd700');
-          textLines.push('[E] Take');
-          textColors.push('#ffd700');
-        }
-
-        // Draw backdrop
-        ctx.globalAlpha = fogAlpha * 0.85;
-        var maxTxtW = 0;
-        ctx.font = 'bold ' + fontSize + 'px Arial';
-        for (var ti = 0; ti < textLines.length; ti++) {
-          var tw = ctx.measureText(textLines[ti]).width;
-          if (tw > maxTxtW) maxTxtW = tw;
-        }
-        var bgW = maxTxtW + 12, bgH = textLines.length * lineH + 6;
-        withSceneDepthBillboard({x:textP.sx-bgW/2,y:textP.sy-bgH+2,width:bgW,height:bgH+2}, textP.fwd, function () {
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(textP.sx - bgW / 2, textP.sy - bgH + 2, bgW, bgH);
-
-        // Draw text lines
-        ctx.textAlign = 'center';
-        for (var tl = 0; tl < textLines.length; tl++) {
-          var isAction = (textLines[tl].indexOf('[E]') >= 0);
-          var pulse = isAction ? (0.7 + 0.3 * Math.sin(now * 0.005)) : 1.0;
-          ctx.globalAlpha = fogAlpha * pulse;
-          ctx.fillStyle = textColors[tl];
-          ctx.font = (tl === 0 ? 'bold ' : '') + fontSize + 'px Arial';
-          ctx.fillText(textLines[tl], textP.sx, textP.sy - bgH + 2 + (tl + 1) * lineH);
-        }
-        });
+        drawTreasureChestLabel(ch, textP, fogAlpha, now);
       }
     }
 
     ctx.restore();
   }
+  addSceneClipStat('clipChest', clipMark);
+}
+
+// The floating loot text over an open chest (legacy and model paths): the
+// lines, their backdrop and text as one scene-depth billboard at textP.
+function drawTreasureChestLabel(ch, textP, fogAlpha, now) {
+  var fontSize = Math.max(8, Math.min(14, Math.floor(1800 / textP.fwd)));
+  var lineH = fontSize + 2;
+  var textLines = [];
+  var textColors = [];
+
+  if (ch.relicId && RELIC_DEFS[ch.relicId]) {
+    // Relic in epic chest
+    var rDef = RELIC_DEFS[ch.relicId];
+    textLines.push(rDef.name);
+    textColors.push(RARITY_COLORS.epic);
+    textLines.push(rDef.desc);
+    textColors.push('#ddbbff');
+    if (equipment.relic) {
+      textLines.push('Replaces: ' + equipment.relic.name);
+      textColors.push('#888877');
+      textLines.push('[E] Swap');
+    } else {
+      textLines.push('[E] Take');
+    }
+    textColors.push('#c040ff');
+  } else if (ch.equipId && EQUIPMENT_DEFS[ch.equipId]) {
+    // Equipment with quality
+    var eInst = createEquipInstance(ch.equipId, ch.quality || 1.0);
+    textLines.push(eInst.displayName);
+    textColors.push(RARITY_COLORS[eInst.rarity] || '#ffffff');
+    textLines.push(eInst.desc);
+    textColors.push('#ccccbb');
+    if (eInst.quality && Math.abs(eInst.quality - 1.0) > 0.04) {
+      textLines.push('Quality: ' + Math.round(eInst.quality * 100) + '%');
+      textColors.push(eInst.quality >= 1.0 ? '#80ff80' : '#ff8080');
+    }
+    var currentItem = equipment[eInst.slot];
+    if (currentItem && currentItem.id !== eInst.id) {
+      textLines.push('Replaces: ' + (currentItem.displayName || currentItem.name));
+      textColors.push('#888877');
+      var statDelta = getEquipStatDelta(eInst, currentItem);
+      if (statDelta) { textLines.push(statDelta.text); textColors.push(statDelta.color); }
+      textLines.push('[E] Swap');
+    } else {
+      textLines.push('[E] Take');
+    }
+    textColors.push('#ffd700');
+  } else {
+    textLines.push('+' + ch.gold + ' Gold');
+    textColors.push('#ffd700');
+    textLines.push('[E] Take');
+    textColors.push('#ffd700');
+  }
+
+  // Draw backdrop
+  ctx.globalAlpha = fogAlpha * 0.85;
+  var maxTxtW = 0;
+  ctx.font = 'bold ' + fontSize + 'px Arial';
+  for (var ti = 0; ti < textLines.length; ti++) {
+    var tw = ctx.measureText(textLines[ti]).width;
+    if (tw > maxTxtW) maxTxtW = tw;
+  }
+  var bgW = maxTxtW + 12, bgH = textLines.length * lineH + 6;
+  withSceneDepthBillboard({x:textP.sx-bgW/2,y:textP.sy-bgH+2,width:bgW,height:bgH+2}, textP.fwd, function () {
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(textP.sx - bgW / 2, textP.sy - bgH + 2, bgW, bgH);
+
+    // Draw text lines
+    ctx.textAlign = 'center';
+    for (var tl = 0; tl < textLines.length; tl++) {
+      var isAction = (textLines[tl].indexOf('[E]') >= 0);
+      var pulse = isAction ? (0.7 + 0.3 * Math.sin(now * 0.005)) : 1.0;
+      ctx.globalAlpha = fogAlpha * pulse;
+      ctx.fillStyle = textColors[tl];
+      ctx.font = (tl === 0 ? 'bold ' : '') + fontSize + 'px Arial';
+      ctx.fillText(textLines[tl], textP.sx, textP.sy - bgH + 2 + (tl + 1) * lineH);
+    }
+  });
+}
+
+// Treasure-chest models (chestModel, integration stage G). The range, fade
+// and the dist < 3 skip are the legacy ones (0.7 viewDist, fading over its
+// last 20%, CHEST_TIER_DEFS for the overlays); a chest is kept while any of
+// it can be ahead of the camera, since its faces are clipped at the near
+// plane. Opaque phase, near to far: the model at the range fade only (no
+// see-through fog: drawWorldModel applies colour fog), writing depth.
+// Overlay phase, far to near, at the legacy overlay alpha (see-through fog
+// times the fade): the glow halo centred on the 'glow' anchor but tested at
+// a depth behind the chest's horizontal reach (open lid included, plus the
+// depth bias), so the chest hides it as the legacy underlay did while
+// anything nearer still does; the open chest's
+// interior glow (the model's translucent mouth); the sparkle and loot label
+// at their anchors; the epic particles as before.
+var CHEST_MODEL_REACH = 12;    // horizontal reach of the parts (open lid 10.6) and particles (10.5 + size)
+var CHEST_HALO_BEHIND = 11;    // > hypot(7, 8) + 0.15: the halo's test depth lies behind the body and open lid
+var _chestModelEntries = [], _chestModelVisible = [], _chestAnchor = {x: 0, y: 0, z: 0};
+function _chestModelFarFirst(a, b) { return b.dist - a.dist; }
+function drawTreasureChestModels3D(phase) {
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var C = getCam3D(), now = gameTimeNow();
+  var maxDist = viewDist * 0.7, fadeStart = maxDist * 0.8, visible = _chestModelVisible;
+  visible.length = 0;
+  for (var i = 0; i < treasureChests.length; i++) {
+    var ch = treasureChests[i];
+    if (ch.collected) continue;
+    var dx = ch.x - cam.x, dy = ch.y - cam.y, dist = Math.hypot(dx, dy);
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng;
+    if (fwd < -CHEST_MODEL_REACH) continue;
+    var entry = _chestModelEntries[visible.length] ||
+      (_chestModelEntries[visible.length] = {ch: null, model: null, dist: 0, fwd: 0, fade: 1, floorZ: 0});
+    entry.ch = ch; entry.model = chestModelFor(ch.tier || 'common');
+    entry.dist = dist; entry.fwd = fwd; entry.floorZ = getEntityRenderFloorZ(ch);
+    entry.fade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    if (entry.model && entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_chestModelFarFirst);
+  for (var n = visible.length - 1; wantOpaque && n >= 0; n--) drawTreasureChestModelOpaque(visible[n], C);
+  for (var f = 0; wantOverlay && f < visible.length; f++) drawTreasureChestModelOverlay(visible[f], C, now);
+}
+
+function drawTreasureChestModelOpaque(entry, C) {
+  var inst = chestModelInstance(entry.ch, entry.floorZ);
+  var alpha = ctx.globalAlpha;
+  if (entry.fade < 1) ctx.globalAlpha = alpha * entry.fade;
+  drawWorldModel(inst, entry.model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+function drawTreasureChestModelOverlay(entry, C, now) {
+  var ch = entry.ch, model = entry.model, inst = chestModelInstance(ch, entry.floorZ);
+  var td = CHEST_TIER_DEFS[ch.tier || 'common'] || CHEST_TIER_DEFS.common;
+  var lid = inst.joints.lid / CHEST_LID_MAX;
+  var fogAlpha = Math.max(0.5, 1.0 - Math.max(1, entry.fwd) / viewDist * 0.4) * entry.fade;
+  ctx.save(); ctx.globalAlpha = fogAlpha;
+  var a = modelAnchorWorld(model, inst, 'glow', _chestAnchor), glowP = projToScreen(a.x, a.y, a.z, C);
+  if (glowP) {
+    var glowR = Math.max(14, Math.min(70, 20 * getScale3D('lgGlow') * projScale / glowP.fwd));
+    ctx.globalAlpha = fogAlpha * td.glowA;
+    ctx.fillStyle = td.glow;
+    withSceneDepthBillboard({x: glowP.sx - glowR, y: glowP.sy - glowR, width: glowR * 2, height: glowR * 2},
+      glowP.fwd + CHEST_HALO_BEHIND, function () {
+        ctx.beginPath(); ctx.arc(glowP.sx, glowP.sy, glowR, 0, Math.PI * 2); ctx.fill();
+      });
+  }
+  if (lid >= 0.05) {
+    ctx.globalAlpha = entry.fade * (0.4 + 0.2 * Math.sin(now * 0.004));
+    drawWorldModel(inst, model, C, 'overlay', null);
+  }
+  var shimmer = 0.5 + 0.5 * Math.sin(now * 0.005 + (ch.seed || 0) * 10);
+  a = modelAnchorWorld(model, inst, 'sparkle', _chestAnchor);
+  var sparkP = projToScreen(a.x, a.y, a.z, C);
+  if (sparkP) {
+    var sparkR = Math.max(1, Math.min(3, 2 * projScale / sparkP.fwd));
+    ctx.globalAlpha = fogAlpha * shimmer * 0.5;
+    ctx.fillStyle = td.spark;
+    withSceneDepthBillboard({x: sparkP.sx - sparkR, y: sparkP.sy - sparkR, width: sparkR * 2, height: sparkR * 2}, sparkP.fwd, function () {
+      ctx.beginPath(); ctx.arc(sparkP.sx, sparkP.sy, sparkR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (ch.tier === 'epic') {
+    ctx.globalAlpha = fogAlpha * 0.8;
+    for (var k = 0; k < 4; k++) {
+      var epAng = now * 0.003 + k * Math.PI * 0.5, epR = CHEST_MODEL_DIMS.hw * 1.5;
+      var epP = projToScreen(ch.x + Math.cos(epAng) * epR, ch.y + Math.sin(epAng) * epR,
+        entry.floorZ + CHEST_MODEL_DIMS.bodyH * 0.5 + Math.sin(now * 0.005 + k) * 4, C);
+      if (!epP) continue;
+      var epSz = Math.max(1.5, Math.min(4, 2.5 * projScale / epP.fwd));
+      withSceneDepthBillboard({x: epP.sx - epSz - 12, y: epP.sy - epSz - 12, width: epSz * 2 + 24, height: epSz * 2 + 24}, epP.fwd, function () {
+        ctx.fillStyle = td.glow;
+        ctx.shadowBlur = 6; ctx.shadowColor = td.glow;
+        ctx.beginPath(); ctx.arc(epP.sx, epP.sy, epSz, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+    ctx.shadowBlur = 0;
+  }
+  if (ch.opened && lid > 0.3) {
+    a = modelAnchorWorld(model, inst, 'label', _chestAnchor);
+    var textP = projToScreen(a.x, a.y, a.z, C);
+    if (textP && textP.fwd > 2) { ctx.globalAlpha = fogAlpha; drawTreasureChestLabel(ch, textP, fogAlpha, now); }
+  }
+  ctx.restore();
 }
 
 // Compare two equipment items and return a stat delta string
@@ -11065,7 +11762,19 @@ function getEquipStatDelta(newDef, oldDef) {
 }
 
 // Render enemy spawner obelisks as dark pulsing pillars with a red glow.
+// With spawnerModel on (stage H) the obelisk is a depth-writing model
+// (drawEnemySpawnerModels3D: body in 'opaque', eye, glow and HP bar in
+// 'overlay'). Otherwise, as drawFloorScatter3D, 'opaque' draws nothing and
+// 'overlay' or no argument draws the legacy obelisks.
 function drawEnemySpawners3D() {
+  var clipMark = sceneClipMark();
+  if (typeof renderFeatureOn === 'function' && renderFeatureOn('spawnerModel') &&
+      typeof spawnerModelFor === 'function' && spawnerModelFor()) {
+    drawEnemySpawnerModels3D(arguments[0]);
+    addSceneClipStat('clipSpawner', clipMark);
+    return;
+  }
+  if (arguments[0] === 'opaque') return;
   // Filter inactive spawners before passing to renderer
   var activeSpawners = [];
   if (enemySpawners) {
@@ -11073,6 +11782,13 @@ function drawEnemySpawners3D() {
       if (enemySpawners[i].active) activeSpawners.push(enemySpawners[i]);
     }
   }
+  drawLegacySpawnerBillboards(activeSpawners);
+  addSceneClipStat('clipSpawner', clipMark);
+}
+
+// The legacy obelisk billboards for a list of active spawners (also the
+// model path's fallback for a spawner whose obelisk the camera is in).
+function drawLegacySpawnerBillboards(activeSpawners) {
   renderEntities3D(activeSpawners, {maxDist: viewDist * 0.5, groundAnchor: true,
     bounds: function(sp, vis) {
       var size = Math.max(12, Math.min(120, Math.floor(40 * getScale3D('lgStructure') * projScale / vis.fwd)));
@@ -11124,10 +11840,132 @@ function drawEnemySpawners3D() {
     });
 }
 
+// Spawner obelisk models (spawnerModel, integration stage H). The range,
+// fade and dist < 3 skip are the legacy ones (0.5 viewDist, fading over its
+// last 20%); a spawner is kept while any of it can be ahead of the camera,
+// since its faces are clipped at the near plane. Opaque phase, near to far:
+// the model at the range fade only (drawWorldModel's colour fog replaces
+// the legacy see-through alpha), writing depth; its rune strips carry the
+// pulse as a tint. Overlay phase, far to near, at the legacy overlay alpha
+// and sizes: the glow, centred on the 'glow' anchor but tested behind the
+// deepest body point under it (spawnerBodyDepthRange; so the obelisk hides
+// it, as the legacy drew it first, while anything nearer still does); the
+// eye at the 'eye' anchor and the HP bar above the apex ('bar'), each
+// tested in front of the nearest body point under its own rect (or at its
+// anchor when that is nearer), so the body never hides its own eye or bar
+// but any nearer occluder does. A spawner whose obelisk the camera is in or
+// at (spawnerCameraInReach: the player can walk into a spawner) skips the
+// model and draws the legacy billboard in the overlay phase, as Legacy.
+var SPAWNER_MODEL_REACH = 25;       // hit-cylinder radius; every part lies within it
+var SPAWNER_GLOW_MARGIN = 0.4;      // glow test depth past the deepest body point under it (0.15 bias + 0.25)
+var SPAWNER_OVERLAY_BIAS = 0.25;    // eye/bar test depth before the nearest body point (0.1 rune + 0.15)
+var _spawnerModelEntries = [], _spawnerModelVisible = [], _spawnerAnchor = {x: 0, y: 0, z: 0};
+var _spawnerLegacyOne = [null], _spawnerDepthRange = {min: Infinity, max: -Infinity};
+function _spawnerModelFarFirst(a, b) { return b.dist - a.dist; }
+function spawnerPulse(sp, now) { return 0.7 + 0.3 * Math.sin(now * 0.004 + (sp.pulsePhase || 0)); }
+function drawEnemySpawnerModels3D(phase) {
+  if (!enemySpawners || !enemySpawners.length || !MODE3D) return;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var C = getCam3D(), now = gameTimeNow(), model = spawnerModelFor();
+  var maxDist = viewDist * 0.5, fadeStart = maxDist * 0.8, visible = _spawnerModelVisible;
+  visible.length = 0;
+  for (var i = 0; i < enemySpawners.length; i++) {
+    var sp = enemySpawners[i];
+    if (!sp.active) continue;
+    var dx = sp.x - cam.x, dy = sp.y - cam.y, dist = Math.max(1, Math.hypot(dx, dy));
+    if (!(dist <= maxDist) || dist < 3) continue;
+    var fwd = dx * C.cosAng + dy * C.sinAng;
+    if (fwd < -SPAWNER_MODEL_REACH) continue;
+    var floorZ = getEntityRenderFloorZ(sp);
+    if (!Number.isFinite(floorZ)) continue;
+    var entry = _spawnerModelEntries[visible.length] ||
+      (_spawnerModelEntries[visible.length] = {sp: null, dist: 0, fwd: 0, fade: 1, floorZ: 0, legacy: false});
+    entry.sp = sp; entry.dist = dist; entry.fwd = fwd; entry.floorZ = floorZ;
+    entry.legacy = typeof spawnerCameraInReach === 'function' && spawnerCameraInReach(spawnerModelInstance(sp, floorZ, 1), C);
+    entry.fade = dist > fadeStart ? Math.max(0, 1.0 - (dist - fadeStart) / (maxDist - fadeStart)) : 1;
+    if (entry.fade > 0) visible.push(entry);
+  }
+  visible.sort(_spawnerModelFarFirst);
+  for (var n = visible.length - 1; wantOpaque && n >= 0; n--) drawEnemySpawnerModelOpaque(visible[n], C, model, now);
+  for (var f = 0; wantOverlay && f < visible.length; f++) drawEnemySpawnerModelOverlay(visible[f], C, model, now);
+}
+
+function drawEnemySpawnerModelOpaque(entry, C, model, now) {
+  if (entry.legacy) return;   // the legacy billboard, in the overlay phase
+  var inst = spawnerModelInstance(entry.sp, entry.floorZ, spawnerPulse(entry.sp, now));
+  var alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * entry.fade;   // the range fade only (1 inside the range)
+  drawWorldModel(inst, model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+// Test depth for the eye or HP bar: before the nearest body point under its
+// rect, or its anchor's depth when that is nearer (the bar above the apex).
+function spawnerOverlayTestDepth(inst, C, bounds, anchorFwd) {
+  var nearest = typeof spawnerBodyDepthRange === 'function' ? spawnerBodyDepthRange(inst, C, bounds, _spawnerDepthRange).min :
+    anchorFwd - SPAWNER_MODEL_REACH;
+  return Math.max(1, Math.min(anchorFwd, nearest) - SPAWNER_OVERLAY_BIAS);
+}
+
+function drawEnemySpawnerModelOverlay(entry, C, model, now) {
+  if (entry.legacy) {
+    _spawnerLegacyOne[0] = entry.sp;
+    try { drawLegacySpawnerBillboards(_spawnerLegacyOne); } finally { _spawnerLegacyOne[0] = null; }
+    return;
+  }
+  var sp = entry.sp, pulse = spawnerPulse(sp, now), inst = spawnerModelInstance(sp, entry.floorZ, pulse);
+  var fwd = Math.max(1, entry.fwd);
+  var size = Math.max(12, Math.min(120, Math.floor(40 * getScale3D('lgStructure') * projScale / fwd)));
+  var fogAlpha = Math.max(0.4, 1.0 - fwd / (viewDist * 0.5) * 0.5) * entry.fade;
+  ctx.save(); ctx.globalAlpha = fogAlpha;
+  var a = modelAnchorWorld(model, inst, 'glow', _spawnerAnchor), glowP = projToScreen(a.x, a.y, a.z, C);
+  if (glowP) {
+    var glowR = size * 2 * pulse;
+    var glowGrad = ctx.createRadialGradient(glowP.sx, glowP.sy, size * 0.2, glowP.sx, glowP.sy, glowR);
+    glowGrad.addColorStop(0, 'rgba(200,40,40,' + (0.3 * pulse).toFixed(2) + ')');
+    glowGrad.addColorStop(1, 'rgba(200,40,40,0)');
+    var glowBounds = {x: glowP.sx - glowR, y: glowP.sy - glowR, width: glowR * 2, height: glowR * 2};
+    var deepest = typeof spawnerBodyDepthRange === 'function' ? spawnerBodyDepthRange(inst, C, glowBounds, _spawnerDepthRange).max : glowP.fwd + SPAWNER_MODEL_REACH;
+    withSceneDepthBillboard(glowBounds,
+      Math.max(glowP.fwd, deepest) + SPAWNER_GLOW_MARGIN, function () {
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(glowP.sx - glowR, glowP.sy - glowR, glowR * 2, glowR * 2);
+      });
+  }
+  a = modelAnchorWorld(model, inst, 'eye', _spawnerAnchor);
+  var eyeP = projToScreen(a.x, a.y, a.z, C);
+  if (eyeP) {
+    var eyeR = Math.max(1, 6 * pulse * projScale / eyeP.fwd);
+    var eyeBounds = {x: eyeP.sx - eyeR, y: eyeP.sy - eyeR, width: eyeR * 2, height: eyeR * 2};
+    withSceneDepthBillboard(eyeBounds, spawnerOverlayTestDepth(inst, C, eyeBounds, eyeP.fwd), function () {
+      ctx.fillStyle = 'rgba(255,60,60,' + (pulse * 0.9).toFixed(2) + ')';
+      ctx.beginPath(); ctx.arc(eyeP.sx, eyeP.sy, eyeR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (sp.hp < sp.maxHp) {
+    a = modelAnchorWorld(model, inst, 'bar', _spawnerAnchor);
+    var barP = projToScreen(a.x, a.y, a.z, C);
+    if (barP) {
+      var hpFrac = sp.hp / sp.maxHp, barW = size * 0.8, barH = Math.max(2, size * 0.08), barY = barP.sy - barH;
+      var barBounds = {x: barP.sx - barW * 0.5, y: barY, width: barW, height: barH};
+      withSceneDepthBillboard(barBounds, spawnerOverlayTestDepth(inst, C, barBounds, barP.fwd), function () {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(barP.sx - barW * 0.5, barY, barW, barH);
+        ctx.fillStyle = hpFrac > 0.5 ? '#44cc44' : hpFrac > 0.25 ? '#ccaa22' : '#cc2222';
+        ctx.fillRect(barP.sx - barW * 0.5, barY, barW * hpFrac, barH);
+      });
+    }
+  }
+  ctx.restore();
+}
+
 // Renders breakable ore vein overlays on cave walls.
 // Attach to the same real exposed face as wall decorations; read opaque scene
 // depth so neither mineral nor glow can shine through the cave roof.
+// Phase as drawFloorScatter3D: the veins are overlays, so 'opaque' draws
+// nothing; 'overlay' or no argument draws them.
 function drawOreVeins() {
+  if (arguments[0] === 'opaque') return;
   if (!oreVeins || !oreVeins.length || !MODE3D) return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
@@ -11136,12 +11974,19 @@ function drawOreVeins() {
 
   // Collect visible ore veins and sort far-to-near for correct painter's algorithm
   var visibleOres = [];
+  // Stage K (decorAnchorCache): entityVisible3D's distance and forward
+  // rejections first (the attachment point is the face point half a unit
+  // out), then terrain from the anchor cache.
+  var early = decorAnchorCacheOn(), anchorMap = early ? decorAnchorMap() : null;
+  var clipMark = sceneClipMark();
   for (var i = 0; i < oreVeins.length; i++) {
     var ore = oreVeins[i];
     var faceX = (ore.gx + (ore.side === 'west' ? 0 : ore.side === 'east' ? 1 : 0.5)) * cell;
     var faceY = (ore.gy + (ore.side === 'north' ? 0 : ore.side === 'south' ? 1 : 0.5)) * cell;
-    var attachment = getWallDecorationAttachment({gridX:ore.gx,gridY:ore.gy,
-      worldX:faceX,worldY:faceY,side:ore.side,type:'ore'});
+    if (early && !oreFaceInView(ore.side, faceX, faceY, C)) continue;
+    var oreFace = {gridX:ore.gx,gridY:ore.gy,
+      worldX:faceX,worldY:faceY,side:ore.side,type:'ore'};
+    var attachment = getWallDecorationAttachment(oreFace, early ? wallDecorationTerrain(oreFace, anchorMap, ore, 'Ore') : undefined);
     if (!attachment || (cam.x-attachment.x)*attachment.nx+(cam.y-attachment.y)*attachment.ny <= 0) continue;
     var vis = entityVisible3D(attachment.x, attachment.y, attachment.z, C,
       { maxDist: 280, sceneDepth: true, fadeFraction: 0.8 });
@@ -11224,10 +12069,76 @@ function drawOreVeins() {
     ctx.restore();
     }, {depthBias:1.5});
   }
+  addSceneClipStat('clipOre', clipMark);
 }
 
-function drawWallDecorations() {
+// Stage K: entityVisible3D's distance and forward rejections of an ore
+// face's attachment point (the face point half a unit out of its side),
+// from the record alone. drawOreVeins keeps every other test.
+function oreFaceInView(side, faceX, faceY, C) {
+  var nx = side === 'west' ? -1 : side === 'east' ? 1 : 0;
+  var ny = side === 'north' ? -1 : side === 'south' ? 1 : 0;
+  if (!nx && !ny) return false;
+  var x = faceX + nx * 0.5, y = faceY + ny * 0.5;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  var dx = x - cam.x, dy = y - cam.y, dist = Math.hypot(dx, dy);
+  if (dist < 1) dist = 1;
+  if (dist > 280) return false;
+  return dx * C.cosAng + dy * C.sinAng >= 1;
+}
+
+// Whether a wall prop hangs in a cave, for the model's cave shading: the
+// wall renderer's cell flags, or a cave ceiling above the attachment.
+function getWallDecorationInCave(dec, attachment) {
+  var ci = dec.gridY * gridW + dec.gridX;
+  if (typeof gridCave !== 'undefined' && gridCave && gridCave[ci]) return true;
+  if (typeof deepCaveRegions !== 'undefined' && deepCaveRegions && deepCaveRegions.length &&
+      typeof isInDeepCave === 'function' && isInDeepCave((dec.gridX + 0.5) * cell, (dec.gridY + 0.5) * cell)) return true;
+  if (!attachment || !floorMesh || typeof getCaveSpaceAt !== 'function') return false;
+  return getCaveSpaceAt(attachment.x, attachment.y, getFloorHeightAt(attachment.x, attachment.y)).underground === true;
+}
+
+// Stage K: whether drawWallDecorations' collection loop can keep dec, from
+// its record alone (no terrain): the attachment point is the record's point
+// half a unit out of its side, so its distance, the sprite's forward and
+// screen-column culls are the loop's own. The model's frustum test uses the
+// largest radius any attachment can give (size at most 32 x its tier scale),
+// so it rejects only what the loop would. The loop keeps every other test.
+var _wallInViewSize = {size: 0};
+function wallDecorationInView(dec, useModels, flameK, C) {
+  var nx = dec.side === 'west' ? -1 : dec.side === 'east' ? 1 : 0;
+  var ny = dec.side === 'north' ? -1 : dec.side === 'south' ? 1 : 0;
+  if (!nx && !ny) return false;
+  var dx = dec.worldX + nx * 0.5 - cam.x, dy = dec.worldY + ny * 0.5 - cam.y;
+  var dist = Math.hypot(dx, dy);
+  if (dist < 1 || dist > viewDist * 0.7) return false;
+  var fwd = dx * C.cosAng + dy * C.sinAng;
+  if (useModels) {
+    var type = canonicalWallDecorationType(dec.type);
+    var model = wallPropModelFor(type, getWallDecorationVariant(dec));
+    if (model) {
+      _wallInViewSize.size = 32 * getScale3D(WALL_DECOR_TIER[type] || 'smWall');
+      var r = wallPropCullRadius(model, _wallInViewSize, flameK) + 0.5, tanHalf = 1 / C.invTanHalf;
+      return !(fwd < -r || Math.abs(dx * (-C.sinAng) + dy * C.cosAng) - fwd * tanHalf > r * Math.sqrt(1 + tanHalf * tanHalf));
+    }
+  }
+  if (fwd < 1) return false;
+  var screenX = Math.floor(((dx * (-C.sinAng) + dy * C.cosAng) / fwd * C.invTanHalf * 0.5 + 0.5) * C.w);
+  return screenX >= -40 && screenX <= C.w + 40;
+}
+
+// phase 'opaque' draws the modelled wall props (wallPropModels) as
+// depth-writing world faces; 'overlay' draws their flame billboards and
+// every sprite-path decoration. Omitted, it draws both, opaque first, so a
+// nearer prop's parts hide a farther flame. Sprites stay in the overlay phase.
+// The model path has no renderX clamp and no flat quad: its frustum test uses
+// the prop's bounding circle and the parts are projected where they are.
+function drawWallDecorations(phase) {
   if (!wallDecorations || wallDecorations.length === 0) return;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  var useModels = typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels') &&
+    typeof wallPropModelFor === 'function';
+  if (!wantOverlay && !useModels) return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonYd = C.horizonY, cameraZd = C.cameraZ;
@@ -11238,9 +12149,16 @@ function drawWallDecorations() {
 
   // Collect visible decorations and sort far-to-near for correct painter's algorithm
   var visibleDecors = [];
+  // World half-width per unit size of a model's flame billboard (see wallPropCullRadius).
+  var flameK = useModels ? projScale / (0.5 * w * invTanHalf) : 1;
+  // Stage K (decorAnchorCache): the same distance and view rejections first,
+  // then terrain from the anchor cache. Off: the loop below, unchanged.
+  var early = decorAnchorCacheOn(), anchorMap = early ? decorAnchorMap() : null;
+  var clipMark = sceneClipMark();
   for (var i = 0; i < wallDecorations.length; i++) {
     var dec = wallDecorations[i];
-    var attachment = getWallDecorationAttachment(dec);
+    if (early && !wallDecorationInView(dec, useModels, flameK, C)) continue;
+    var attachment = getWallDecorationAttachment(dec, early ? wallDecorationTerrain(dec, anchorMap, dec, 'Decor') : undefined);
     if (!attachment) continue;
     var dx = attachment.x - cam.x;
     var dy = attachment.y - cam.y;
@@ -11249,6 +12167,20 @@ function drawWallDecorations() {
     var _dFade = dist > viewDist * 0.56 ? Math.max(0, 1.0 - (dist - viewDist * 0.56) / (viewDist * 0.14)) : 1.0;
 
     var fwd = dx * cosAng + dy * sinAng;
+    var propType = useModels ? canonicalWallDecorationType(dec.type) : '';
+    var propVariant = useModels ? getWallDecorationVariant(dec) : 0;
+    var propModel = useModels ? wallPropModelFor(propType, propVariant) : null;
+    if (propModel) {
+      var propR = wallPropCullRadius(propModel, attachment, flameK) + 0.5, tanHalf = 1 / invTanHalf;
+      var propRgt = dx * (-sinAng) + dy * cosAng;
+      if (fwd < -propR || Math.abs(propRgt) - fwd * tanHalf > propR * Math.sqrt(1 + tanHalf * tanHalf)) { culledCount++; continue; }
+      // As the sprite: not from behind the wall plane, not below half a pixel.
+      if ((cam.x - dec.worldX) * attachment.nx + (cam.y - dec.worldY) * attachment.ny <= 0) continue;
+      if (fwd >= 1 && attachment.size / fwd * projScale < 0.5) continue;
+      visibleDecors.push({dec: dec, attachment: attachment, dx: dx, dy: dy, dist: dist, fwd: fwd, screenX: 0, _dFade: _dFade, model: propModel,
+        type: propType, variant: propVariant});
+      continue;
+    }
     if (fwd < 1) { culledCount++; continue; }
     var rgt = dx * (-sinAng) + dy * cosAng;
     var screenX = Math.floor((rgt / fwd * invTanHalf * 0.5 + 0.5) * w);
@@ -11257,7 +12189,16 @@ function drawWallDecorations() {
     visibleDecors.push({dec: dec, attachment:attachment, dx: dx, dy: dy, dist: dist, fwd: fwd, screenX: screenX, _dFade: _dFade});
   }
   visibleDecors.sort(function(a, b) { return b.dist - a.dist; });
-  for (var di = 0; di < visibleDecors.length; di++) {
+  if (useModels && wantOpaque) {
+    for (var mi = 0; mi < visibleDecors.length; mi++) {
+      if (visibleDecors[mi].model && visibleDecors[mi]._dFade > 0) drawWallPropModelOpaque(visibleDecors[mi], C);
+    }
+  }
+  for (var di = 0; wantOverlay && di < visibleDecors.length; di++) {
+    if (visibleDecors[di].model) {
+      if (visibleDecors[di]._dFade > 0) drawWallPropModelOverlay(visibleDecors[di], C, now);
+      continue;
+    }
     var dec = visibleDecors[di].dec, dist = visibleDecors[di].dist, fwd = visibleDecors[di].fwd;
     var screenX = visibleDecors[di].screenX, _dFade = visibleDecors[di]._dFade;
     visibleCount++;
@@ -11291,10 +12232,87 @@ function drawWallDecorations() {
       drawWallAlignedDecoration(dec.type, renderX, decorY, size, dist, dec.side, viewAngle, _dFade, dec, now);
     }, {depthBias:1.5});
   }
+  addSceneClipStat('clipDecor', clipMark);
   if (shouldLog) {
     //console.log('[DECOR] Summary: ' + visibleCount + ' visible, ' + occludedCount + ' occluded, ' + culledCount + ' culled'); // TEMP DISABLED
     __decorDebugLast = debugNow;
   }
+}
+
+// Model path, opaque phase: the parts at the attachment frame, faded like
+// the sprite over the last 20% of its range (drawWorldModel restores alpha).
+function drawWallPropModelOpaque(entry, C) {
+  var inst = wallPropInstance(entry.attachment, getWallDecorationInCave(entry.dec, entry.attachment));
+  var alpha = ctx.globalAlpha;
+  if (entry._dFade < 1) ctx.globalAlpha = alpha * entry._dFade;
+  drawWorldModel(inst, entry.model, C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+
+// Model path, overlay phase: the sprite's flame recipe for the prop's type at
+// the model's 'flame' anchor, a billboard at the anchor's depth, full width
+// at every view angle (an emissive volume). The point light and glow stay at
+// attachment.x/y and flameZ. Per type: the recipe origin's offset below the
+// anchor (the sprite's shaft tip or bowl rim relation) and the billboard
+// rectangle around that origin, in units of s. Shields and banners have none.
+var WALL_PROP_FLAMES = {
+  torch: {dy: 0.01, left: 0.36, width: 0.72, top: 0.72, height: 0.84},
+  sconce: {dy: 0.06, left: 0.22, width: 0.44, top: 0.56, height: 0.62}
+};
+var _wallPropFlameAnchor = {x: 0, y: 0, z: 0};
+function drawWallPropModelOverlay(entry, C, now) {
+  var recipe = WALL_PROP_FLAMES[entry.type];
+  if (!recipe) return 0;
+  var inst = wallPropInstance(entry.attachment, false);
+  var anchor = modelAnchorWorld(entry.model, inst, 'flame', _wallPropFlameAnchor);
+  if (!anchor) return 0;
+  var ax = anchor.x - cam.x, ay = anchor.y - cam.y;
+  var depth = ax * C.cosAng + ay * C.sinAng;
+  if (depth < 1) return 0;
+  var sx = ((ax * (-C.sinAng) + ay * C.cosAng) / depth * C.invTanHalf * 0.5 + 0.5) * C.w;
+  var s = entry.attachment.size / depth * projScale;
+  var sy = C.horizonY + (C.cameraZ - anchor.z) / depth * projScale + s * recipe.dy;
+  var variant = entry.variant, fade = entry._dFade, sconce = entry.type === 'sconce';
+  var x0 = sx - s * recipe.left, y0 = sy - s * recipe.top, x1 = x0 + s * recipe.width, y1 = y0 + s * recipe.height;
+  var drawFlame = function() {
+    ctx.save();
+    if (sconce) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);
+    else drawWallTorchFlame(sx, sy, s, s, variant, now, fade);
+    ctx.restore();
+  };
+  var fold = wallPropFlameFold(inst, entry.attachment.nx, entry.attachment.ny, C, depth, x0, x1, y0, y1);
+  if (!fold) return withSceneDepthBillboard({x: x0, y: y0, width: s * recipe.width, height: s * recipe.height}, depth, drawFlame);
+  return withSceneDepthClip([{x: x0, y: y0, depth: depth}, {x: x1, y: y0, depth: depth},
+    {x: x1, y: y1, depth: depth}, {x: x0, y: y1, depth: depth}], drawFlame, {depthBias: 0.15, extraPolygons: [fold]});
+}
+
+// The flame is about 0.6 S wide but hangs only 2.2 out, so off the normal the
+// wall-side half of its anchor-depth billboard lies behind its own wall and
+// was clipped (to about 25-30% at 56-80 degrees). Where the plane
+// WALL_PROP_FLAME_FOLD_OUT in front of the wall (just proud of the 0.4
+// backplate; scaled with the prop) is nearer than the anchor, the flame's
+// depth test uses that plane instead: the flame folds onto its wall. Anything
+// standing further out of the wall still hides it; the far half keeps the
+// anchor depth. Returns the screen polygon (same rows as the billboard) with
+// the fold plane's depths, or null when the plane is nowhere nearer. A ray's
+// inverse depth to a vertical plane is linear in screen x, as the scene-depth
+// rasterizer interpolates it, so the polygon's depth is exact; the fold stops
+// where that plane reaches depth 1.
+var WALL_PROP_FLAME_FOLD_OUT = 0.5;
+function wallPropFlameFold(inst, nx, ny, C, depth, x0, x1, y0, y1) {
+  var c = (cam.x - inst.x) * nx + (cam.y - inst.y) * ny - WALL_PROP_FLAME_FOLD_OUT * inst.scale;
+  if (!(c > 0) || !(x1 > x0)) return null;
+  var fn = C.cosAng * nx + C.sinAng * ny, rn = -C.sinAng * nx + C.cosAng * ny;
+  // right/depth at screen x is (2x/w - 1)/invTanHalf; inverse depth = a + b x.
+  var b = -rn * 2 / (C.w * C.invTanHalf * c), a = -(fn - rn / C.invTanHalf) / c;
+  if (!(Math.abs(b) > 1e-12)) return null;
+  var xs = (1 / depth - a) / b, xc = (1 - a) / b;
+  var lo = b > 0 ? Math.max(x0, xs) : Math.max(x0, xc), hi = b > 0 ? Math.min(x1, xc) : Math.min(x1, xs);
+  if (!(hi > lo)) return null;
+  var dLo = 1 / (a + b * lo), dHi = 1 / (a + b * hi);
+  if (!(dLo > 0 && dHi > 0 && Number.isFinite(dLo) && Number.isFinite(dHi))) return null;
+  dLo = Math.max(1, dLo); dHi = Math.max(1, dHi);   // rounding at the depth-1 end
+  return [{x: lo, y: y0, depth: dLo}, {x: hi, y: y0, depth: dHi}, {x: hi, y: y1, depth: dHi}, {x: lo, y: y1, depth: dLo}];
 }
 // Canvas2D artwork pilot. Only appearance is cached: projection, support,
 // ordering and the caller's scene-depth clip still run for every visible prop.
@@ -14336,6 +15354,4289 @@ function projectSceneWorldPolygon(vertices, C) {
   }
   return projected;
 }
+// Canvas texture mapper (TexturePilot), shipped in MAIN and also injected into
+// the texture/structure studies. Inert at load. UV units are tile repeats.
+// The scene owns lighting, culling and the production opaque depth/pixel mask.
+var TexturePilot = (function () {
+  var patternCaches = new WeakMap();
+  var preparedMaterials = new WeakMap();
+
+  // Periodic, centered box integration sampled at an explicitly chosen spatial
+  // density. Ordinary nonoverlapping mip texels lose the position of a narrow
+  // feature within a large box. Four samples per filter footprint preserve that
+  // phase much better without adding render-time samples. Each level is made
+  // directly from the original image, not a chain of already rounded averages.
+  function prefilterMipPixels(pixels, size, footprint, outputSize) {
+    if (!Number.isInteger(size) || size < 1 || size > 128 || (size & (size - 1)) ||
+        !Number.isInteger(footprint) || footprint < 1 || footprint > size || (footprint & (footprint - 1)) ||
+        !Number.isInteger(outputSize) || outputSize < 1 || outputSize > 128 || (outputSize & (outputSize - 1)) ||
+        !pixels || pixels.length !== size * size * 4) throw new RangeError('Invalid centered mip source');
+    for (var channel = 0; channel < pixels.length; channel++) {
+      if (!Number.isInteger(pixels[channel]) || pixels[channel] < 0 || pixels[channel] > 255) throw new RangeError('Invalid centered mip channel');
+    }
+    var weights = [];
+    for (var coordinate = 0; coordinate < outputSize; coordinate++) {
+      var center = (coordinate + 0.5) * size / outputSize;
+      var start = center - footprint * 0.5, end = center + footprint * 0.5, taps = [];
+      for (var sample = Math.floor(start); sample < Math.ceil(end); sample++) {
+        var weight = Math.min(end, sample + 1) - Math.max(start, sample);
+        if (weight > 0) taps.push({index: ((sample % size) + size) % size, weight: weight});
+      }
+      weights.push(taps);
+    }
+    // Separable exact area integration. Keep intermediate sums unrounded so
+    // the result does not acquire a directional bias or repeated quantization.
+    var horizontal = new Float64Array(size * outputSize * 4);
+    for (var y = 0; y < size; y++) for (var x = 0; x < outputSize; x++) {
+      var target = (y * outputSize + x) * 4, rowWeights = weights[x];
+      for (var tap = 0; tap < rowWeights.length; tap++) {
+        var source = (y * size + rowWeights[tap].index) * 4, scale = rowWeights[tap].weight;
+        for (var c = 0; c < 4; c++) horizontal[target + c] += pixels[source + c] * scale;
+      }
+    }
+    var output = new Uint8ClampedArray(outputSize * outputSize * 4), area = footprint * footprint;
+    for (var oy = 0; oy < outputSize; oy++) for (var ox = 0; ox < outputSize; ox++) {
+      var out = (oy * outputSize + ox) * 4, columnWeights = weights[oy];
+      for (var color = 0; color < 4; color++) {
+        var sum = 0;
+        for (var row = 0; row < columnWeights.length; row++) {
+          sum += horizontal[(columnWeights[row].index * outputSize + ox) * 4 + color] * columnWeights[row].weight;
+        }
+        output[out + color] = Math.round(sum / area);
+      }
+    }
+    return {data: output, width: outputSize, height: outputSize};
+  }
+
+  // Materials become immutable assets after preparation: do not redraw their
+  // source canvas. Metadata/level descriptors are frozen and shared by every
+  // instance. Explicit preparation keeps generation off the rendering path.
+  function prepareMaterial(material) {
+    if (!material || !material.source || typeof material.source.getContext !== 'function' ||
+        !Number.isInteger(material.size) || material.size < 1 || material.size > 128 ||
+        (material.size & (material.size - 1)) || material.source.width !== material.size || material.source.height !== material.size) {
+      throw new RangeError('Material must be a square power-of-two canvas of at most 128 pixels');
+    }
+    var prior = preparedMaterials.get(material);
+    if (prior) {
+      if (prior.levels[0].source !== material.source || prior.levels[0].size !== material.size) throw new RangeError('Prepared material identity changed');
+      return prior;
+    }
+    var size = material.size, sourcePixels = material.source.getContext('2d').getImageData(0, 0, size, size).data;
+    if (sourcePixels.length !== size * size * 4) throw new RangeError('Incomplete material pixels');
+    for (var alpha = 3; alpha < sourcePixels.length; alpha += 4) {
+      if (sourcePixels[alpha] !== 255) throw new RangeError('Texture pilot requires opaque material sources');
+    }
+    var levels = [Object.freeze({source: material.source, size: size, footprint: 1, color: material.color})];
+    var baseBytes = size * size * 4, bytes = baseBytes;
+    for (var footprint = 2; footprint <= size; footprint *= 2) {
+      // A full-period footprint is exactly the constant tile mean, so store it
+      // as one texel. Other levels keep four texels per filter footprint, up to
+      // the same bounded128 grid for either source resolution. A64px source's
+      // first filtered level needs128 phase samples; limiting it to64 causes
+      // visible moving-edge error despite using the correct footprint width.
+      var outputSize = footprint === size ? 1 : Math.min(128, size * 4 / footprint);
+      var filtered = prefilterMipPixels(sourcePixels, size, footprint, outputSize);
+      var canvas = document.createElement('canvas'); canvas.width = canvas.height = outputSize;
+      var context = canvas.getContext('2d'), image = context.createImageData(outputSize, outputSize);
+      image.data.set(filtered.data); context.putImageData(image, 0, 0);
+      levels.push(Object.freeze({source: canvas, size: outputSize, footprint: footprint, color: material.color}));
+      bytes += outputSize * outputSize * 4;
+    }
+    var planarLevels=levels, planarSize=size;
+    if (size===64) {
+      // The optional planar sampler needs sub-source-texel footprints too.
+      // Nearest expansion preserves the64px artwork's exact piecewise-constant
+      // signal; it invents no image detail. Its virtual128 chain adds only two
+      // images, then shares every existing coarser level by object identity.
+      // Triangle and explicit isotropic/legacy paths retain the original base.
+      var expanded=new Uint8ClampedArray(128*128*4);
+      for (var ey=0;ey<128;ey++) for (var ex=0;ex<128;ex++) {
+        var from=((ey>>1)*size+(ex>>1))*4, to=(ey*128+ex)*4;
+        for (var ec=0;ec<4;ec++) expanded[to+ec]=sourcePixels[from+ec];
+      }
+      var planarPixels=[expanded,prefilterMipPixels(sourcePixels,size,1,128).data], added=[];
+      for (var extra=0;extra<planarPixels.length;extra++) {
+        var extraCanvas=document.createElement('canvas'); extraCanvas.width=extraCanvas.height=128;
+        var extraContext=extraCanvas.getContext('2d'), extraImage=extraContext.createImageData(128,128);
+        extraImage.data.set(planarPixels[extra]); extraContext.putImageData(extraImage,0,0);
+        added.push(Object.freeze({source:extraCanvas,size:128,footprint:extra?1:0.5,color:material.color}));
+        bytes+=128*128*4;
+      }
+      planarLevels=added.concat(levels.slice(1)); planarSize=128;
+    }
+    var prepared = Object.freeze({levels: Object.freeze(levels), planarLevels:Object.freeze(planarLevels),
+      planarSize:planarSize, oversampling: 4, baseBytes: baseBytes, mipBytes: bytes - baseBytes, bytes: bytes});
+    preparedMaterials.set(material, prepared);
+    return prepared;
+  }
+
+  // Source-texel -> screen-pixel affine Jacobian. Its inverse's largest singular
+  // value is the widest source footprint of one screen pixel, including skew
+  // and grazing angles. Distance alone cannot supply this information.
+  function footprintLOD(m11, m12, m21, m22, maxLevel) {
+    if (![m11, m12, m21, m22].every(Number.isFinite) || !Number.isInteger(maxLevel) || maxLevel < 0 || maxLevel > 7) return null;
+    var determinant = m11 * m22 - m12 * m21;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) return null;
+    var a = m22 / determinant, b = -m12 / determinant, c = -m21 / determinant, d = m11 / determinant;
+    var first = a * a + b * b, second = c * c + d * d, cross = a * c + b * d;
+    var footprint = Math.sqrt((first + second + Math.hypot(first - second, 2 * cross)) * 0.5);
+    if (!Number.isFinite(footprint) || footprint <= 0) return null;
+    var lod = Math.max(0, Math.min(maxLevel, Math.log2(footprint)));
+    var lower = Math.floor(lod), upper = Math.ceil(lod);
+    return {footprint: footprint, lod: lod, lower: lower, upper: upper,
+      blend: upper === lower ? 0 : lod - lower, minifying: footprint > 1};
+  }
+
+  // Bounded two-tap anisotropic approximation of one screen pixel's source
+  // footprint. Derivatives are in tile repeats/pixel; offsets are ORIGINAL
+  // source pixels, independent of the physical size of a prepared mip canvas.
+  // Endpoint extrema bound the span. The center supplies a stable orientation;
+  // fade the offset to zero as its covariance becomes isotropic, where no
+  // major-axis direction is well-defined. No new bitmaps or readbacks are used.
+  function planarFootprint(center, left, right, size, maxLevel) {
+    if (!Number.isFinite(size) || size <= 0 || !Number.isInteger(maxLevel) || maxLevel < 0 || maxLevel > 7) return null;
+    function ellipse(value) {
+      if (!value || ![value.ux,value.uy,value.vx,value.vy].every(Number.isFinite)) return null;
+      var a=value.ux*size, b=value.uy*size, c=value.vx*size, d=value.vy*size;
+      var first=a*a+b*b, second=c*c+d*d, cross=a*c+b*d;
+      var major=Math.sqrt((first+second+Math.hypot(first-second,2*cross))*0.5);
+      var minor=Math.abs(a*d-b*c)/major;
+      if (!(Number.isFinite(major) && major>0 && Number.isFinite(minor) && minor>0)) return null;
+      return {major:major,minor:minor,angle:Math.atan2(2*cross,first-second)*0.5};
+    }
+    var mid=ellipse(center), lo=ellipse(left), hi=ellipse(right);
+    if (!mid || !lo || !hi) return null;
+    var major=Math.max(lo.major,hi.major), minor=Math.max(lo.minor,hi.minor);
+    var footprintWidth=Math.max(1,minor,major*0.5,major*mid.minor/mid.major);
+    var offset=Math.sqrt(Math.max(0,major*major-footprintWidth*footprintWidth)/12);
+    var lod=Math.max(0,Math.min(maxLevel,Math.log2(footprintWidth)));
+    var lower=Math.floor(lod), upper=Math.ceil(lod);
+    // The last level is the constant whole-tile mean: displaced copies would
+    // be identical, so retain the single pair of mip passes at that endpoint.
+    if (lower===maxLevel || major<=1) offset=0;
+    return {footprint:major,minor:minor,width:footprintWidth,lod:lod,lower:lower,upper:upper,
+      blend:upper===lower?0:lod-lower,minifying:major>1,taps:offset>1e-10?2:1,
+      offsetU:Math.cos(mid.angle)*offset,offsetV:Math.sin(mid.angle)*offset};
+  }
+
+  function finiteVertex(p) {
+    return !!p && Number.isFinite(p.x) && Number.isFinite(p.y) &&
+      Number.isFinite(p.depth) && p.depth > 0 && Number.isFinite(p.u) && Number.isFinite(p.v);
+  }
+
+  // Match projectSceneWorldPolygon exactly, but retain UVs at near-plane cuts.
+  // World-space UV interpolation must happen before the perspective division.
+  function clipNear(vertices, camera, C, projScale) {
+    if (!Array.isArray(vertices) || vertices.length < 3 || vertices.length > 64 ||
+        !camera || !Number.isFinite(camera.x) || !Number.isFinite(camera.y) || !C ||
+        ![C.cosAng, C.sinAng, C.invTanHalf, C.w, C.h, C.horizonY, C.cameraZ, projScale].every(Number.isFinite) ||
+        C.w <= 0 || C.h <= 0 || C.invTanHalf <= 0 || projScale <= 0) return [];
+    var nearDepth = 1;
+    var input = [], output = [], result = [];
+    for (var i = 0; i < vertices.length; i++) {
+      var p = vertices[i];
+      if (!p || ![p.x, p.y, p.z, p.u, p.v].every(Number.isFinite)) return [];
+      var dx = p.x - camera.x, dy = p.y - camera.y;
+      var depth = dx * C.cosAng + dy * C.sinAng;
+      var right = -dx * C.sinAng + dy * C.cosAng;
+      if (!Number.isFinite(depth) || !Number.isFinite(right)) return [];
+      input.push({depth: depth, right: right, z: p.z, u: p.u, v: p.v});
+    }
+    var previous = input[input.length - 1];
+    for (var j = 0; j < input.length; j++) {
+      var current = input[j];
+      if ((previous.depth >= nearDepth) !== (current.depth >= nearDepth)) {
+        var t = (nearDepth - previous.depth) / (current.depth - previous.depth);
+        output.push({depth: nearDepth,
+          right: previous.right + t * (current.right - previous.right),
+          z: previous.z + t * (current.z - previous.z),
+          u: previous.u + t * (current.u - previous.u),
+          v: previous.v + t * (current.v - previous.v)});
+      }
+      if (current.depth >= nearDepth) output.push(current);
+      previous = current;
+    }
+    for (var k = 0; k < output.length; k++) {
+      var q = output[k];
+      var projected = {x: (q.right / q.depth * C.invTanHalf * 0.5 + 0.5) * C.w,
+        y: C.horizonY + (C.cameraZ - q.z) / q.depth * projScale,
+        depth: q.depth, u: q.u, v: q.v};
+      if (!finiteVertex(projected)) return [];
+      result.push(projected);
+    }
+    return result;
+  }
+
+  // Analytic perspective-correct sample. The same formula also describes why
+  // Canvas affine images need subdivision on receding surfaces.
+  function perspectiveUV(a, b, c, x, y) {
+    if (!finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c) ||
+        !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (!Number.isFinite(area) || Math.abs(area) < 1e-12) return null;
+    var wb = ((x - a.x) * (c.y - a.y) - (y - a.y) * (c.x - a.x)) / area;
+    var wc = ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)) / area;
+    var wa = 1 - wb - wc;
+    var inverse = wa / a.depth + wb / b.depth + wc / c.depth;
+    if (!Number.isFinite(inverse) || inverse <= 0) return null;
+    var u = (wa * a.u / a.depth + wb * b.u / b.depth + wc * c.u / c.depth) / inverse;
+    var v = (wa * a.v / a.depth + wb * b.v / b.depth + wc * c.v / c.depth) / inverse;
+    return Number.isFinite(u) && Number.isFinite(v) ? {u: u, v: v, depth: 1 / inverse} : null;
+  }
+
+  // Screen-space clipping/subdivision must interpolate reciprocal depth and
+  // UV/depth, NOT raw UV. This keeps new vertices on the original 3D surface.
+  function interpolateScreen(a, b, t) {
+    var denominator = (1 - t) / a.depth + t / b.depth;
+    return {x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y), depth: 1 / denominator,
+      u: ((1 - t) * a.u / a.depth + t * b.u / b.depth) / denominator,
+      v: ((1 - t) * a.v / a.depth + t * b.v / b.depth) / denominator};
+  }
+
+  function clipViewport(vertices, width, height) {
+    var result = vertices.slice();
+    var axes = ['x', 'x', 'y', 'y'], bounds = [0, width, 0, height];
+    for (var edge = 0; edge < 4 && result.length; edge++) {
+      var input = result; result = [];
+      var axis = axes[edge], bound = bounds[edge], lower = edge % 2 === 0;
+      var a = input[input.length - 1], aInside = lower ? a[axis] >= bound : a[axis] <= bound;
+      for (var i = 0; i < input.length; i++) {
+        var b = input[i], bInside = lower ? b[axis] >= bound : b[axis] <= bound;
+        if (aInside !== bInside) {
+          var p = interpolateScreen(a, b, (bound - a[axis]) / (b[axis] - a[axis]));
+          p[axis] = bound;
+          result.push(p);
+        }
+        if (bInside) result.push(b);
+        a = b; aInside = bInside;
+      }
+    }
+    return result;
+  }
+
+  // Isosceles triangles on walls and floors often have two exactly tied edge
+  // errors. A strict comparison lets floating-point noise pick a different
+  // split edge each frame, re-meshing the face and making the texture jump
+  // (measured: 12 -> 16 of 20 structure motion cases at the same cost). Split
+  // the lowest-index edge within SPLIT_TIE of the largest error instead; edge
+  // indices are structural, not camera-driven.
+  var SPLIT_TIE = 0.02;
+  function makeNode(a, b, c, level, boundary) {
+    var du1 = b.u - a.u, dv1 = b.v - a.v, du2 = c.u - a.u, dv2 = c.v - a.v;
+    var determinant = du1 * dv2 - dv1 * du2;
+    var node = {a: a, b: b, c: c, level: level, edge: 0, error: 0, children: null,
+      boundary: boundary || [false, false, false]};
+    if (Math.abs(determinant) < 1e-12) return node;
+    // UV -> screen Jacobian turns mapping error into approximate screen pixels.
+    var xu = ((b.x - a.x) * dv2 - (c.x - a.x) * dv1) / determinant;
+    var xv = ((c.x - a.x) * du1 - (b.x - a.x) * du2) / determinant;
+    var yu = ((b.y - a.y) * dv2 - (c.y - a.y) * dv1) / determinant;
+    var yv = ((c.y - a.y) * du1 - (b.y - a.y) * du2) / determinant;
+    var vertices = [a, b, c], errors = [0, 0, 0];
+    for (var i = 0; i < 3; i++) {
+      var p = vertices[i], q = vertices[(i + 1) % 3];
+      var inv = 1 / p.depth + 1 / q.depth;
+      var u = (p.u / p.depth + q.u / q.depth) / inv - (p.u + q.u) * 0.5;
+      var v = (p.v / p.depth + q.v / q.depth) / inv - (p.v + q.v) * 0.5;
+      errors[i] = Math.hypot(xu * u + xv * v, yu * u + yv * v);
+      if (errors[i] > node.error) node.error = errors[i];
+    }
+    for (var k = 0; k < 3; k++) if (errors[k] >= node.error * (1 - SPLIT_TIE)) { node.edge = k; break; }
+    return node;
+  }
+
+  function heapPush(heap, node) {
+    var i = heap.length; heap.push(node);
+    while (i) {
+      var parent = (i - 1) >> 1;
+      if (heap[parent].error >= node.error) break;
+      heap[i] = heap[parent]; i = parent;
+    }
+    heap[i] = node;
+  }
+  function heapPop(heap) {
+    var root = heap[0], last = heap.pop();
+    if (!heap.length) return root;
+    var i = 0;
+    while (i * 2 + 1 < heap.length) {
+      var child = i * 2 + 1;
+      if (child + 1 < heap.length && heap[child + 1].error > heap[child].error) child++;
+      if (heap[child].error <= last.error) break;
+      heap[i] = heap[child]; i = child;
+    }
+    heap[i] = last;
+    return root;
+  }
+
+  // Convex polygons only. Clip to viewport BEFORE refinement so huge projected
+  // near-plane coordinates cannot consume the whole budget off-screen. Every
+  // split replaces one leaf with two; budgets never discard part of a face.
+  // emit(a,b,c,boundary) receives projected vertices plus [ab,bc,ca] flags for
+  // edges on the face outline, which an owner-masked caller may extend.
+  // Viewport cuts are not flagged: no pixel beyond the canvas is owned.
+  // Stats report quality fallback.
+  function tessellate(polygon, options, emit) {
+    options = options || {};
+    var stats = {triangles: 0, splits: 0, capped: false, clippedVertices: 0, rejected: false};
+    var width = options.width, height = options.height;
+    var maxTriangles = options.maxTriangles === undefined ? 256 : options.maxTriangles;
+    var maxDepth = options.maxDepth === undefined ? 6 : options.maxDepth;
+    var errorPixels = options.errorPixels === undefined ? 0.6 : options.errorPixels;
+    if (!Array.isArray(polygon) || polygon.length < 3 || polygon.length > 128 ||
+        !polygon.every(finiteVertex) || typeof emit !== 'function' ||
+        !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 ||
+        !Number.isInteger(maxTriangles) || maxTriangles < 1 || maxTriangles > 4096 ||
+        !Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > 12 ||
+        !Number.isFinite(errorPixels) || errorPixels <= 0) {
+      stats.rejected = true; return stats;
+    }
+    var clipped = clipViewport(polygon, width, height);
+    stats.clippedVertices = clipped.length;
+    if (clipped.length < 3) return stats;
+    if (!clipped.every(finiteVertex)) { stats.rejected = true; return stats; }
+    var roots = [], heap = [], fan = [];
+    for (var i = 1; i + 1 < clipped.length; i++) {
+      var a = clipped[0], b = clipped[i], c = clipped[i + 1];
+      var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      if (Math.abs(area) >= 1e-8) fan.push(i);
+    }
+    // clipViewport sets cut coordinates exactly to the bound, and split
+    // midpoints of such an edge keep it, so exact comparison is safe.
+    function outline(p, q) {
+      return !((p.x === 0 && q.x === 0) || (p.x === width && q.x === width) ||
+        (p.y === 0 && q.y === 0) || (p.y === height && q.y === height));
+    }
+    for (var f = 0; f < fan.length; f++) {
+      var a = clipped[0], b = clipped[fan[f]], c = clipped[fan[f] + 1];
+      // Fan roots: bc is always an outline edge; ab only for the first KEPT
+      // root and ca only for the last, so a skipped degenerate end root cannot
+      // hide its collinear outline edge. The other fan diagonals are interior.
+      var node = makeNode(a, b, c, 0, [f === 0 && outline(a, b), outline(b, c), f === fan.length - 1 && outline(c, a)]);
+      roots.push(node); heapPush(heap, node);
+    }
+    // A too-small caller budget cannot even represent this polygon. Reject the
+    // whole face so the caller's opaque fallback remains complete and honest.
+    if (roots.length > maxTriangles) { stats.rejected = true; stats.capped = true; return stats; }
+    var leafCount = roots.length;
+    while (heap.length) {
+      var candidate = heapPop(heap);
+      if (candidate.error <= errorPixels) break;
+      if (candidate.level >= maxDepth) { stats.capped = true; continue; }
+      if (leafCount >= maxTriangles) { stats.capped = true; break; }
+      var corners = [candidate.a, candidate.b, candidate.c], edge = candidate.edge;
+      var p = corners[edge], q = corners[(edge + 1) % 3], r = corners[(edge + 2) % 3];
+      var midpoint = interpolateScreen(p, q, 0.5), flags = candidate.boundary;
+      // Both halves of a split outline edge stay outline edges; the new
+      // midpoint-to-r edge is interior. r->p is the parent's edge (edge + 2).
+      var left = makeNode(p, midpoint, r, candidate.level + 1, [flags[edge], false, flags[(edge + 2) % 3]]);
+      var right = makeNode(midpoint, q, r, candidate.level + 1, [flags[edge], flags[(edge + 1) % 3], false]);
+      candidate.children = [left, right];
+      heapPush(heap, left); heapPush(heap, right);
+      leafCount++; stats.splits++;
+    }
+    var stack = roots.slice();
+    while (stack.length) {
+      var leaf = stack.pop();
+      if (leaf.children) { stack.push(leaf.children[1], leaf.children[0]); continue; }
+      emit(leaf.a, leaf.b, leaf.c, leaf.boundary.slice()); stats.triangles++;
+    }
+    return stats;
+  }
+
+  // Offset triangle clip edges by a fraction of a screen pixel. The scene must
+  // supply an outer exact face/depth mask and opaque base-color fill. This
+  // overlap removes internal Canvas AA cracks without leaking beyond a face.
+  function expandTriangle(a, b, c) {
+    var points = [a, b, c], result = [];
+    var sign = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0 ? 1 : -1;
+    for (var i = 0; i < 3; i++) {
+      var prev = points[(i + 2) % 3], p = points[i], next = points[(i + 1) % 3];
+      var dx1 = p.x - prev.x, dy1 = p.y - prev.y, dx2 = next.x - p.x, dy2 = next.y - p.y;
+      var len1 = Math.hypot(dx1, dy1), len2 = Math.hypot(dx2, dy2);
+      if (len1 < 1e-9 || len2 < 1e-9) return null;
+      var nx1 = sign * dy1 / len1, ny1 = -sign * dx1 / len1;
+      var nx2 = sign * dy2 / len2, ny2 = -sign * dx2 / len2;
+      var scale = 0.7 / Math.max(0.01, 1 + nx1 * nx2 + ny1 * ny2);
+      var ox = (nx1 + nx2) * scale, oy = (ny1 + ny2) * scale;
+      var length = Math.hypot(ox, oy);
+      if (length > 3) { ox *= 3 / length; oy *= 3 / length; }
+      result.push({x: p.x + ox, y: p.y + oy});
+    }
+    return result;
+  }
+
+  // Owner-masked clip. The caller has already clipped to the face's exact
+  // integer depth mask, so a pixel whose center lies in the face is painted
+  // with its whole area; the texture must cover that whole pixel too. An
+  // antialiased clip on the true outline leaves part of such a pixel bare and
+  // exposes the base color as a pulsing seam. expandTriangle's 0.7 px overlap
+  // is also unreliable there: its miter cap pulls an outline edge of a long
+  // thin triangle to ~0.2 px. So the clip keeps expandTriangle unchanged for
+  // the interior (identical overlap between sibling triangles) and adds an
+  // outward skirt on each outline edge: a quad from the edge to
+  // OWNED_SKIRT_OUT px outside it, lengthened by OWNED_SKIRT_ALONG px at both
+  // ends. Skirts lie entirely outside the face, so they only reach owned
+  // outline pixels (the mask trims everything else) and never change interior
+  // pixels. They share the triangle's winding, so the nonzero clip is a union.
+  // Returns {points, polygons}, or null for a degenerate triangle.
+  var OWNED_SKIRT_OUT = 2, OWNED_SKIRT_ALONG = 2;
+  function ownedClip(a, b, c, boundary) {
+    var triangle = expandTriangle(a, b, c);
+    if (!triangle) return null;
+    var polygons = [triangle], points = triangle.slice(), corners = [a, b, c];
+    var sign = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0 ? 1 : -1;
+    for (var i = 0; i < 3; i++) {
+      if (!boundary || !boundary[i]) continue;
+      var p = corners[i], q = corners[(i + 1) % 3], dx = q.x - p.x, dy = q.y - p.y, length = Math.hypot(dx, dy);
+      if (!(length > 1e-9)) continue;
+      var ex = dx / length, ey = dy / length, nx = sign * dy / length, ny = -sign * dx / length;
+      var head = {x: q.x + ex * OWNED_SKIRT_ALONG, y: q.y + ey * OWNED_SKIRT_ALONG};
+      var tail = {x: p.x - ex * OWNED_SKIRT_ALONG, y: p.y - ey * OWNED_SKIRT_ALONG};
+      // Traverse q->p along the shared edge: the same rotation as the triangle.
+      var skirt = [head, tail, {x: tail.x + nx * OWNED_SKIRT_OUT, y: tail.y + ny * OWNED_SKIRT_OUT},
+        {x: head.x + nx * OWNED_SKIRT_OUT, y: head.y + ny * OWNED_SKIRT_OUT}];
+      polygons.push(skirt); points = points.concat(skirt);
+    }
+    return {points: points, polygons: polygons};
+  }
+
+  // Kept intact for the native broken-filter negative control. Also supplies
+  // each single-level affine pass for the stable material sampler below.
+  // clip.ownedPixels selects ownedClip for callers that supply the face mask.
+  function drawTriangleLegacy(ctx, a, b, c, material, clip) {
+    if (!ctx || !finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c) || !material ||
+        !material.source || !Number.isFinite(material.size) || material.size <= 0) return false;
+    var size = material.size;
+    var sx = a.u * size, sy = a.v * size;
+    var du1 = (b.u - a.u) * size, dv1 = (b.v - a.v) * size;
+    var du2 = (c.u - a.u) * size, dv2 = (c.v - a.v) * size;
+    var determinant = du1 * dv2 - dv1 * du2;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-10) return false;
+    var m11 = ((b.x - a.x) * dv2 - (c.x - a.x) * dv1) / determinant;
+    var m21 = ((c.x - a.x) * du1 - (b.x - a.x) * du2) / determinant;
+    var m12 = ((b.y - a.y) * dv2 - (c.y - a.y) * dv1) / determinant;
+    var m22 = ((c.y - a.y) * du1 - (b.y - a.y) * du2) / determinant;
+    var dx = a.x - m11 * sx - m21 * sy, dy = a.y - m12 * sx - m22 * sy;
+    var screenDet = m11 * m22 - m12 * m21;
+    if (![m11, m21, m12, m22, dx, dy, screenDet].every(Number.isFinite) || Math.abs(screenDet) < 1e-12) return false;
+    var owned = clip && clip.ownedPixels ? (clip.shapes || ownedClip(a, b, c, clip.boundary)) : null;
+    var expanded = owned ? owned.points : clip && clip.ownedPixels ? null : expandTriangle(a, b, c);
+    if (!expanded) return false;
+    var cache = patternCaches.get(ctx);
+    if (!cache) { cache = new WeakMap(); patternCaches.set(ctx, cache); }
+    var pattern = cache.get(material);
+    if (!pattern) { pattern = ctx.createPattern(material.source, 'repeat'); if (!pattern) return false; cache.set(material, pattern); }
+    var minU = Infinity, minV = Infinity, maxU = -Infinity, maxV = -Infinity;
+    for (var i = 0; i < expanded.length; i++) {
+      var px = expanded[i].x - dx, py = expanded[i].y - dy;
+      var u = (m22 * px - m21 * py) / screenDet;
+      var v = (m11 * py - m12 * px) / screenDet;
+      minU = Math.min(minU, u); maxU = Math.max(maxU, u);
+      minV = Math.min(minV, v); maxV = Math.max(maxV, v);
+    }
+    ctx.save();
+    ctx.beginPath();
+    var shapes = owned ? owned.polygons : [expanded];
+    for (var shape = 0; shape < shapes.length; shape++) {
+      var outline = shapes[shape];
+      ctx.moveTo(outline[0].x, outline[0].y);
+      for (var corner = 1; corner < outline.length; corner++) ctx.lineTo(outline[corner].x, outline[corner].y);
+      ctx.closePath();
+    }
+    ctx.clip();
+    ctx.transform(m11, m12, m21, m22, dx, dy);
+    ctx.fillStyle = pattern;
+    ctx.fillRect(minU - 1, minV - 1, maxU - minU + 2, maxV - minV + 2);
+    ctx.restore();
+    return true;
+  }
+
+  // Magnification keeps the caller's crisp/smooth preference. Minification
+  // always uses prefiltered mip levels with smooth sampling and a continuous
+  // crossfade; never switch a tiny moving line abruptly between whole texels.
+  // At most two cached-pattern passes, no per-frame canvases/readbacks/bakes.
+  function drawTriangle(ctx, a, b, c, material, options) {
+    var filter = options && options.filter !== undefined ? options.filter : 'stable';
+    var stats = options && options.stats;
+    function count(name) { if (stats) stats[name] = (Number.isFinite(stats[name]) ? stats[name] : 0) + 1; }
+    // Build the owner-masked clip once per triangle; both filter passes share it.
+    var clip = null;
+    if (options && options.ownedPixels) {
+      if (!finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c)) return false;
+      clip = {ownedPixels: true, boundary: options.boundary, shapes: ownedClip(a, b, c, options.boundary)};
+      if (!clip.shapes) return false;
+    }
+    if (filter === 'legacy') {
+      var legacySuccess = drawTriangleLegacy(ctx, a, b, c, material, clip);
+      if (legacySuccess) count('patternFills');
+      return legacySuccess;
+    }
+    if (filter !== 'stable' || !ctx || !finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c) || !material) return false;
+    var prepared = preparedMaterials.get(material);
+    if (!prepared || prepared.levels[0].source !== material.source || prepared.levels[0].size !== material.size) { count('unpreparedMaterials'); return false; }
+    var size = material.size, du1 = (b.u - a.u) * size, dv1 = (b.v - a.v) * size;
+    var du2 = (c.u - a.u) * size, dv2 = (c.v - a.v) * size, determinant = du1 * dv2 - dv1 * du2;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-10) return false;
+    var m11 = ((b.x - a.x) * dv2 - (c.x - a.x) * dv1) / determinant;
+    var m21 = ((c.x - a.x) * du1 - (b.x - a.x) * du2) / determinant;
+    var m12 = ((b.y - a.y) * dv2 - (c.y - a.y) * dv1) / determinant;
+    var m22 = ((c.y - a.y) * du1 - (b.y - a.y) * du2) / determinant;
+    var sampling = footprintLOD(m11, m12, m21, m22, prepared.levels.length - 1);
+    if (!sampling) return false;
+    if (!sampling.minifying) {
+      var magnifiedSuccess = drawTriangleLegacy(ctx, a, b, c, prepared.levels[0], clip);
+      if (magnifiedSuccess) count('patternFills');
+      return magnifiedSuccess;
+    }
+    var alpha = ctx.globalAlpha, blend = sampling.blend, success = false;
+    if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) return false;
+    ctx.save();
+    try {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'low';
+      // Two source-over draws must retain the caller's total opacity. The
+      // ordinary opaque case is first-level alpha1, second-level alpha=blend.
+      var secondAlpha = alpha * blend;
+      ctx.globalAlpha = secondAlpha < 1 ? alpha * (1 - blend) / (1 - secondAlpha) : 0;
+      success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.lower], clip);
+      if (success) { count('patternFills'); count('minifiedTriangles'); }
+      if (success && blend > 0) {
+        ctx.globalAlpha = secondAlpha;
+        success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.upper], clip);
+        if (success) { count('patternFills'); count('blendedTriangles'); }
+      }
+    } finally { ctx.restore(); }
+    return success;
+  }
+
+  // Optional planar fast path, deliberately separate from tessellate. On the
+  // current yaw/horizon camera, horizontal surfaces have Q=1/depth varying only
+  // with screen Y, and vertical walls only with X. At each pixel-row/column
+  // center, UQ/Q and VQ/Q are EXACTLY affine along that whole scan band. A fixed
+  // integer band grid removes camera-selected triangle seams and T-junctions.
+  // Caller retains responsibility for opaque depth/base-color coverage. This
+  // helper additionally clips to the actual convex face and never expands it,
+  // unless options.ownedPixels says the caller already clipped to the face's
+  // exact integer mask: then that antialiased face clip would leave owned edge
+  // pixels partly bare, and the one-pixel band rectangles are exact already.
+  // Declines/preflight failures paint nothing. strips counts completed bands;
+  // stats counts actual patternFills/minifiedStrips/blendedStrips and
+  // anisotropicStrips, not strips. Stable filtering uses at most FOUR pattern
+  // fills per band; directional:false retains the two-pass isotropic baseline.
+  function drawPlanarFace(ctx, points, material, options) {
+    options = options || {};
+    var width = options.width, height = options.height;
+    var maximum = options.maxStrips === undefined ? 256 : options.maxStrips;
+    var filter = options.filter === undefined ? 'stable' : options.filter, stats = options.stats;
+    function decline(reason, failed) { return {handled: false, strips: 0, failed: !!failed, reason: reason}; }
+    function count(name) { if (stats) stats[name] = (Number.isFinite(stats[name]) ? stats[name] : 0) + 1; }
+    if (!ctx || !Array.isArray(points) || points.length < 3 || points.length > 128 || !points.every(finiteVertex) ||
+        !Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || width > 8192 || height > 8192 ||
+        !Number.isInteger(maximum) || maximum < 1 || maximum > 2048 || (filter !== 'stable' && filter !== 'legacy') ||
+        (options.directional !== undefined && typeof options.directional !== 'boolean') ||
+        (options.ownedPixels !== undefined && typeof options.ownedPixels !== 'boolean') ||
+        (options.rowsOnly !== undefined && typeof options.rowsOnly !== 'boolean')) return decline('invalid-input');
+    var visibleBounds = options.visibleBounds;
+    if (visibleBounds !== undefined && (!visibleBounds ||
+        ![visibleBounds.minX, visibleBounds.maxX, visibleBounds.minY, visibleBounds.maxY].every(Number.isInteger) ||
+        visibleBounds.minX < 0 || visibleBounds.maxX >= width || visibleBounds.minY < 0 || visibleBounds.maxY >= height ||
+        visibleBounds.minX > visibleBounds.maxX || visibleBounds.minY > visibleBounds.maxY)) return decline('invalid-visible-bounds');
+    if (!material || !material.source || !Number.isFinite(material.size) || material.size <= 0) return decline('invalid-material', true);
+    var prepared = filter === 'stable' ? preparedMaterials.get(material) : null;
+    if (filter === 'stable' && (!prepared || prepared.levels[0].source !== material.source || prepared.levels[0].size !== material.size)) return decline('unprepared-material', true);
+    if (!Number.isFinite(ctx.globalAlpha) || ctx.globalAlpha < 0 || ctx.globalAlpha > 1) return decline('invalid-opacity', true);
+
+    // Reject concave/self-crossing ordering: scan-band extrema assume a convex
+    // polygon, like the existing scene-depth path. Zero-length edges are safe.
+    var signedArea = 0;
+    for (var edge = 0; edge < points.length; edge++) {
+      var p = points[edge], q = points[(edge + 1) % points.length];
+      signedArea += p.x * q.y - p.y * q.x;
+    }
+    if (!Number.isFinite(signedArea) || Math.abs(signedArea) < 1e-8) return decline('degenerate-face');
+    var winding = signedArea > 0 ? 1 : -1;
+    for (var e = 0; e < points.length; e++) {
+      var first = points[e], second = points[(e + 1) % points.length];
+      for (var corner = 0; corner < points.length; corner++) {
+        var cross = (second.x - first.x) * (points[corner].y - first.y) - (second.y - first.y) * (points[corner].x - first.x);
+        if (!Number.isFinite(cross) || cross * winding < -Math.abs(signedArea) * 1e-9) return decline('nonconvex-face');
+      }
+    }
+    var a = points[0], b = null, c = null, area = 0;
+    for (var triangle = 1; triangle + 1 < points.length; triangle++) {
+      b = points[triangle]; c = points[triangle + 1];
+      area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      if (Math.abs(area) > 1e-8) break;
+    }
+    if (Math.abs(area) <= 1e-8) return decline('degenerate-face');
+    function fit(fa, fb, fc) {
+      var x = ((fb - fa) * (c.y - a.y) - (fc - fa) * (b.y - a.y)) / area;
+      var y = ((fc - fa) * (b.x - a.x) - (fb - fa) * (c.x - a.x)) / area;
+      return {x: x, y: y, c: fa - x * a.x - y * a.y};
+    }
+    var Q = fit(1 / a.depth, 1 / b.depth, 1 / c.depth);
+    var U = fit(a.u / a.depth, b.u / b.depth, c.u / c.depth);
+    var V = fit(a.v / a.depth, b.v / b.depth, c.v / c.depth);
+    function at(plane, x, y) { return plane.x * x + plane.y * y + plane.c; }
+    var largestQ = 0;
+    for (var vertex = 0; vertex < points.length; vertex++) {
+      var point = points[vertex], expected = [1 / point.depth, point.u / point.depth, point.v / point.depth], planes = [Q, U, V];
+      largestQ = Math.max(largestQ, expected[0]);
+      for (var channel = 0; channel < 3; channel++) {
+        var value = at(planes[channel], point.x, point.y);
+        if (!Number.isFinite(value) || Math.abs(value - expected[channel]) > 1e-8 * Math.max(1e-6, Math.abs(expected[channel]))) return decline('nonplanar-depth-or-uv');
+      }
+    }
+    var xChanges = Math.abs(Q.x) * width > largestQ * 1e-8;
+    var yChanges = Math.abs(Q.y) * height > largestQ * 1e-8;
+    if (xChanges && yChanges) return decline('general-perspective');
+    if (!xChanges && !yChanges) return decline('constant-depth');
+    var rows = yChanges, axis = rows ? 'y' : 'x', other = rows ? 'x' : 'y';
+    // Hybrid mapping: strips only for row faces (floors, flat and camera-facing
+    // roofs); walls return to tie-broken triangles, which pass there at lower cost.
+    if (options.rowsOnly === true && !rows) return decline('rows-only');
+    if (rows) Q.x = 0; else Q.y = 0; // numerical noise, bounded by validation above
+    var clipped = clipViewport(points, width, height);
+    if (clipped.length < 3) return decline('offscreen');
+    var low = Infinity, high = -Infinity;
+    for (var bound = 0; bound < clipped.length; bound++) {
+      low = Math.min(low, clipped[bound][axis]); high = Math.max(high, clipped[bound][axis]);
+    }
+    var begin = Math.max(0, Math.floor(low)), end = Math.min(rows ? height : width, Math.ceil(high));
+    // Optional production depth-mask bounds skip wholly invisible bands. Never
+    // use an occluder's span to choose UVs, filter footprints or mip levels:
+    // unchanged visible pixels must retain exactly the same material sampling.
+    if (visibleBounds) {
+      begin = Math.max(begin, rows ? visibleBounds.minY : visibleBounds.minX);
+      end = Math.min(end, (rows ? visibleBounds.maxY : visibleBounds.maxX) + 1);
+    }
+    var directional=filter==='stable' && options.directional!==false;
+    var levels = filter === 'stable' ? (directional?prepared.planarLevels:prepared.levels) : [material], bands = [];
+    var samplingSize=directional?prepared.planarSize:material.size;
+
+    function derivatives(x, y) {
+      var inverse = at(Q, x, y), uq = at(U, x, y), vq = at(V, x, y);
+      if (!Number.isFinite(inverse) || inverse <= 0) return null;
+      var square = inverse * inverse;
+      var ux = (U.x * inverse - uq * Q.x) / square, uy = (U.y * inverse - uq * Q.y) / square;
+      var vx = (V.x * inverse - vq * Q.x) / square, vy = (V.y * inverse - vq * Q.y) / square;
+      var det = (ux * vy - uy * vx) * material.size * material.size;
+      if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null;
+      var transform = {a: vy * material.size / det, b: -vx * material.size / det,
+        c: -uy * material.size / det, d: ux * material.size / det};
+      var u = uq / inverse, v = vq / inverse;
+      transform.e = x - transform.a * u * material.size - transform.c * v * material.size;
+      transform.f = y - transform.b * u * material.size - transform.d * v * material.size;
+      if (![ux, uy, vx, vy, u, v, transform.a, transform.b, transform.c, transform.d, transform.e, transform.f].every(Number.isFinite)) return null;
+      return {u: u, v: v, ux: ux, uy: uy, vx: vx, vy: vy, x: x, y: y, transform: transform};
+    }
+    // Preflight EVERY visible band, including material sampling and the total
+    // work budget, before issuing any paint. Unsupported faces stay untouched.
+    for (var band = begin; band < end; band++) {
+      var line = band + 0.5, minimum = Infinity, maximumSpan = -Infinity;
+      for (var side = 0; side < clipped.length; side++) {
+        var from = clipped[side], to = clipped[(side + 1) % clipped.length], delta = to[axis] - from[axis];
+        if (Math.abs(delta) < 1e-12) {
+          if (Math.abs(from[axis] - line) < 1e-10) { minimum = Math.min(minimum, from[other], to[other]); maximumSpan = Math.max(maximumSpan, from[other], to[other]); }
+        } else if (line >= Math.min(from[axis], to[axis]) && line <= Math.max(from[axis], to[axis])) {
+          var along = from[other] + (line - from[axis]) / delta * (to[other] - from[other]);
+          minimum = Math.min(minimum, along); maximumSpan = Math.max(maximumSpan, along);
+        }
+      }
+      if (!(maximumSpan > minimum)) continue;
+      if (bands.length >= maximum) return decline('strip-budget');
+      var midpoint = (minimum + maximumSpan) * 0.5;
+      var center = derivatives(rows ? midpoint : line, rows ? line : midpoint);
+      var left = derivatives(rows ? minimum : line, rows ? line : minimum);
+      var right = derivatives(rows ? maximumSpan : line, rows ? line : maximumSpan);
+      if (!center || !left || !right) return decline('invalid-mapping');
+      var sampling = {lower: 0, upper: 0, blend: 0, minifying: false};
+      if (filter === 'stable') {
+        if (options.directional !== false) {
+          sampling = planarFootprint(center,left,right,samplingSize,levels.length-1);
+          if (!sampling) return decline('invalid-directional-footprint');
+          // paintLevel's affine matrix is expressed in ORIGINAL source pixels.
+          // Virtual high-density levels change filter resolution, not UV phase.
+          sampling.offsetU*=material.size/samplingSize; sampling.offsetV*=material.size/samplingSize;
+        } else {
+          var l = left.transform, r = right.transform;
+          var leftSample = footprintLOD(l.a, l.b, l.c, l.d, levels.length - 1);
+          var rightSample = footprintLOD(r.a, r.b, r.c, r.d, levels.length - 1);
+          if (!leftSample || !rightSample) return decline('invalid-footprint');
+          // The derivative matrix is affine along a constant-Q band. Its
+          // largest singular value is convex, bounding the whole span here.
+          sampling = leftSample.footprint >= rightSample.footprint ? leftSample : rightSample;
+        }
+      }
+      var rectangle = rows ? {x: 0, y: band, w: width, h: 1} : {x: band, y: 0, w: 1, h: height};
+      // Affine fill bounds do not depend on mip choice or tap displacement.
+      // Compute their four scalar corners once per band; each pass only scales
+      // and translates these limits. This removes per-pass corner-array churn.
+      var dx0=rectangle.x-center.x, dx1=rectangle.x+rectangle.w-center.x;
+      var dy0=rectangle.y-center.y, dy1=rectangle.y+rectangle.h-center.y;
+      var u00=center.u+center.ux*dx0+center.uy*dy0, u10=center.u+center.ux*dx1+center.uy*dy0;
+      var u11=center.u+center.ux*dx1+center.uy*dy1, u01=center.u+center.ux*dx0+center.uy*dy1;
+      var v00=center.v+center.vx*dx0+center.vy*dy0, v10=center.v+center.vx*dx1+center.vy*dy0;
+      var v11=center.v+center.vx*dx1+center.vy*dy1, v01=center.v+center.vx*dx0+center.vy*dy1;
+      bands.push({rectangle: rectangle, center: center, sampling: sampling,
+        minU:Math.min(u00,u10,u11,u01),maxU:Math.max(u00,u10,u11,u01),
+        minV:Math.min(v00,v10,v11,v01),maxV:Math.max(v00,v10,v11,v01)});
+    }
+    if (!bands.length) return decline('no-pixel-centers');
+    var cache = patternCaches.get(ctx);
+    if (!cache) { cache = new WeakMap(); patternCaches.set(ctx, cache); }
+    var patterns = [];
+    for (var needed = 0; needed < bands.length; needed++) {
+      var selection = bands[needed].sampling;
+      var indices = selection.blend > 0 ? [selection.lower, selection.upper] : [selection.lower];
+      for (var index = 0; index < indices.length; index++) {
+        var levelIndex = indices[index], level = levels[levelIndex];
+        if (patterns[levelIndex]) continue;
+        var pattern = cache.get(level);
+        if (!pattern) { pattern = ctx.createPattern(level.source, 'repeat'); if (!pattern) return decline('pattern-unavailable', true); cache.set(level, pattern); }
+        patterns[levelIndex] = pattern;
+      }
+    }
+    var result = {handled: true, strips: 0, failed: false, axis: axis};
+    var originalAlpha = ctx.globalAlpha;
+    function paintLevel(item, levelIndex, offsetU, offsetV) {
+      var rect = item.rectangle, sample = item.center, matrix = sample.transform, level = levels[levelIndex];
+      offsetU=offsetU||0; offsetV=offsetV||0;
+      var minU=(item.minU+offsetU/material.size)*level.size, maxU=(item.maxU+offsetU/material.size)*level.size;
+      var minV=(item.minV+offsetV/material.size)*level.size, maxV=(item.maxV+offsetV/material.size)*level.size;
+      var ratio = material.size / level.size;
+      ctx.save();
+      try {
+        ctx.transform(matrix.a * ratio, matrix.b * ratio, matrix.c * ratio, matrix.d * ratio,
+          matrix.e-matrix.a*offsetU-matrix.c*offsetV,matrix.f-matrix.b*offsetU-matrix.d*offsetV);
+        ctx.fillStyle = patterns[levelIndex];
+        ctx.fillRect(minU - 1, minV - 1, maxU - minU + 2, maxV - minV + 2);
+        count('patternFills');
+      } finally { ctx.restore(); }
+    }
+    ctx.save();
+    try {
+      if (options.ownedPixels !== true) {
+        ctx.beginPath(); ctx.moveTo(clipped[0].x, clipped[0].y);
+        for (var path = 1; path < clipped.length; path++) ctx.lineTo(clipped[path].x, clipped[path].y);
+        ctx.closePath(); ctx.clip();
+      }
+      for (var draw = 0; draw < bands.length; draw++) {
+        var item = bands[draw], rect = item.rectangle, selection = item.sampling;
+        ctx.save();
+        try {
+          ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+          if (selection.minifying) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low'; }
+          if (selection.taps===2) {
+            var consumed=0, blend=selection.blend;
+            for (var tap=0;tap<2;tap++) for (var mip=0;mip<(blend>0?2:1);mip++) {
+              var weight=(mip?blend:1-blend)*0.5;
+              consumed+=weight;
+              var remainingWeight=Math.max(0,1-consumed);
+              ctx.globalAlpha=originalAlpha*weight/(1-originalAlpha*remainingWeight);
+              var direction=tap===0?-1:1;
+              paintLevel(item,mip?selection.upper:selection.lower,direction*selection.offsetU,direction*selection.offsetV);
+            }
+            count('anisotropicStrips');
+            if (blend>0) count('blendedStrips');
+          } else {
+            var secondAlpha = originalAlpha * selection.blend;
+            ctx.globalAlpha = secondAlpha < 1 ? originalAlpha * (1 - selection.blend) / (1 - secondAlpha) : 0;
+            paintLevel(item, selection.lower);
+            if (selection.blend > 0) { ctx.globalAlpha = secondAlpha; paintLevel(item, selection.upper); count('blendedStrips'); }
+          }
+          if (selection.minifying) count('minifiedStrips');
+          result.strips++;
+        } finally { ctx.restore(); }
+      }
+    } catch (error) {
+      result.failed = true; result.reason = 'canvas-paint-failed';
+    } finally { ctx.restore(); }
+    return result;
+  }
+
+  function rng(seed) {
+    var state = seed >>> 0;
+    return function () { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296; };
+  }
+  function createTile(size, color, paint, seed) {
+    var canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(size / 128, size / 128);
+    ctx.fillStyle = color; ctx.fillRect(0, 0, 128, 128);
+    paint(ctx, rng(seed));
+    return {source: canvas, color: color, size: size};
+  }
+  function paintWood(ctx, random) {
+    // Four continuous horizontal planks; periodic grain wraps across tile ends.
+    var colors = ['#79502f', '#916039', '#815432', '#a16c40'];
+    for (var row = 0; row < 4; row++) {
+      ctx.fillStyle = colors[row]; ctx.fillRect(0, row * 32, 128, 32);
+      ctx.fillStyle = '#38281f'; ctx.fillRect(0, row * 32, 128, 2);
+      ctx.fillStyle = '#b48655'; ctx.fillRect(0, row * 32 + 2, 128, 1);
+      for (var line = 0; line < 9; line++) {
+        var y = row * 32 + 5 + line * 2.8;
+        var phase = random() * Math.PI * 2, amplitude = 0.5 + random();
+        ctx.strokeStyle = line % 3 === 0 ? 'rgba(212,161,99,.24)' : 'rgba(45,27,18,.27)';
+        ctx.lineWidth = 0.6 + random() * 0.65; ctx.beginPath();
+        for (var x = 0; x <= 128; x += 4) {
+          var grainY = y + Math.sin(x / 128 * Math.PI * 2 + phase) * amplitude;
+          if (!x) ctx.moveTo(x, grainY); else ctx.lineTo(x, grainY);
+        }
+        ctx.stroke();
+      }
+      var seam = row % 2 ? 87 : 23;
+      ctx.fillStyle = 'rgba(42,25,16,.48)'; ctx.fillRect(seam, row * 32 + 2, 1, 30);
+      ctx.fillStyle = '#493e31';
+      ctx.fillRect(seam + 4, row * 32 + 7, 2, 2); ctx.fillRect(seam + 4, row * 32 + 24, 2, 2);
+    }
+  }
+  function paintStone(ctx, random) {
+    ctx.fillStyle = '#373935'; ctx.fillRect(0, 0, 128, 128);
+    var colors = ['#777a6b', '#858779', '#696e65', '#7b8075', '#6c7267'];
+    for (var row = 0; row < 4; row++) {
+      var offset = row % 2 ? -32 : 0;
+      for (var col = 0; col < 3; col++) {
+        var x = offset + col * 64, y = row * 32;
+        ctx.fillStyle = colors[(row * 2 + col % 2) % colors.length]; ctx.fillRect(x + 2, y + 2, 60, 28);
+        ctx.strokeStyle = 'rgba(213,215,187,.16)'; ctx.lineWidth = 1;
+        ctx.strokeRect(x + 3.5, y + 3.5, 57, 25);
+      }
+    }
+    for (var i = 0; i < 750; i++) {
+      var px = Math.floor(random() * 128), py = Math.floor(random() * 128);
+      ctx.fillStyle = i % 2 ? 'rgba(20,25,22,.12)' : 'rgba(221,218,189,.12)';
+      ctx.fillRect(px, py, 1 + Math.floor(random() * 2), 1);
+    }
+    ctx.strokeStyle = 'rgba(29,32,29,.4)'; ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.moveTo(43, 6); ctx.lineTo(39, 14); ctx.lineTo(44, 21); ctx.lineTo(42, 28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(93, 70); ctx.lineTo(99, 75); ctx.lineTo(97, 83); ctx.stroke();
+  }
+  function paintIron(ctx, random) {
+    ctx.fillStyle = '#626b70'; ctx.fillRect(0, 0, 128, 128);
+    for (var y = 0; y < 128; y++) {
+      var value = 80 + Math.floor(random() * 34);
+      ctx.fillStyle = 'rgba(' + value + ',' + (value + 6) + ',' + (value + 9) + ',.5)';
+      ctx.fillRect(0, y, 128, 1);
+    }
+    for (var i = 0; i < 400; i++) {
+      ctx.fillStyle = i % 3 ? 'rgba(13,24,28,.13)' : 'rgba(179,191,189,.18)';
+      ctx.fillRect(Math.floor(random() * 128), Math.floor(random() * 128), 1, 1);
+    }
+    ctx.fillStyle = '#394146'; ctx.fillRect(0, 0, 128, 2); ctx.fillRect(0, 0, 2, 128);
+    ctx.fillStyle = '#7c8589'; ctx.fillRect(2, 2, 125, 1); ctx.fillRect(2, 2, 1, 125);
+    for (var ix = 0; ix < 2; ix++) for (var iy = 0; iy < 2; iy++) {
+      var x = 10 + ix * 108, y2 = 10 + iy * 108;
+      ctx.fillStyle = '#343e42'; ctx.beginPath(); ctx.arc(x, y2, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#939b9b'; ctx.fillRect(x - 1, y2 - 2, 2, 1);
+    }
+  }
+  function paintChecker(ctx) {
+    for (var y = 0; y < 8; y++) for (var x = 0; x < 8; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#27384b' : '#e2ddbd';
+      ctx.fillRect(x * 16, y * 16, 16, 16);
+    }
+    ctx.fillStyle = '#cc6b46'; ctx.fillRect(0, 0, 128, 3);
+    ctx.fillStyle = '#4b98a4'; ctx.fillRect(0, 3, 3, 125);
+  }
+
+  // Only startup/resolution changes call this. A material is shared by every
+  // face; no per-object bitmap copies, network fetches or external image data.
+  function createCatalog(size) {
+    if (size !== 64 && size !== 128) throw new RangeError('Texture size must be 64 or 128');
+    var start = performance.now();
+    var materials = {
+      wood: createTile(size, '#875c37', paintWood, 0x781abc),
+      stone: createTile(size, '#777b6e', paintStone, 0x51abf8),
+      iron: createTile(size, '#60696d', paintIron, 0x18f137),
+      checker: createTile(size, '#929783', paintChecker, 0x101010)
+    };
+    var bytes = 0, baseBytes = 0;
+    Object.keys(materials).forEach(function (name) {
+      var prepared = prepareMaterial(materials[name]); bytes += prepared.bytes; baseBytes += prepared.baseBytes;
+    });
+    return {materials: materials, bytes: bytes, baseBytes: baseBytes, mipBytes: bytes - baseBytes, buildMs: performance.now() - start};
+  }
+
+  // Structure defaults from the 2026-09-27 cost/benefit sweep (TEXTURES.md,
+  // "Long faces"): with hybrid mapping (planar rows, tie-broken triangles
+  // elsewhere) all 20 structure motion cases passed for about +9% median
+  // submission time. Triangle-only faces reach their own sweet spot here.
+  var STRUCTURE_TESSELLATION = Object.freeze({maxTriangles: 256, maxDepth: 10, errorPixels: 0.4});
+
+  return {createCatalog: createCatalog, clipNear: clipNear, perspectiveUV: perspectiveUV,
+    tessellate: tessellate, drawTriangle: drawTriangle, drawPlanarFace: drawPlanarFace, prepareMaterial: prepareMaterial,
+    prefilterMipPixels: prefilterMipPixels, footprintLOD: footprintLOD, planarFootprint: planarFootprint,
+    expandTriangle: expandTriangle, ownedClip: ownedClip, STRUCTURE_TESSELLATION: STRUCTURE_TESSELLATION};
+}());
+// World textures in production (integration stage E): the structure model's
+// opaque faces painted through TexturePilot with the structure study's
+// verified optimum (hybrid mapping, tie-broken triangles, owner-mask edges,
+// 128 px tiles, a 2,048-primitive budget). A pure colour change: coverage and
+// depth come from exactly fillSceneDepthPolygon's withSceneDepthClip call, so
+// the mask and _sceneDepthInv are identical with textures on or off.
+// Inert at load: declarations and the feature registrations only. The catalog
+// is built by prepareGameRun (22-lifecycle.js) or lazily by the first engaged
+// frame. Fail open: every decline or failure repaints the face's prepared mean
+// inside the same scene-depth callback, and no exception leaves the sink.
+// Headless hosts whose getImageData returns alpha 0 (the audit lab) fail the
+// catalog build once per session and always render the flat model.
+
+var WORLD_TEXTURE_DEFAULTS = Object.freeze({
+  mapping: 'hybrid', tile: 128, ownedPixels: true, filter: 'stable', maxStrips: 384, maxTriangles: 256,
+  tessellation: typeof TexturePilot !== 'undefined' && TexturePilot.STRUCTURE_TESSELLATION ||
+    Object.freeze({maxTriangles: 256, maxDepth: 10, errorPixels: 0.4}),
+  budget: 2048, maxRows: 360, wash: 0.32, minOwnedPx: 64, leaveOwnedPx: 48, fadeStart: 0.72, fadeEnd: 0.82
+});
+
+// Texture catalog material per world material id. Keys are GAME_MATERIALS ids
+// (01-materials.js; model parts carry them) plus the structure model's face
+// materials (12-structure-models.js: stone, wood, cloth). Values are catalog
+// materials; null (and any id not listed) paints the flat authored colour.
+// The diagnostic checker is never mapped.
+var WORLD_TEXTURE_MATERIALS = Object.freeze({
+  stone: 'stone', wood: 'wood', cloth: null,
+  caveStone: 'stone', entranceStone: 'stone', rubbleStone: 'stone',
+  crateWood: 'wood', palisadeWood: 'wood', wallPropWood: 'wood', floorPropWood: 'wood',
+  wallPropIron: 'iron', floorPropIron: 'iron',
+  wallHeraldry: null, wallFlame: null, floorFoliage: null, bone: null,
+  floorStone: 'stone', barrelWood: 'wood'   // stage I floor props (sandstone, mesaRock stay flat)
+});
+var WORLD_TEXTURE_CATALOG_USED = ['stone', 'wood', 'iron'];
+function worldTextureMaterialName(id) {
+  return Object.prototype.hasOwnProperty.call(WORLD_TEXTURE_MATERIALS, id) ? WORLD_TEXTURE_MATERIALS[id] : null;
+}
+
+// ── Catalog (once per tile size; session failure flag like _floorArtworkFailed) ──
+var _worldTextureCatalogs = {};
+var _worldTextureCatalogFailed = false;
+var _worldTextureCatalogStats = {builds: 0, failures: 0, bytes: 0, ms: 0, lastFailure: '', lastBuildMs: 0};
+var _worldTextureOverride = null;   // test/console hook: {textureBudget: 64, ...} wins over the registry
+function _worldTextureNow() { return typeof performance !== 'undefined' && performance.now ? performance.now() : 0; }
+function _worldTextureSetting(key, fallback) {
+  if (_worldTextureOverride && Object.prototype.hasOwnProperty.call(_worldTextureOverride, key)) return _worldTextureOverride[key];
+  if (typeof RENDER_FEATURES === 'object' && RENDER_FEATURES && Object.prototype.hasOwnProperty.call(RENDER_FEATURES, key)) return RENDER_FEATURES[key];
+  return fallback;
+}
+function _worldTextureTile() {
+  var tile = +_worldTextureSetting('textureTile', WORLD_TEXTURE_DEFAULTS.tile);
+  return tile === 64 ? 64 : 128;
+}
+function worldTexturesWanted() {
+  return typeof renderFeatureOn === 'function' && (renderFeatureOn('structureTextures') || renderFeatureOn('propTextures')) &&
+    USE_TEXTURES === true;
+}
+// Returns {size, materials, means, bytes, buildMs} or null. Never throws.
+function ensureWorldTextureCatalog(size) {
+  if (size === undefined) size = _worldTextureTile();
+  size = size === 64 ? 64 : 128;
+  var have = _worldTextureCatalogs[size];
+  if (have) return have;
+  if (_worldTextureCatalogFailed || typeof TexturePilot === 'undefined' || !TexturePilot) return null;
+  var start = _worldTextureNow();
+  try {
+    var built = TexturePilot.createCatalog(size), means = {};
+    for (var i = 0; i < WORLD_TEXTURE_CATALOG_USED.length; i++) {
+      var name = WORLD_TEXTURE_CATALOG_USED[i], material = built.materials[name];
+      // The coarsest prepared level is one texel: the exact tile mean.
+      var prepared = TexturePilot.prepareMaterial(material), level = prepared.levels[prepared.levels.length - 1];
+      var px = level.source.getContext('2d').getImageData(0, 0, 1, 1).data;
+      if (level.size !== 1 || !px || px[3] !== 255) throw new Error('no opaque mean for ' + name);
+      means[name] = [px[0], px[1], px[2]];
+    }
+    var entry = {size: size, materials: built.materials, means: means, bytes: built.bytes, buildMs: _worldTextureNow() - start};
+    _worldTextureCatalogs[size] = entry;
+    _worldTextureCatalogStats.builds++;
+    _worldTextureCatalogStats.bytes += entry.bytes;
+    _worldTextureCatalogStats.ms += entry.buildMs;
+    _worldTextureCatalogStats.lastBuildMs = entry.buildMs;
+    return entry;
+  } catch (e) {
+    _worldTextureCatalogFailed = true;
+    _worldTextureCatalogStats.failures++;
+    _worldTextureCatalogStats.lastFailure = e && e.message ? e.message : String(e);
+    // Silent, like _floorArtworkFailed: with structureTextures ON by default a
+    // headless host fails here every session, and steady-state console checks
+    // (the audit lab's) must stay quiet. The HUD line reads 'flat:catalog', the
+    // frame counts texFlatCatalog, and getWorldTextureState().lastFailure says why.
+    return null;
+  }
+}
+// Drops every catalog and clears the session failure flag (tests, console).
+function resetWorldTextureCatalog() {
+  _worldTextureCatalogs = {};
+  _worldTextureCatalogFailed = false;
+  _worldTextureCatalogStats = {builds: 0, failures: 0, bytes: 0, ms: 0, lastFailure: '', lastBuildMs: 0};
+}
+
+// ── Per-frame pass ──
+// beginWorldTexturePass(C) runs once at the start of the structure model pass
+// (12-structure-models.js). The whole frame is textured or flat; a flat frame
+// counts its reason. Faces then call fillSceneDepthTexturedPolygon near to far,
+// so the budget admits the nearest faces first (skip-not-stop: a face that
+// does not fit is painted with its mean and later faces may still fit).
+var _WORLD_TEXTURE_CLIP = {writeDepth: true, _paintsDepthPixels: true};
+var WORLD_TEXTURE_FLAT_KEYS = {master: 'texFlatMaster', debug: 'texFlatDebug', rows: 'texFlatRows', composite: 'texFlatComposite',
+  filter: 'texFlatFilter', shadow: 'texFlatShadow', transform: 'texFlatTransform', catalog: 'texFlatCatalog'};
+var _worldTexturePass = {active: false, begun: false, props: false, reason: 'off', C: null, catalog: null, mapping: 'hybrid', owned: true, budget: 2048,
+  used: 0, minPx: 64, leavePx: 48, fadeStart: 0, fadeEnd: 0, w: 0, h: 0, points: null, buildMs: 0,
+  stats: null, mapperStats: null, declines: null};
+var _worldTextureSurface = null;
+var _worldTextureShown = typeof WeakMap === 'function' ? new WeakMap() : null; // face -> textured last time (hysteresis)
+var _worldTexturePlanarOptions = {width: 0, height: 0, maxStrips: 384, filter: 'stable', stats: null, ownedPixels: true,
+  rowsOnly: true, visibleBounds: null};
+var _worldTextureTessOptions = {width: 0, height: 0, maxTriangles: 256, maxDepth: 10, errorPixels: 0.4};
+var _worldTextureTriangleOptions = {filter: 'stable', stats: null, ownedPixels: true, boundary: null};
+var _worldTextureEmitMaterial = null, _worldTextureEmitDraws = 0, _worldTextureEmitFailed = 0;
+var _worldTextureDeclineKeys = {};
+
+function _worldTextureNewStats() {
+  return {faces: 0, meanBudget: 0, meanSmall: 0, meanFade: 0, meanDecline: 0, meanFailed: 0, triangles: 0, strips: 0,
+    clips: 0, capped: 0, planarDeclines: 0, failedDraws: 0, mappingMs: 0, debugTints: 0};
+}
+// The first reason this frame cannot texture, or ''. State reads first; the
+// transform check (one getTransform call) runs after the catalog check in
+// beginWorldTexturePass, so a host without a catalog makes no context call.
+function _worldTextureFlatReason() {
+  if (USE_TEXTURES !== true) return 'master';
+  if ((typeof DEBUG_POLY_TYPES !== 'undefined' && DEBUG_POLY_TYPES) ||
+      (typeof DEBUG_CAVE_COLORS !== 'undefined' && DEBUG_CAVE_COLORS) ||
+      (typeof DEBUG_LAYER_TYPES !== 'undefined' && DEBUG_LAYER_TYPES)) return 'debug';
+  var rows = _worldTextureSetting('textureMaxRows', WORLD_TEXTURE_DEFAULTS.maxRows);
+  if (rows !== 'unlimited' && canvas.height > +rows) return 'rows';
+  if (ctx.globalCompositeOperation !== 'source-over') return 'composite';
+  if (ctx.filter !== undefined && ctx.filter !== 'none') return 'filter';
+  if ((ctx.shadowBlur || 0) !== 0 || (ctx.shadowOffsetX || 0) !== 0 || (ctx.shadowOffsetY || 0) !== 0) return 'shadow';
+  return '';
+}
+function _worldTextureIdentityTransform() {
+  if (typeof ctx.getTransform !== 'function') return false;
+  var t = ctx.getTransform();
+  return !!t && t.a === 1 && t.b === 0 && t.c === 0 && t.d === 1 && t.e === 0 && t.f === 0;
+}
+function beginWorldTexturePass(C) {
+  var pass = _worldTexturePass;
+  pass.active = false; pass.reason = 'off'; pass.used = 0; pass.buildMs = 0; pass.begun = true; pass.props = false;
+  pass.stats = _worldTextureNewStats(); pass.mapperStats = {}; pass.declines = {};
+  if (!(typeof renderFeatureOn === 'function' && renderFeatureOn('structureTextures'))) return false;
+  return _worldTextureEngage(pass, C);
+}
+// The engage rules and parameters of a begun pass (structure or prop).
+function _worldTextureEngage(pass, C) {
+  var reason = _worldTextureFlatReason(), catalog = null;
+  if (!reason) {
+    var builds = _worldTextureCatalogStats.builds;
+    catalog = ensureWorldTextureCatalog(_worldTextureTile());
+    if (_worldTextureCatalogStats.builds !== builds) pass.buildMs = _worldTextureCatalogStats.lastBuildMs;
+    if (!catalog) reason = 'catalog';
+    else if (!_worldTextureIdentityTransform()) reason = 'transform';
+  }
+  pass.reason = reason;
+  if (reason) return false;
+  var mapping = _worldTextureSetting('textureMapping', WORLD_TEXTURE_DEFAULTS.mapping);
+  var minPx = +_worldTextureSetting('textureMinPixels', WORLD_TEXTURE_DEFAULTS.minOwnedPx);
+  var budget = +_worldTextureSetting('textureBudget', WORLD_TEXTURE_DEFAULTS.budget);
+  pass.mapping = mapping === 'triangles' || mapping === 'planar' ? mapping : 'hybrid';
+  pass.owned = _worldTextureSetting('textureOwnedEdges', WORLD_TEXTURE_DEFAULTS.ownedPixels) !== false;
+  pass.budget = budget > 0 ? Math.floor(budget) : WORLD_TEXTURE_DEFAULTS.budget;
+  pass.minPx = minPx > 0 ? minPx : 0;
+  pass.leavePx = minPx > 0 ? Math.round(minPx * WORLD_TEXTURE_DEFAULTS.leaveOwnedPx / WORLD_TEXTURE_DEFAULTS.minOwnedPx) : 0;
+  pass.fadeStart = viewDist * WORLD_TEXTURE_DEFAULTS.fadeStart;
+  pass.fadeEnd = viewDist * WORLD_TEXTURE_DEFAULTS.fadeEnd;
+  pass.w = canvas.width; pass.h = canvas.height; pass.C = C; pass.catalog = catalog;
+  pass.active = true;
+  return true;
+}
+function _worldTextureStat(name, amount) {
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat(name, amount);
+}
+// Publishes this pass's counters to the frame stats and ends the pass.
+function endWorldTexturePass() {
+  var pass = _worldTexturePass, s = pass.stats;
+  var wasActive = pass.active, begun = pass.begun;
+  pass.active = false; pass.begun = false; pass.C = null; pass.points = null; _worldTextureSurface = null;
+  if (begun) _worldTextureFrameNote(pass, wasActive);   // stage L: the props continue this frame's budget
+  if (!begun || pass.reason === 'off' || !s) return;
+  if (pass.buildMs) _worldTextureStat('texCatalogMs', Math.round(pass.buildMs * 1000) / 1000);
+  if (!wasActive) {
+    _worldTextureStat('texFlat', 1);
+    _worldTextureStat(WORLD_TEXTURE_FLAT_KEYS[pass.reason] || 'texFlatOther', 1);
+    return;
+  }
+  var fallbacks = s.meanBudget + s.meanDecline + s.meanFailed;
+  _worldTextureStat('texFaces', s.faces);
+  _worldTextureStat('texMean', fallbacks + s.meanSmall + s.meanFade);
+  _worldTextureStat('texMeanBudget', s.meanBudget); _worldTextureStat('texMeanSmall', s.meanSmall);
+  _worldTextureStat('texMeanFade', s.meanFade); _worldTextureStat('texMeanDecline', s.meanDecline);
+  _worldTextureStat('texMeanFailed', s.meanFailed); _worldTextureStat('texFallbacks', fallbacks);
+  _worldTextureStat('texTriangles', s.triangles); _worldTextureStat('texStrips', s.strips);
+  _worldTextureStat('texPatternFills', pass.mapperStats.patternFills || 0);
+  _worldTextureStat('texClips', s.clips); _worldTextureStat('texCapped', s.capped);
+  _worldTextureStat('texPlanarDeclines', s.planarDeclines); _worldTextureStat('texFailedDraws', s.failedDraws);
+  _worldTextureStat('texMappingMs', Math.round(s.mappingMs * 1000) / 1000);
+  _worldTextureStat('texPrims', pass.used); _worldTextureStat('texBudget', pass.budget);
+  _worldTextureStat('texCatalogBytes', pass.catalog ? pass.catalog.bytes : 0);
+  for (var reason in pass.declines) _worldTextureStat(reason, pass.declines[reason]);
+  if (s.debugTints) _worldTextureStat('texDebugTints', s.debugTints);
+}
+function getWorldTextureState() {
+  var pass = _worldTexturePass, c = _worldTextureCatalogStats;
+  return {active: pass.active, reason: pass.reason, mapping: pass.mapping, budget: pass.budget, used: pass.used,
+    catalogFailed: _worldTextureCatalogFailed, catalogBuilds: c.builds, catalogFailures: c.failures,
+    catalogBytes: c.bytes, catalogMs: Math.round(c.ms * 1000) / 1000, lastFailure: c.lastFailure,
+    catalogs: Object.keys(_worldTextureCatalogs).map(Number)};
+}
+
+// ── Colour: the prepared mean and the luma-normalised light ──
+// The flat model paints P = worldFaceColor(authored A). A textured face is the
+// tile (mean M) under a 32% wash of A, so its mean is W = 0.68 M + 0.32 A per
+// channel. Light k = (P / A) * luma(A) / luma(W) per channel keeps the
+// production light (sun, point lights, warmth, fog) and brings the textured
+// face's luma to the flat face's. It is applied as one 'multiply' fill with
+// min(k, 1) plus, where k > 1, one 'lighter' fill of (k - 1) W. The prepared
+// mean W k is what budget, small, fade, decline and failure paint instead.
+var _worldTextureColour = {mean: '', wash: '', multiply: '', lighter: '', amount: 0};
+function _worldTextureLuma(r, g, b) { return 0.299 * r + 0.587 * g + 0.114 * b; }
+// washAmount: the surface's wash fraction (stage L props); otherwise 0.32.
+function _worldTextureColours(meanRGB, tint, lit, washAmount) {
+  var wash = typeof washAmount === 'number' && washAmount >= 0 && washAmount <= 1 ? washAmount : WORLD_TEXTURE_DEFAULTS.wash;
+  var ar = (tint >>> 16) & 255, ag = (tint >>> 8) & 255, ab = tint & 255;
+  var pr = (lit >>> 16) & 255, pg = (lit >>> 8) & 255, pb = lit & 255;
+  var wr = meanRGB[0] * (1 - wash) + ar * wash, wg = meanRGB[1] * (1 - wash) + ag * wash, wb = meanRGB[2] * (1 - wash) + ab * wash;
+  var lumaA = _worldTextureLuma(ar, ag, ab), lumaW = _worldTextureLuma(wr, wg, wb);
+  var fl = lumaA > 0 ? _worldTextureLuma(pr, pg, pb) / lumaA : 0, norm = lumaW > 0 ? lumaA / lumaW : 0;
+  var kr = (ar > 0 ? pr / ar : fl) * norm, kg = (ag > 0 ? pg / ag : fl) * norm, kb = (ab > 0 ? pb / ab : fl) * norm;
+  var out = _worldTextureColour;
+  out.mean = rgbQ(Math.round(wr * kr), Math.round(wg * kg), Math.round(wb * kb));
+  out.wash = rgbQ(ar, ag, ab);
+  out.multiply = rgbQ(Math.round(255 * Math.min(1, kr)), Math.round(255 * Math.min(1, kg)), Math.round(255 * Math.min(1, kb)));
+  out.lighter = kr > 1 || kg > 1 || kb > 1 ?
+    rgbQ(Math.round(Math.max(0, kr - 1) * wr), Math.round(Math.max(0, kg - 1) * wg), Math.round(Math.max(0, kb - 1) * wb)) : '';
+  out.amount = wash;
+  return out;
+}
+
+// ── The sink ──
+// surface: {vertices (world, with u/v), material (catalog name), tint (packed
+// authored colour), lit (packed flat colour), dist (camera depth of the face),
+// horizontal (bool), key (object for the owned-pixel hysteresis)}.
+// Returns withSceneDepthClip's visible pixel count, like fillSceneDepthPolygon.
+function fillSceneDepthTexturedPolygon(points, surface) {
+  var pass = _worldTexturePass;
+  if (!pass.active || !surface) {
+    if (surface) ctx.fillStyle = rgbQ((surface.lit >>> 16) & 255, (surface.lit >>> 8) & 255, surface.lit & 255);
+    return fillSceneDepthPolygon(points);
+  }
+  _worldTextureSurface = surface; pass.points = points;
+  try {
+    return withSceneDepthClip(points, _worldTexturePaintFace, _WORLD_TEXTURE_CLIP);
+  } finally {
+    _worldTextureSurface = null; pass.points = null;
+  }
+}
+function _worldTextureMean(stats, key, style, gen, minY, maxY, reason) {
+  if (reason === 'budget') stats.meanBudget++;
+  else if (reason === 'small') stats.meanSmall++;
+  else if (reason === 'fade') stats.meanFade++;
+  else if (reason === 'failed') stats.meanFailed++;
+  else stats.meanDecline++;
+  if (_worldTextureShown && key) _worldTextureShown.set(key, false);
+  try {
+    ctx.fillStyle = style;
+    _traceSceneDepthPixelMask(gen, minY, maxY);
+    ctx.fill();
+  } catch (e) {
+    stats.failedDraws++;
+  }
+  _worldTextureDebugTint(stats, 'mean', gen, minY, maxY);
+}
+// Texture debug (the page's checkbox, DEBUG_TEXTURE, default unchecked): a
+// translucent tint over each face's own mask by the path that painted it in
+// an engaged frame. A flat frame has no path and no tint (its reason is on
+// the HUD render line).
+var WORLD_TEXTURE_DEBUG_TINTS = Object.freeze({strip: 'rgb(0,200,255)', triangle: 'rgb(255,60,200)', mean: 'rgb(255,190,0)'});
+var WORLD_TEXTURE_DEBUG_ALPHA = 0.45;
+function _worldTextureDebugTint(stats, path, gen, minY, maxY) {
+  if (!(typeof DEBUG_TEXTURE !== 'undefined' && DEBUG_TEXTURE === true)) return;
+  var alpha = ctx.globalAlpha;
+  try {
+    ctx.globalAlpha = alpha * WORLD_TEXTURE_DEBUG_ALPHA;
+    ctx.fillStyle = WORLD_TEXTURE_DEBUG_TINTS[path];
+    _traceSceneDepthPixelMask(gen, minY, maxY);
+    ctx.fill();
+    stats.debugTints++;
+  } catch (e) {
+    stats.failedDraws++;
+  } finally {
+    ctx.globalAlpha = alpha;
+  }
+}
+function _worldTextureEmit(a, b, c, edges) {
+  _worldTextureTriangleOptions.boundary = edges;
+  if (TexturePilot.drawTriangle(ctx, a, b, c, _worldTextureEmitMaterial, _worldTextureTriangleOptions)) _worldTextureEmitDraws++;
+  else _worldTextureEmitFailed++;
+}
+function _worldTextureDecline(pass, reason) {
+  var key = _worldTextureDeclineKeys[reason];
+  if (!key) key = _worldTextureDeclineKeys[reason] = 'texDecl' + String(reason).replace(/(^|-)([a-z])/g, function (m, d, ch) { return ch.toUpperCase(); });
+  pass.declines[key] = (pass.declines[key] || 0) + 1;
+}
+// The scene-depth callback: paints this face's integer mask and nothing else.
+function _worldTexturePaintFace() {
+  var pass = _worldTexturePass, stats = pass.stats, surface = _worldTextureSurface;
+  var gen = _sceneDepthClipGeneration, minY = _sceneDepthClipMinY, maxY = _sceneDepthClipMaxY;
+  var minX = _sceneDepthClipMinX, maxX = _sceneDepthClipMaxX, owned = _sceneDepthClipCount;
+  var key = surface.key, dist = surface.dist, catalog = pass.catalog;
+  var material = catalog.materials[surface.material], meanRGB = catalog.means[surface.material];
+  if (!material || !meanRGB) {
+    ctx.fillStyle = rgbQ((surface.lit >>> 16) & 255, (surface.lit >>> 8) & 255, surface.lit & 255);
+    return _worldTextureMean(stats, key, ctx.fillStyle, gen, minY, maxY, 'decline');
+  }
+  var colours = _worldTextureColours(meanRGB, surface.tint, surface.lit, surface.wash), meanStyle = colours.mean;
+  // Stage L: a prop face drawn at a fade alpha below 1 cannot composite its
+  // wash and light fills over what is behind it; it paints the mean.
+  if (surface.meanOnly) return _worldTextureMean(stats, key, meanStyle, gen, minY, maxY, 'fade');
+  if (dist >= pass.fadeEnd) return _worldTextureMean(stats, key, meanStyle, gen, minY, maxY, 'fade');
+  if (pass.minPx > 0) {
+    var shown = _worldTextureShown && key ? _worldTextureShown.get(key) === true : false;
+    if (owned < (shown ? pass.leavePx : pass.minPx)) return _worldTextureMean(stats, key, meanStyle, gen, minY, maxY, 'small');
+  }
+  var planar = pass.mapping === 'planar' || (pass.mapping === 'hybrid' && surface.horizontal);
+  if (surface.triangles) planar = false;
+  if (pass.budget - pass.used < (planar ? 1 : 8)) return _worldTextureMean(stats, key, meanStyle, gen, minY, maxY, 'budget');
+  var baseAlpha = ctx.globalAlpha, dash = ctx.lineDashOffset, failed = false, meanReason = '';
+  var washStyle = colours.wash, multiplyStyle = colours.multiply, lighterStyle = colours.lighter, washAmount = colours.amount;
+  ctx.save();
+  try {
+    // Sentinel for a balanced restore if a mapper call throws between its
+    // own save and restore (drawTriangleLegacy has no finally).
+    ctx.lineDashOffset = dash + 0.5;
+    _traceSceneDepthPixelMask(gen, minY, maxY); ctx.clip(); stats.clips++;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low';
+    var tp = TexturePilot.clipNear(surface.vertices, cam, pass.C, projScale);
+    if (!tp || tp.length !== pass.points.length) { meanReason = 'decline'; _worldTextureDecline(pass, 'uv'); }
+    else {
+      var start = _worldTextureNow(), remaining = pass.budget - pass.used, handled = false;
+      if (planar) {
+        var po = _worldTexturePlanarOptions;
+        po.width = pass.w; po.height = pass.h; po.maxStrips = Math.min(WORLD_TEXTURE_DEFAULTS.maxStrips, remaining);
+        po.stats = pass.mapperStats; po.ownedPixels = pass.owned; po.rowsOnly = pass.mapping === 'hybrid';
+        po.visibleBounds = {minX: minX, maxX: maxX, minY: minY, maxY: maxY};
+        var result = TexturePilot.drawPlanarFace(ctx, tp, material, po);
+        if (result.handled) { handled = true; pass.used += result.strips; stats.strips += result.strips; }
+        else { stats.planarDeclines++; _worldTextureDecline(pass, result.reason); }
+        if (result.failed) { failed = true; stats.failedDraws++; }
+      }
+      if (!handled && !failed) {
+        remaining = pass.budget - pass.used;
+        if (remaining < 8) meanReason = 'budget';
+        else {
+          var T = WORLD_TEXTURE_DEFAULTS.tessellation, to = _worldTextureTessOptions;
+          to.width = pass.w; to.height = pass.h; to.maxTriangles = Math.min(T.maxTriangles, remaining);
+          to.maxDepth = T.maxDepth; to.errorPixels = T.errorPixels;
+          var tri = _worldTextureTriangleOptions;
+          tri.stats = pass.mapperStats; tri.ownedPixels = pass.owned;
+          _worldTextureEmitMaterial = material; _worldTextureEmitDraws = 0; _worldTextureEmitFailed = 0;
+          var work = TexturePilot.tessellate(tp, to, _worldTextureEmit);
+          _worldTextureEmitMaterial = null;
+          pass.used += work.triangles; stats.triangles += work.triangles;
+          if (work.capped) stats.capped++;
+          if (work.rejected) { if (work.capped) meanReason = 'budget'; else { meanReason = 'decline'; _worldTextureDecline(pass, 'tessellation'); } }
+          else if (_worldTextureEmitFailed || !_worldTextureEmitDraws) { failed = true; stats.failedDraws += _worldTextureEmitFailed || 1; }
+        }
+      }
+      stats.mappingMs += _worldTextureNow() - start;
+      if (!failed && !meanReason) {
+        var bw = maxX - minX + 1, bh = maxY - minY + 1;
+        ctx.globalAlpha = baseAlpha * washAmount; ctx.fillStyle = washStyle; ctx.fillRect(minX, minY, bw, bh);
+        ctx.globalAlpha = baseAlpha;
+        ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = multiplyStyle; ctx.fillRect(minX, minY, bw, bh);
+        if (lighterStyle) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = lighterStyle; ctx.fillRect(minX, minY, bw, bh); }
+        ctx.globalCompositeOperation = 'source-over';
+        if (dist > pass.fadeStart) {
+          ctx.globalAlpha = baseAlpha * Math.min(1, (dist - pass.fadeStart) / (pass.fadeEnd - pass.fadeStart));
+          ctx.fillStyle = meanStyle; ctx.fillRect(minX, minY, bw, bh);
+        }
+      }
+    }
+  } catch (e) {
+    failed = true; stats.failedDraws++;
+  } finally {
+    ctx.restore();
+    for (var guard = 0; guard < 32 && ctx.lineDashOffset !== dash; guard++) ctx.restore();
+  }
+  if (failed || meanReason) return _worldTextureMean(stats, key, meanStyle, gen, minY, maxY, failed ? 'failed' : meanReason);
+  stats.faces++;
+  if (_worldTextureShown && key) _worldTextureShown.set(key, true);
+  _worldTextureDebugTint(stats, handled ? 'strip' : 'triangle', gen, minY, maxY);
+}
+
+// ── Prop textures (integration stage L, propTextures, default ON) ──
+// drawWorldModel (12-prop-models.js) paints the opaque faces of the materials
+// and roles below through fillSceneDepthTexturedPolygon: the chest body and
+// lid (every tier) in wood at uvScale 14 with the structures' 32% wash, and
+// the spawner obelisk's body in stone at uvScale 32 under a dark wash (50%
+// of its dark violet albedo, meant to keep the obelisk's colour; natively, in
+// Chromium, the stone replaces most of the purple at 0.5 (TEXTURES.md); the
+// mean brightness is still normalised to the flat face). uvScale is world
+// units per tile; a part authored at another UV scale is rescaled (the
+// obelisk's parts carry 24). Triangles only: props never use planar strips,
+// whatever textureMapping says. The same engage rules, parameters and
+// per-frame primitive budget as the structure pass: props continue from the
+// primitives the structure pass used this frame (structureModels3D draws
+// first, then each prop family near to far). The same counters, plus
+// texPropFaces, texPropMean, texPropPrims, texPropDraws (engaged prop
+// passes) and texPropFlat (flat prop passes); a frame's flat reason is
+// counted once, texBudget and texCatalogBytes once per frame. A face drawn
+// at a fade alpha below 1 (the chest and obelisk range fade) paints the
+// prepared mean. The frame is _renderFrameStats.frame: a host that draws
+// props without beginRenderFrameStats keeps one budget across its draws.
+var PROP_TEXTURE_WOOD = Object.freeze({material: 'wood', uvScale: 14, wash: 0.32});
+var PROP_TEXTURE_OBELISK_STONE = Object.freeze({material: 'stone', uvScale: 32, wash: 0.5});
+var PROP_TEXTURE_SPECS = Object.freeze({
+  chestCommon: Object.freeze({body: PROP_TEXTURE_WOOD, lid: PROP_TEXTURE_WOOD}),
+  chestUncommon: Object.freeze({body: PROP_TEXTURE_WOOD, lid: PROP_TEXTURE_WOOD}),
+  chestRare: Object.freeze({body: PROP_TEXTURE_WOOD, lid: PROP_TEXTURE_WOOD}),
+  chestEpic: Object.freeze({body: PROP_TEXTURE_WOOD, lid: PROP_TEXTURE_WOOD}),
+  spawnerObelisk: Object.freeze({body: PROP_TEXTURE_OBELISK_STONE})
+});
+var _worldTextureFrame = {stamp: NaN, used: 0, reported: false, budgetShown: false};
+function _worldTextureFrameNow() {
+  var f = _worldTextureFrame;
+  var stamp = typeof _renderFrameStats === 'object' && _renderFrameStats ? _renderFrameStats.frame : -1;
+  if (f.stamp !== stamp) { f.stamp = stamp; f.used = 0; f.reported = false; f.budgetShown = false; }
+  return f;
+}
+// endWorldTexturePass: the structure pass's primitives count against the props.
+function _worldTextureFrameNote(pass, wasActive) {
+  var frame = _worldTextureFrameNow();
+  if (pass.reason === 'off') return;
+  frame.reported = true;
+  if (wasActive) { frame.used = pass.used; frame.budgetShown = true; }
+}
+var _worldTexturePropModels = typeof WeakMap === 'function' ? new WeakMap() : null;
+function _worldTexturePropModel(model) {
+  var known = _worldTexturePropModels ? _worldTexturePropModels.get(model) : undefined;
+  if (known === undefined) {
+    known = false;
+    for (var i = 0; i < model.parts.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(PROP_TEXTURE_SPECS, model.parts[i].material)) known = true;
+    }
+    if (_worldTexturePropModels) _worldTexturePropModels.set(model, known);
+  }
+  return known;
+}
+// Begins a prop pass for one model's opaque faces; true when it engaged. A
+// flat pass is counted and ended here. Never inside a structure pass; a prop
+// pass left begun (drawWorldModel threw mid-model) is simply replaced.
+function beginWorldTexturePropPass(model, C) {
+  var pass = _worldTexturePass;
+  if (((pass.active || pass.begun) && !pass.props) || !model || !model.parts || !C ||
+      !(typeof renderFeatureOn === 'function' && renderFeatureOn('propTextures')) || !_worldTexturePropModel(model)) return false;
+  var frame = _worldTextureFrameNow();
+  pass.active = false; pass.reason = 'off'; pass.buildMs = 0; pass.begun = true; pass.props = true;
+  pass.stats = _worldTextureNewStats(); pass.mapperStats = {}; pass.declines = {};
+  pass.used = frame.used; pass.propStart = frame.used;
+  if (_worldTextureEngage(pass, C)) return true;
+  endWorldTexturePropPass();
+  return false;
+}
+var _worldTexturePropSurface = {vertices: null, material: '', tint: 0, lit: 0, dist: 0, horizontal: false, key: null,
+  wash: 0, triangles: true, meanOnly: false};
+var _worldTexturePropVerts = [], _worldTexturePropPool = [];
+var _worldTexturePropKeys = typeof WeakMap === 'function' ? new WeakMap() : null;
+// Owned-pixel hysteresis key: one object per (instance owner, face index).
+function _worldTexturePropKey(owner, index) {
+  if (!_worldTexturePropKeys || !owner || typeof owner !== 'object') return null;
+  var keys = _worldTexturePropKeys.get(owner);
+  if (!keys) { keys = []; _worldTexturePropKeys.set(owner, keys); }
+  return keys[index] || (keys[index] = {});
+}
+// The sink surface for one opaque model face in an engaged prop pass, or
+// null (paint it flat). part: the face's model part; index: its index in the
+// model (inst.texOwner keys the hysteresis); packed: its authored colour;
+// lit: its flat colour; alpha: the globalAlpha it is drawn at.
+function worldTexturePropSurface(face, part, inst, index, packed, lit, dist, alpha) {
+  if (!_worldTexturePass.active || !face || (face.flags && (face.flags.translucent || face.flags.emissive))) return null;
+  var roles = Object.prototype.hasOwnProperty.call(PROP_TEXTURE_SPECS, face.material) ? PROP_TEXTURE_SPECS[face.material] : null;
+  var spec = roles && roles[face.role];
+  if (!spec) return null;
+  var verts = face.vertices;
+  var k = part && part.uvScale > 0 ? part.uvScale / spec.uvScale : 1;
+  if (k !== 1) {
+    var scaled = _worldTexturePropVerts, pool = _worldTexturePropPool;
+    scaled.length = 0;
+    for (var i = 0; i < verts.length; i++) {
+      var v = verts[i], s = pool[i] || (pool[i] = {x: 0, y: 0, z: 0, u: 0, v: 0});
+      s.x = v.x; s.y = v.y; s.z = v.z; s.u = v.u * k; s.v = v.v * k;
+      scaled.push(s);
+    }
+    verts = scaled;
+  }
+  var out = _worldTexturePropSurface;
+  out.vertices = verts; out.material = spec.material; out.tint = packed; out.lit = lit; out.dist = dist;
+  out.horizontal = false; out.wash = spec.wash; out.triangles = true; out.meanOnly = !(alpha >= 1);
+  out.key = _worldTexturePropKey(inst && inst.texOwner, index);
+  return out;
+}
+// Publishes one prop pass's counters (added to the frame's) and ends it.
+function endWorldTexturePropPass() {
+  var pass = _worldTexturePass, s = pass.stats;
+  var wasActive = pass.active, begun = pass.begun;
+  pass.active = false; pass.begun = false; pass.C = null; pass.points = null; _worldTextureSurface = null;
+  if (!begun || pass.reason === 'off' || !s) return;
+  var frame = _worldTextureFrameNow();
+  if (pass.buildMs) _worldTextureStat('texCatalogMs', Math.round(pass.buildMs * 1000) / 1000);
+  if (!wasActive) {
+    _worldTextureStat('texPropFlat', 1);
+    if (!frame.reported) {
+      frame.reported = true;
+      _worldTextureStat('texFlat', 1);
+      _worldTextureStat(WORLD_TEXTURE_FLAT_KEYS[pass.reason] || 'texFlatOther', 1);
+    }
+    return;
+  }
+  var prims = pass.used - pass.propStart, fallbacks = s.meanBudget + s.meanDecline + s.meanFailed;
+  var means = fallbacks + s.meanSmall + s.meanFade;
+  frame.used = pass.used; frame.reported = true;
+  _worldTextureStat('texFaces', s.faces);
+  _worldTextureStat('texMean', means);
+  _worldTextureStat('texMeanBudget', s.meanBudget); _worldTextureStat('texMeanSmall', s.meanSmall);
+  _worldTextureStat('texMeanFade', s.meanFade); _worldTextureStat('texMeanDecline', s.meanDecline);
+  _worldTextureStat('texMeanFailed', s.meanFailed); _worldTextureStat('texFallbacks', fallbacks);
+  _worldTextureStat('texTriangles', s.triangles); _worldTextureStat('texStrips', s.strips);
+  _worldTextureStat('texPatternFills', pass.mapperStats.patternFills || 0);
+  _worldTextureStat('texClips', s.clips); _worldTextureStat('texCapped', s.capped);
+  _worldTextureStat('texPlanarDeclines', s.planarDeclines); _worldTextureStat('texFailedDraws', s.failedDraws);
+  _worldTextureStat('texMappingMs', Math.round(s.mappingMs * 1000) / 1000);
+  _worldTextureStat('texPrims', prims);
+  if (!frame.budgetShown) {
+    frame.budgetShown = true;
+    _worldTextureStat('texBudget', pass.budget);
+    _worldTextureStat('texCatalogBytes', pass.catalog ? pass.catalog.bytes : 0);
+  }
+  for (var reason in pass.declines) _worldTextureStat(reason, pass.declines[reason]);
+  if (s.debugTints) _worldTextureStat('texDebugTints', s.debugTints);
+  _worldTextureStat('texPropFaces', s.faces); _worldTextureStat('texPropMean', means);
+  _worldTextureStat('texPropPrims', prims); _worldTextureStat('texPropDraws', 1);
+}
+
+// A switch back on after a session catalog failure retries the build (lazily,
+// in the next engaged frame); no catalog work happens here or at load.
+// Stage L: either texture switch counts (structures or props).
+var _worldTexturesWasOn = false;
+function _worldTexturesFeatureChanged() {
+  var on = typeof renderFeatureOn === 'function' && (renderFeatureOn('structureTextures') || renderFeatureOn('propTextures'));
+  if (on && !_worldTexturesWasOn && _worldTextureCatalogFailed) {
+    _worldTextureCatalogFailed = false;
+  }
+  _worldTexturesWasOn = on;
+}
+// Stage E2: structureTextures ships ON in Recommended (OFF in Legacy). The
+// parameters below only shape an engaged pass; their Legacy value equals the
+// default (bool switches must be false in Legacy), and Legacy never engages.
+// Budgets above 2,048 are for comparison only.
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'structureTextures', label: 'Structure textures', type: 'bool', default: true, legacy: false,
+    title: 'Stone and wood textures on the structure models (hybrid mapping, 2,048-primitive budget); a pure colour change over the same depth. Toggle Textures is the master switch.'});
+  defineRenderFeature({key: 'textureMapping', label: 'Texture mapping', type: 'enum', values: ['hybrid', 'triangles', 'planar'],
+    default: WORLD_TEXTURE_DEFAULTS.mapping, legacy: WORLD_TEXTURE_DEFAULTS.mapping,
+    title: 'hybrid: planar strips on horizontal faces, tie-broken triangles elsewhere (the study optimum); triangles: every face; planar: strips on every face (experimental).'});
+  defineRenderFeature({key: 'textureTile', label: 'Texture tile', type: 'enum', values: [128, 64],
+    default: WORLD_TEXTURE_DEFAULTS.tile, legacy: WORLD_TEXTURE_DEFAULTS.tile,
+    title: 'Texture tile size in pixels; each size builds its catalog once.'});
+  defineRenderFeature({key: 'textureOwnedEdges', label: 'Texture owned edges', type: 'bool', default: WORLD_TEXTURE_DEFAULTS.ownedPixels, legacy: false,
+    title: 'Owner-mask edge coverage: textured primitives cover the pixels their face owns, so no seams between primitives.'});
+  defineRenderFeature({key: 'textureBudget', label: 'Texture budget', type: 'enum', values: [2048, 4096, 8192],
+    default: WORLD_TEXTURE_DEFAULTS.budget, legacy: WORLD_TEXTURE_DEFAULTS.budget,
+    title: 'Mapped primitives (strips plus triangles) per frame, nearest faces first; the rest paint their mean colour. 4,096 and 8,192 are for comparison only.'});
+  defineRenderFeature({key: 'textureMaxRows', label: 'Texture max rows', type: 'enum', values: [360, 540, 720, 'unlimited'],
+    default: WORLD_TEXTURE_DEFAULTS.maxRows, legacy: WORLD_TEXTURE_DEFAULTS.maxRows,
+    title: 'Canvases taller than this many rows draw the flat model colours (reason rows on the HUD line).'});
+  defineRenderFeature({key: 'textureMinPixels', label: 'Texture min pixels', type: 'enum', values: [64, 0],
+    default: WORLD_TEXTURE_DEFAULTS.minOwnedPx, legacy: WORLD_TEXTURE_DEFAULTS.minOwnedPx,
+    title: 'Faces owning fewer pixels paint their mean colour (64 to enter, 48 to leave); 0 disables the threshold.'});
+  // Stage L: default ON since the native magnified-band case (chests at
+  // 20-90 units, 16/16 in Chromium) and the lab A/B passed; Legacy OFF.
+  defineRenderFeature({key: 'propTextures', label: 'Prop textures', type: 'bool', default: true, legacy: false,
+    title: 'Wood on chest bodies and lids, stone on spawner obelisks (triangles only, on the same texture budget).'});
+}
+if (typeof onRenderFeaturesChange === 'function') {
+  // Seeded after registration: the registration notices fire before this
+  // listener exists, and a later unrelated switch must not count as off->on.
+  _worldTexturesWasOn = typeof renderFeatureOn === 'function' && (renderFeatureOn('structureTextures') || renderFeatureOn('propTextures'));
+  onRenderFeaturesChange(_worldTexturesFeatureChanged);
+}
+// Shared model core for props and landmarks (integration stage C).
+// A model is frozen, backend-neutral data: parts authored in model-local
+// space (r = right, o = out, z = up, world units), each with a
+// GAME_MATERIALS id and role, a per-part uvScale, a tint role, flags, an
+// optional hinge, named anchors and bounds. buildModelFaces() writes reusable
+// world-space face records whose UVs were assigned in part-local space;
+// drawWorldModel() is the one Canvas draw path: exact back-face culling on
+// closed opaque parts clear of the near plane, near-plane clipping, lighting
+// that matches the wall renderer and the production scene-depth fill. Inert
+// at load: declarations plus render-feature registrations (and one
+// registry listener), no DOM, canvas or catalog work. The wall-prop (stage
+// F), chest (stage G) and spawner obelisk (stage H) models are defined here
+// too, and the landmark opaque pass (stage G2). Stage K adds the read-only
+// early reject (modelHiddenByDepth, switch modelEarlyReject) and registers
+// decorAnchorCache (07-decorations-lighting.js's anchor cache).
+//
+// Local winding is outward and counter-clockwise in right-handed (r, o, z)
+// algebra. modelBasis() maps that frame with determinant -1 (out=(cos,sin),
+// right=(-sin,cos)), so the builder reverses vertex order there; the
+// structure basis (right=(cos,sin), out=(-sin,cos)) is its mirror and keeps
+// the authored order. Either way every emitted face winds outward in world
+// algebra and carries its outward unit normal.
+//
+// definePropModel() checks materials against GAME_MATERIALS and throws when
+// 01-materials.js is absent, and fragments must stay inert at load. So
+// production models are defined lazily (on first use) or behind a
+// typeof GAME_MATERIALS guard, never as top-level definePropModel calls.
+var PROP_MODELS = Object.create(null);
+var PROP_MODEL_KINDS = Object.freeze(['box', 'frustum', 'prism', 'extrude', 'quad', 'tri', 'poly', 'mesh']);
+var PROP_MODEL_FLAGS = Object.freeze(['closed', 'emissive', 'translucent', 'decal']);
+var PROP_MODEL_UV_SCALE = 32;
+// Optional capture hook read (typeof-guarded) by drawRuinDecorFace in
+// 15-render-hud-menu.js. When it is a function it receives each world face
+// and colour instead of that face being drawn. Null keeps drawing unchanged.
+var _ruinDecorFaceSink = null;
+var _propModelScratch = null, _propModelBasisScratch = null, _pmTranslucentPoints = null;
+
+function _propModelError(message) { return new Error('prop models: ' + message); }
+
+// ── Bases and adapters ──
+function _pmSnap(v) { return Math.abs(v) < 1e-12 ? 0 : v; }
+function modelBasis(yaw, out) {
+  out = out || {};
+  var c = _pmSnap(Math.cos(yaw)), s = _pmSnap(Math.sin(yaw));
+  out.outX = c; out.outY = s; out.rightX = -s; out.rightY = c;
+  out.hand = out.rightX * out.outY - out.rightY * out.outX;
+  return out;
+}
+// drawStructureBoxWorld's basis: right=(cos,sin), out=(-sin,cos) (mirrored).
+function structureModelBasis(yaw, out) {
+  out = out || {};
+  var c = _pmSnap(Math.cos(yaw)), s = _pmSnap(Math.sin(yaw));
+  out.rightX = c; out.rightY = s; out.outX = -s; out.outY = c;
+  out.hand = out.rightX * out.outY - out.rightY * out.outX;
+  return out;
+}
+function chestModelBasis(ch, out) { return modelBasis(ch && Number.isFinite(ch.facing) ? ch.facing : 0, out); }
+function ruinModelBasis(ru, out) { return modelBasis((((ru && ru.facing) | 0) & 3) * Math.PI * 0.5 - Math.PI * 0.5, out); }
+function wallModelBasis(nx, ny, out) { return modelBasis(Math.atan2(ny, nx), out); }
+function _pmInstanceBasis(inst) {
+  if (inst.basis) return inst.basis;
+  return modelBasis(Number.isFinite(inst.yaw) ? inst.yaw : 0,
+    _propModelBasisScratch || (_propModelBasisScratch = {}));
+}
+function modelLocalToWorld(inst, r, o, z, out) {
+  var b = _pmInstanceBasis(inst), s = inst.scale > 0 ? inst.scale : 1;
+  out = out || {};
+  out.x = inst.x + (r * b.rightX + o * b.outX) * s;
+  out.y = inst.y + (r * b.rightY + o * b.outY) * s;
+  out.z = (Number.isFinite(inst.z) ? inst.z : 0) + z * s;
+  return out;
+}
+
+// ── Stateless keys (no RNG) ──
+function propTypeSalt(name) {
+  var h = 0x811c9dc5, text = String(name);
+  for (var i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+function propInstanceKey(salt, cellX, cellY, seed) {
+  var h = Math.imul((salt | 0) ^ 0x27d4eb2f, 0x9e3779b1);
+  h = Math.imul(h ^ (cellX | 0), 0x85ebca6b); h ^= h >>> 13;
+  h = Math.imul(h ^ (cellY | 0), 0xc2b2ae35); h ^= h >>> 16;
+  h = Math.imul(h ^ (seed | 0), 0x27d4eb2f); h ^= h >>> 15;
+  return h >>> 0;
+}
+
+// ── Definition-time geometry (allocates; never on the draw path) ──
+function _pmVec(value, n, what) {
+  if (!Array.isArray(value) || value.length !== n) throw _propModelError(what + ' must be ' + n + ' numbers');
+  for (var i = 0; i < n; i++) {
+    if (typeof value[i] !== 'number' || !Number.isFinite(value[i])) throw _propModelError(what + ' must be finite numbers');
+  }
+  return value.slice();
+}
+function _pmNumber(value, fallback, what, min) {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value) || (min !== undefined && value < min))
+    throw _propModelError(what + ' must be a finite number' + (min !== undefined ? ' >= ' + min : ''));
+  return value;
+}
+function _pmNewell(points) {
+  var nx = 0, ny = 0, nz = 0;
+  for (var i = 0; i < points.length; i++) {
+    var a = points[i], b = points[(i + 1) % points.length];
+    nx += (a[1] - b[1]) * (a[2] + b[2]);
+    ny += (a[2] - b[2]) * (a[0] + b[0]);
+    nz += (a[0] - b[0]) * (a[1] + b[1]);
+  }
+  var length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  return length > 1e-9 ? [nx / length, ny / length, nz / length] : null;
+}
+function _pmDedupe(points) {
+  var out = [];
+  for (var i = 0; i < points.length; i++) {
+    var p = points[i], q = out.length ? out[out.length - 1] : null;
+    if (!q || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) > 1e-9) out.push(p);
+  }
+  while (out.length > 1) {
+    var f = out[0], l = out[out.length - 1];
+    if (Math.abs(f[0] - l[0]) + Math.abs(f[1] - l[1]) + Math.abs(f[2] - l[2]) > 1e-9) break;
+    out.pop();
+  }
+  return out;
+}
+// Box and frustum faces share one order: -out, +right, +out, -right, top,
+// bottom. The first five match drawRuinDecorBox, so an adapter reproduces it.
+function _pmQuadBlock(b, t, top, bottom) {
+  var faces = [[b[0], b[1], t[1], t[0]], [b[1], b[2], t[2], t[1]], [b[2], b[3], t[3], t[2]], [b[3], b[0], t[0], t[3]]];
+  if (top) faces.push([t[0], t[1], t[2], t[3]]);
+  if (bottom) faces.push([b[0], b[3], b[2], b[1]]);
+  return faces;
+}
+function _pmPartPoints(part, def, name) {
+  var faces = [], i;
+  if (part.kind === 'box') {
+    var mn = _pmVec(def.min, 3, name + '.min'), mx = _pmVec(def.max, 3, name + '.max');
+    for (i = 0; i < 3; i++) if (!(mx[i] > mn[i])) throw _propModelError(name + ': box max must exceed min');
+    var b = [[mn[0], mn[1], mn[2]], [mx[0], mn[1], mn[2]], [mx[0], mx[1], mn[2]], [mn[0], mx[1], mn[2]]];
+    var t = b.map(function(p) { return [p[0], p[1], mx[2]]; });
+    faces = _pmQuadBlock(b, t, def.top !== false, def.bottom !== false);
+    part.defaultClosed = def.top !== false && def.bottom !== false;
+  } else if (part.kind === 'frustum') {
+    var fc = _pmVec(def.center || [0, 0], 2, name + '.center'), fz0 = _pmNumber(def.z0, 0, name + '.z0');
+    var fz1 = _pmNumber(def.z1, NaN, name + '.z1'), lo = _pmVec(def.bottom, 2, name + '.bottom');
+    var hi = _pmVec(def.top, 2, name + '.top'), shift = _pmVec(def.shift || [0, 0], 2, name + '.shift');
+    if (!(fz1 > fz0) || !(lo[0] > 0 && lo[1] > 0) || hi[0] < 0 || hi[1] < 0)
+      throw _propModelError(name + ': frustum needs z1 > z0, a positive bottom and a non-negative top');
+    var fb = [[fc[0] - lo[0], fc[1] - lo[1], fz0], [fc[0] + lo[0], fc[1] - lo[1], fz0],
+      [fc[0] + lo[0], fc[1] + lo[1], fz0], [fc[0] - lo[0], fc[1] + lo[1], fz0]];
+    var tr = fc[0] + shift[0], to = fc[1] + shift[1];
+    var ft = [[tr - hi[0], to - hi[1], fz1], [tr + hi[0], to - hi[1], fz1],
+      [tr + hi[0], to + hi[1], fz1], [tr - hi[0], to + hi[1], fz1]];
+    if (def.apex === undefined) {
+      faces = _pmQuadBlock(fb, ft, true, def.bottomCap !== false);
+    } else {
+      // Optional (stage H): apex > z1 replaces the flat top with a pyramid
+      // cap to (center + shift, apex): sides, four cap triangles, bottom.
+      var apex = _pmNumber(def.apex, NaN, name + '.apex');
+      if (!(apex > fz1) || !(hi[0] > 0 && hi[1] > 0)) throw _propModelError(name + ': a frustum apex needs a positive top and apex > z1');
+      faces = _pmQuadBlock(fb, ft, false, false);
+      for (i = 0; i < 4; i++) faces.push([ft[i], ft[(i + 1) % 4], [tr, to, apex]]);
+      if (def.bottomCap !== false) faces.push([fb[0], fb[3], fb[2], fb[1]]);
+    }
+    part.defaultClosed = def.bottomCap !== false;
+  } else if (part.kind === 'prism') {
+    // Optional (stage F2): axis 'o' or 'r' runs the prism along that local
+    // axis (center and radius are then in the other two, in r, o, z order;
+    // z0/z1 are positions along the axis), and radius may be [a, b] for an
+    // elliptical cross-section. The defaults keep the vertical prism exactly.
+    var sides = def.sides;
+    if (!Number.isInteger(sides) || sides < 3 || sides > 64) throw _propModelError(name + ': prism sides must be an integer 3..64');
+    var paxis = def.axis === undefined ? 'z' : def.axis;
+    if (paxis !== 'r' && paxis !== 'o' && paxis !== 'z') throw _propModelError(name + ': prism axis must be r, o or z');
+    var pc = _pmVec(def.center || [0, 0], 2, name + '.center');
+    var radius = Array.isArray(def.radius) ? _pmVec(def.radius, 2, name + '.radius') : _pmNumber(def.radius, NaN, name + '.radius');
+    var ra = Array.isArray(radius) ? radius[0] : radius, rb = Array.isArray(radius) ? radius[1] : radius;
+    var taper = _pmNumber(def.taper, 1, name + '.taper', 0), rotation = _pmNumber(def.rotation, 0, name + '.rotation');
+    var pz0 = _pmNumber(def.z0, 0, name + '.z0'), pz1 = _pmNumber(def.z1, NaN, name + '.z1');
+    var ps = _pmVec(def.shift || [0, 0], 2, name + '.shift');
+    if (!(ra > 0) || !(rb > 0) || !(pz1 > pz0)) throw _propModelError(name + ': prism needs radius > 0 and z1 > z0');
+    var pat = function(p0, p1, tt) { return paxis === 'z' ? [p0, p1, tt] : paxis === 'o' ? [p0, tt, p1] : [tt, p0, p1]; };
+    var ring0 = [], ring1 = [];
+    for (i = 0; i < sides; i++) {
+      var a = rotation + i * Math.PI * 2 / sides, ca = Math.cos(a), sa = Math.sin(a);
+      ring0.push(pat(pc[0] + ca * ra, pc[1] + sa * rb, pz0));
+      ring1.push(pat(pc[0] + ps[0] + ca * ra * taper, pc[1] + ps[1] + sa * rb * taper, pz1));
+    }
+    for (i = 0; i < sides; i++) faces.push([ring0[i], ring0[(i + 1) % sides], ring1[(i + 1) % sides], ring1[i]]);
+    faces.push(ring1.slice());
+    if (def.bottomCap !== false) faces.push(ring0.slice().reverse());
+    // (a, t, b) swaps two axes, a reflection: reverse to keep outward winding.
+    if (paxis === 'o') faces.forEach(function(f) { f.reverse(); });
+    part.defaultClosed = def.bottomCap !== false;
+  } else if (part.kind === 'extrude') {
+    var axis = def.axis;
+    if (axis !== 'r' && axis !== 'o' && axis !== 'z') throw _propModelError(name + ': extrude axis must be r, o or z');
+    if (!Array.isArray(def.profile) || def.profile.length < 3) throw _propModelError(name + ': extrude needs a profile of 3+ points');
+    var profile = def.profile.map(function(p, pi) { return _pmVec(p, 2, name + '.profile[' + pi + ']'); });
+    var from = _pmNumber(def.from, NaN, name + '.from'), to2 = _pmNumber(def.to, NaN, name + '.to');
+    if (!(to2 > from)) throw _propModelError(name + ': extrude needs to > from');
+    var at = function(p, tt) { return axis === 'z' ? [p[0], p[1], tt] : axis === 'r' ? [tt, p[0], p[1]] : [p[0], tt, p[1]]; };
+    var n = profile.length, start = [], end = [];
+    for (i = 0; i < n; i++) {
+      faces.push([at(profile[i], from), at(profile[(i + 1) % n], from), at(profile[(i + 1) % n], to2), at(profile[i], to2)]);
+      start.push(at(profile[n - 1 - i], from)); end.push(at(profile[i], to2));
+    }
+    if (def.caps !== false) { faces.push(start); faces.push(end); }
+    part.defaultClosed = def.caps !== false;
+    // The profile may be authored either way round; orient by signed volume.
+    if (part.defaultClosed && _pmSignedVolume(faces) < 0) faces.forEach(function(f) { f.reverse(); });
+  } else if (part.kind === 'quad' || part.kind === 'tri' || part.kind === 'poly') {
+    // poly (stage F2): one planar convex polygon of 3+ vertices, e.g. a decal.
+    var count = part.kind === 'quad' ? 4 : part.kind === 'tri' ? 3 : 0;
+    if (!Array.isArray(def.vertices) || (count ? def.vertices.length !== count : def.vertices.length < 3))
+      throw _propModelError(name + ': ' + part.kind + ' needs ' + (count || '3+') + ' vertices');
+    faces = [def.vertices.map(function(p, vi) { return _pmVec(p, 3, name + '.vertices[' + vi + ']'); })];
+    part.defaultClosed = false;
+  } else if (part.kind === 'mesh') {
+    if (!Array.isArray(def.vertices) || def.vertices.length < 3 || !Array.isArray(def.triangles) || !def.triangles.length)
+      throw _propModelError(name + ': mesh needs vertices and triangles');
+    var verts = def.vertices.map(function(p, vi) { return _pmVec(p, 3, name + '.vertices[' + vi + ']'); });
+    def.triangles.forEach(function(tri, ti) {
+      if (!Array.isArray(tri) || tri.length !== 3 || !tri.every(function(k) { return Number.isInteger(k) && k >= 0 && k < verts.length; }))
+        throw _propModelError(name + '.triangles[' + ti + '] must index three vertices');
+      faces.push([verts[tri[0]], verts[tri[1]], verts[tri[2]]]);
+    });
+    part.defaultClosed = false;
+  }
+  return faces;
+}
+function _pmSignedVolume(faces) {
+  var volume = 0;
+  faces.forEach(function(f) {
+    for (var i = 1; i + 1 < f.length; i++) {
+      var a = f[0], b = f[i], c = f[i + 1];
+      volume += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
+    }
+  });
+  return volume / 6;
+}
+function _pmPointKey(p) { return p.map(function(v) { return Math.round(v * 1e6); }).join(','); }
+// Every directed edge must be matched by exactly one opposite edge.
+function _pmManifoldProblem(faces) {
+  var edges = Object.create(null);
+  faces.forEach(function(f) {
+    for (var i = 0; i < f.length; i++) {
+      var key = _pmPointKey(f[i]) + '>' + _pmPointKey(f[(i + 1) % f.length]);
+      edges[key] = (edges[key] || 0) + 1;
+    }
+  });
+  for (var key in edges) {
+    var ends = key.split('>'), reverse = ends[1] + '>' + ends[0];
+    if (edges[key] !== 1 || edges[reverse] !== 1) return 'edge ' + key + ' is not shared by exactly two faces';
+  }
+  return '';
+}
+// Canvas and the scene-depth fan both assume a planar convex polygon.
+function _pmFaceProblem(points, normal) {
+  var p0 = points[0], size = 0, i;
+  for (i = 1; i < points.length; i++) size = Math.max(size, Math.abs(points[i][0] - p0[0]) + Math.abs(points[i][1] - p0[1]) + Math.abs(points[i][2] - p0[2]));
+  for (i = 1; i < points.length; i++) {
+    var d = (points[i][0] - p0[0]) * normal[0] + (points[i][1] - p0[1]) * normal[1] + (points[i][2] - p0[2]) * normal[2];
+    if (Math.abs(d) > size * 1e-6) return 'is not planar';
+  }
+  for (i = 0; i < points.length; i++) {
+    var a = points[i], b = points[(i + 1) % points.length], c = points[(i + 2) % points.length];
+    var ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - b[0], vy = c[1] - b[1], vz = c[2] - b[2];
+    var turn = (uy * vz - uz * vy) * normal[0] + (uz * vx - ux * vz) * normal[1] + (ux * vy - uy * vx) * normal[2];
+    if (turn < -size * size * 1e-9) return 'is not convex';
+  }
+  return '';
+}
+// Part-local UVs in tile repeats: u runs along the horizontal tangent
+// t = z x n (the viewer's right for modelBasis instances), v runs down the
+// face. Horizontal faces use u along +r.
+function _pmFaceUV(points, normal, scale) {
+  var horizontal = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1]);
+  var tx = 1, ty = 0;
+  if (horizontal > 1e-9) { tx = -normal[1] / horizontal; ty = normal[0] / horizontal; }
+  var bx = -normal[2] * ty, by = normal[2] * tx, bz = normal[0] * ty - normal[1] * tx;
+  return points.map(function(p) {
+    return Object.freeze([(p[0] * tx + p[1] * ty) / scale, -(p[0] * bx + p[1] * by + p[2] * bz) / scale]);
+  });
+}
+function _pmDeepFreeze(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    Object.getOwnPropertyNames(value).forEach(function(k) { _pmDeepFreeze(value[k]); });
+  }
+  return value;
+}
+
+function _pmNormalizePart(def, index, anchorNames) {
+  if (!def || typeof def !== 'object') throw _propModelError('part ' + index + ' must be an object');
+  var name = typeof def.name === 'string' && def.name ? def.name : 'part' + index;
+  if (PROP_MODEL_KINDS.indexOf(def.kind) < 0) throw _propModelError(name + ': unknown kind ' + def.kind);
+  var materials = typeof GAME_MATERIALS !== 'undefined' ? GAME_MATERIALS : null;
+  var material = materials && materials[def.material];
+  if (!material) throw _propModelError(name + ': unknown material ' + def.material);
+  var role = def.role === undefined ? 'base' : def.role;
+  if (!material.packed || !(role in material.packed)) throw _propModelError(name + ': material ' + def.material + ' has no role ' + role);
+  var part = {name: name, kind: def.kind, material: def.material, role: role,
+    uvScale: _pmNumber(def.uvScale, PROP_MODEL_UV_SCALE, name + '.uvScale'),
+    tint: def.tint === undefined ? 'none' : def.tint, alpha: 1, hinge: null, anchors: {}, faceRoles: null};
+  if (!(part.uvScale > 0)) throw _propModelError(name + ': uvScale must be positive');
+  if (typeof part.tint !== 'string' || !part.tint) throw _propModelError(name + ': tint must be a role name');
+  var flags = def.flags || {};
+  Object.keys(flags).forEach(function(k) {
+    if (PROP_MODEL_FLAGS.indexOf(k) < 0 || typeof flags[k] !== 'boolean') throw _propModelError(name + ': unknown or non-boolean flag ' + k);
+  });
+  var points = _pmPartPoints(part, def, name).map(_pmDedupe).filter(function(f) { return f.length >= 3; });
+  if (!points.length) throw _propModelError(name + ': no faces');
+  part.flags = {closed: flags.closed === undefined ? part.defaultClosed : flags.closed,
+    emissive: !!flags.emissive, translucent: !!flags.translucent, decal: !!flags.decal};
+  delete part.defaultClosed;
+  if (part.flags.translucent) {
+    part.alpha = _pmNumber(def.alpha, 0.6, name + '.alpha');
+    if (!(part.alpha > 0 && part.alpha <= 1)) throw _propModelError(name + ': alpha must be in (0, 1]');
+  }
+  if (def.faceRoles !== undefined) {
+    if (!Array.isArray(def.faceRoles) || def.faceRoles.length !== points.length)
+      throw _propModelError(name + ': faceRoles needs one role per face (' + points.length + ')');
+    def.faceRoles.forEach(function(r) { if (!(r in material.packed)) throw _propModelError(name + ': material ' + def.material + ' has no role ' + r); });
+    part.faceRoles = def.faceRoles.slice();
+  }
+  if (part.flags.closed) {
+    var problem = _pmManifoldProblem(points);
+    if (problem) throw _propModelError(name + ': closed part ' + problem);
+    if (!(_pmSignedVolume(points) > 0)) throw _propModelError(name + ': closed part winds inward');
+  }
+  part.faces = points.map(function(f, fi) {
+    var normal = _pmNewell(f);
+    if (!normal) throw _propModelError(name + ': face ' + fi + ' has no area');
+    var problem = _pmFaceProblem(f, normal);
+    if (problem) throw _propModelError(name + ': face ' + fi + ' ' + problem);
+    return {points: f.map(function(p) { return p.slice(); }), uv: _pmFaceUV(f, normal, part.uvScale), normal: normal,
+      role: part.faceRoles ? part.faceRoles[fi] : role};
+  });
+  var min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  part.faces.forEach(function(f) { f.points.forEach(function(p) {
+    for (var k = 0; k < 3; k++) { min[k] = Math.min(min[k], p[k]); max[k] = Math.max(max[k], p[k]); }
+  }); });
+  part.bounds = {min: min, max: max};
+  if (def.hinge !== undefined) {
+    var h = def.hinge;
+    if (!h || typeof h.name !== 'string' || !h.name) throw _propModelError(name + ': hinge needs a name');
+    var axis = _pmVec(h.axis, 3, name + '.hinge.axis'), length = Math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+    if (!(length > 1e-9)) throw _propModelError(name + ': hinge axis must be non-zero');
+    part.hinge = {name: h.name, origin: _pmVec(h.origin, 3, name + '.hinge.origin'),
+      axis: [axis[0] / length, axis[1] / length, axis[2] / length],
+      min: _pmNumber(h.min, -Math.PI, name + '.hinge.min'), max: _pmNumber(h.max, Math.PI, name + '.hinge.max')};
+    if (!(part.hinge.max >= part.hinge.min)) throw _propModelError(name + ': hinge max must be >= min');
+  }
+  Object.keys(def.anchors || {}).forEach(function(anchor) {
+    if (anchorNames.indexOf(anchor) >= 0) throw _propModelError(name + ': duplicate anchor ' + anchor);
+    anchorNames.push(anchor);
+    part.anchors[anchor] = _pmVec(def.anchors[anchor], 3, name + '.anchors.' + anchor);
+  });
+  return part;
+}
+
+// Validates and freezes a model, then registers it in PROP_MODELS.
+function definePropModel(def) {
+  if (!def || typeof def !== 'object') throw _propModelError('a definition object is required');
+  var key = def.key;
+  if (typeof key !== 'string' || !/^[a-z][A-Za-z0-9]*$/.test(key)) throw _propModelError('invalid key ' + key);
+  if (PROP_MODELS[key]) throw _propModelError('duplicate key ' + key);
+  if (!Array.isArray(def.parts) || !def.parts.length) throw _propModelError(key + ': parts required');
+  var family = def.family === undefined ? key : def.family;
+  if (typeof family !== 'string' || !/^[a-z][A-Za-z0-9]*$/.test(family)) throw _propModelError(key + ': invalid family');
+  var anchorNames = [], names = {};
+  var parts = def.parts.map(function(p, i) {
+    var part = _pmNormalizePart(p, i, anchorNames);
+    if (names[part.name]) throw _propModelError(key + ': duplicate part ' + part.name);
+    names[part.name] = true;
+    return part;
+  });
+  var min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], faceCount = 0;
+  parts.forEach(function(part) {
+    faceCount += part.faces.length;
+    for (var k = 0; k < 3; k++) { min[k] = Math.min(min[k], part.bounds.min[k]); max[k] = Math.max(max[k], part.bounds.max[k]); }
+  });
+  var label = family.charAt(0).toUpperCase() + family.slice(1);
+  var model = _pmDeepFreeze({key: key, family: family, parts: parts, bounds: {min: min, max: max},
+    anchorNames: anchorNames, faceCount: faceCount,
+    statKeys: {faces: 'mdl' + label + 'Faces', culled: 'mdl' + label + 'Culled', drawn: 'mdl' + label + 'Drawn',
+      tested: 'mdl' + label + 'Tested'}});
+  PROP_MODELS[key] = model;
+  return model;
+}
+
+// ── Faces ──
+function createModelFaceBuffer() { return {count: 0, faces: [], anchors: {}, parts: [], modelAnchors: {}}; }
+function _pmFaceRecord() {
+  return {vertices: [], material: '', role: '', tint: 'none', normal: {x: 0, y: 0, z: 1}, flags: null,
+    alpha: 1, part: 0, partName: '', _pool: []};
+}
+function _pmRotate(p, a, o, c, s, out) {
+  var x = p[0] - o[0], y = p[1] - o[1], z = p[2] - o[2];
+  var d = (a[0] * x + a[1] * y + a[2] * z) * (1 - c);
+  out[0] = o[0] + x * c + (a[1] * z - a[2] * y) * s + a[0] * d;
+  out[1] = o[1] + y * c + (a[2] * x - a[0] * z) * s + a[1] * d;
+  out[2] = o[2] + z * c + (a[0] * y - a[1] * x) * s + a[2] * d;
+  return out;
+}
+var _pmPoint = [0, 0, 0], _pmNormal = [0, 0, 0], _pmZero = [0, 0, 0];
+
+// Writes world faces into `out` (reused records) and returns their count.
+// instance: {x, y, z, basis | yaw, scale, joints: {hingeName: angle},
+// tints: {tintRole: packed rgb}, cave}.
+function buildModelFaces(model, inst, out) {
+  out = out || createModelFaceBuffer();
+  out.count = 0;
+  if (!model || !model.parts || !inst) return 0;
+  // Anchors live in one reused map per model, so out.anchors holds exactly
+  // this model's names; the next build of the same model overwrites them.
+  var anchorMaps = out.modelAnchors || (out.modelAnchors = {});
+  out.anchors = anchorMaps[model.key] || (anchorMaps[model.key] = {});
+  var basis = _pmInstanceBasis(inst);
+  var RX = basis.rightX, RY = basis.rightY, OX = basis.outX, OY = basis.outY;
+  var reverse = RX * OY - RY * OX < 0;
+  var scale = inst.scale > 0 ? inst.scale : 1, ox = inst.x, oy = inst.y, oz = Number.isFinite(inst.z) ? inst.z : 0;
+  var count = 0;
+  for (var pi = 0; pi < model.parts.length; pi++) {
+    var part = model.parts[pi], hinge = part.hinge, angle = 0;
+    if (hinge && inst.joints && Number.isFinite(inst.joints[hinge.name]))
+      angle = Math.max(hinge.min, Math.min(hinge.max, inst.joints[hinge.name]));
+    var hc = Math.cos(angle), hs = Math.sin(angle);
+    var bounds = out.parts[pi] || (out.parts[pi] = {minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0});
+    bounds.minX = bounds.minY = bounds.minZ = Infinity; bounds.maxX = bounds.maxY = bounds.maxZ = -Infinity;
+    for (var fi = 0; fi < part.faces.length; fi++) {
+      var src = part.faces[fi], n = src.points.length;
+      var rec = out.faces[count] || (out.faces[count] = _pmFaceRecord());
+      rec.vertices.length = 0;
+      for (var k = 0; k < n; k++) {
+        var j = reverse && k ? n - k : k;
+        var p = angle ? _pmRotate(src.points[j], hinge.axis, hinge.origin, hc, hs, _pmPoint) : src.points[j], uv = src.uv[j];
+        var v = rec._pool[k] || (rec._pool[k] = {x: 0, y: 0, z: 0, u: 0, v: 0});
+        v.x = ox + (p[0] * RX + p[1] * OX) * scale;
+        v.y = oy + (p[0] * RY + p[1] * OY) * scale;
+        v.z = oz + p[2] * scale;
+        v.u = uv[0]; v.v = uv[1];
+        rec.vertices.push(v);
+        if (v.x < bounds.minX) bounds.minX = v.x; if (v.x > bounds.maxX) bounds.maxX = v.x;
+        if (v.y < bounds.minY) bounds.minY = v.y; if (v.y > bounds.maxY) bounds.maxY = v.y;
+        if (v.z < bounds.minZ) bounds.minZ = v.z; if (v.z > bounds.maxZ) bounds.maxZ = v.z;
+      }
+      var nl = src.normal;
+      if (angle) nl = _pmRotate(nl, hinge.axis, _pmZero, hc, hs, _pmNormal);
+      rec.normal.x = nl[0] * RX + nl[1] * OX; rec.normal.y = nl[0] * RY + nl[1] * OY; rec.normal.z = nl[2];
+      rec.material = part.material; rec.role = src.role; rec.tint = part.tint; rec.flags = part.flags;
+      rec.alpha = part.alpha; rec.part = pi; rec.partName = part.name;
+      count++;
+    }
+    for (var anchor in part.anchors) {
+      var ap = angle ? _pmRotate(part.anchors[anchor], hinge.axis, hinge.origin, hc, hs, _pmPoint) : part.anchors[anchor];
+      var target = out.anchors[anchor] || (out.anchors[anchor] = {x: 0, y: 0, z: 0});
+      target.x = ox + (ap[0] * RX + ap[1] * OX) * scale;
+      target.y = oy + (ap[0] * RY + ap[1] * OY) * scale;
+      target.z = oz + ap[2] * scale;
+    }
+  }
+  out.count = count;
+  return count;
+}
+
+// ── Lighting (matches 12-render-core-walls.js renderFace) ──
+// Exact on axis faces: the squared components select one production shade.
+// Downward faces get no sun, so they take the surface ambient.
+function worldFaceShade(nx, ny, nz) {
+  var sx = nx * nx, sy = ny * ny, sz = nz * nz, total = sx + sy + sz;
+  if (!(total > 0)) return renderSurfaceAmbient;
+  var shade = sx * (nx >= 0 ? renderSurfaceWallShadeE : renderSurfaceWallShadeW) +
+    sy * (ny >= 0 ? renderSurfaceWallShadeS : renderSurfaceWallShadeN) +
+    sz * (nz >= 0 ? renderSurfaceTopShade : renderSurfaceAmbient);
+  return total === 1 ? shade : shade / total;
+}
+function worldFaceLight(wx, wy) {
+  if (typeof _lightGrid === 'undefined' || !_lightGrid) return 0;
+  var lgx = Math.floor(wx / _lightCellSize), lgy = Math.floor(wy / _lightCellSize);
+  if (lgx >= 0 && lgx < _lightGridW && lgy >= 0 && lgy < _lightGridH) return _lightGrid[lgy * _lightGridW + lgx];
+  return 0;
+}
+function worldFaceFog(dist, inCave) {
+  var floor = inCave && typeof renderCaveFogFloor !== 'undefined' ? renderCaveFogFloor :
+    (typeof renderSurfaceFogFloor !== 'undefined' ? renderSurfaceFogFloor : fogFloor);
+  return Math.max(floor, 1.0 - dist * 0.0008);
+}
+function worldFaceFadeAlpha(dist) {
+  var fadeStart = viewDist * 0.82, fadeRange = viewDist - fadeStart;
+  if (!(dist > fadeStart)) return 1;
+  var alpha = Math.max(0, 1.0 - (dist - fadeStart) / fadeRange);
+  return alpha * alpha;
+}
+// Lit multiplier as the wall renderer applies it: side faces clamp
+// shade + light to 1 (renderFace), up-facing faces add the light to
+// renderSurfaceTopShade unclamped (the wall top pass), and downward faces
+// clamp like sides. Sloped normals blend the two by squared components.
+function worldFaceLitShade(nx, ny, nz, light) {
+  var side = nx * nx + ny * ny, vert = nz * nz, total = side + vert;
+  if (!(total > 0)) return Math.min(1.0, renderSurfaceAmbient + light);
+  var lit = 0;
+  if (side > 0) lit += side * Math.min(1.0, worldFaceShade(nx, ny, 0) + light);
+  if (vert > 0) lit += vert * (nz > 0 ? renderSurfaceTopShade + light : Math.min(1.0, renderSurfaceAmbient + light));
+  return total === 1 ? lit : lit / total;
+}
+// Packed RGB of a lit face. Cave faces use the interior roles as walls do:
+// up-facing is floor, down-facing is ceiling, the rest are walls, and faces
+// running east-west (normal along y) are 0.94 quieter.
+function worldFaceColor(packed, nx, ny, nz, wx, wy, fog, inCave, emissive) {
+  var light = emissive ? 0 : worldFaceLight(wx, wy);
+  if (inCave && !emissive) {
+    var role = nz > 0.7 ? CAVE_SURFACE_FLOOR : nz < -0.7 ? CAVE_SURFACE_CEILING : CAVE_SURFACE_WALL;
+    var ambient = typeof getCaveRenderLightAt === 'function' ? getCaveRenderLightAt(wx, wy, true) : renderSurfaceAmbient;
+    if (role === CAVE_SURFACE_WALL) {
+      var sx = nx * nx, sy = ny * ny;
+      ambient *= (sx + sy * 0.94) / (sx + sy);
+    }
+    return shadeCaveSurfaceColor(packed, role, ambient, light, fog);
+  }
+  var total = emissive ? 1 : worldFaceLitShade(nx, ny, nz, light);
+  var warmR = light > 0.05 ? 1.0 + light * 0.3 : 1.0, warmB = light > 0.05 ? 1.0 - light * 0.2 : 1.0;
+  var r = Math.max(0, Math.min(255, Math.floor(((packed >>> 16) & 255) * total * fog * warmR)));
+  var g = Math.max(0, Math.min(255, Math.floor(((packed >>> 8) & 255) * total * fog)));
+  var b = Math.max(0, Math.min(255, Math.floor((packed & 255) * total * fog * warmB)));
+  return (r << 16) | (g << 8) | b;
+}
+
+// ── Drawing ──
+function _pmFillTranslucent() { traceSceneDepthPolygon(_pmTranslucentPoints); ctx.fill(); }
+// Smallest camera depth over a part's world bounds. Depth is linear, so a
+// bounds corner attains it, and rounding is monotonic, so no vertex projects
+// shallower. A camera inside the bounds gives a depth <= 0.
+function _pmNearDepth(b, camX, camY, cosA, sinA) {
+  return ((cosA >= 0 ? b.minX : b.maxX) - camX) * cosA + ((sinA >= 0 ? b.minY : b.maxY) - camY) * sinA;
+}
+
+// ── Early reject (integration stage K: modelEarlyReject; exact, kept for bisecting) ──
+// Model-local bounds holding every face at any joint angle: a part's own
+// bounds, or for a hinged part the cube round its hinge origin whose half
+// size is its farthest vertex from that origin. Cached per model object.
+var _pmReachBoundsCache = null, _pmRejectedKeys = Object.create(null);
+function modelReachBounds(model) {
+  if (!_pmReachBoundsCache && typeof WeakMap === 'function') _pmReachBoundsCache = new WeakMap();
+  var cached = _pmReachBoundsCache ? _pmReachBoundsCache.get(model) : null;
+  if (cached) return cached;
+  var min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  model.parts.forEach(function(part) {
+    var lo = part.bounds.min, hi = part.bounds.max;
+    if (part.hinge) {
+      var o = part.hinge.origin, reach = 0;
+      part.faces.forEach(function(face) {
+        face.points.forEach(function(p) { reach = Math.max(reach, Math.hypot(p[0] - o[0], p[1] - o[1], p[2] - o[2])); });
+      });
+      lo = [o[0] - reach, o[1] - reach, o[2] - reach]; hi = [o[0] + reach, o[1] + reach, o[2] + reach];
+    }
+    for (var k = 0; k < 3; k++) { min[k] = Math.min(min[k], lo[k]); max[k] = Math.max(max[k], hi[k]); }
+  });
+  var bounds = {min: min, max: max};
+  if (_pmReachBoundsCache) _pmReachBoundsCache.set(model, bounds);
+  return bounds;
+}
+// Read-only: true when no face of the instance can pass the scene-depth
+// test. Depth is linear, so a corner of the transformed reach box attains
+// the nearest depth of any face point, and (all corners in front of the near
+// plane, so no face is clipped) every face projects inside the corners'
+// screen box. If at every pixel centre that box can reach (plus one pixel)
+// even a fragment at that nearest depth fails withSceneDepthClip's test at
+// the opaque fill's bias 0.15 (translucent parts use the same default), no
+// face can draw or write depth. Fail-open: a corner nearer than 1.001, a
+// non-finite corner or no scene-depth buffer keeps the full draw.
+function modelHiddenByDepth(inst, model, C) {
+  if (typeof _sceneDepthInv === 'undefined' || !_sceneDepthW || !_sceneDepthH) return false;
+  var rb = modelReachBounds(model), b = _pmInstanceBasis(inst);
+  var scale = inst.scale > 0 ? inst.scale : 1, ox = inst.x, oy = inst.y, oz = Number.isFinite(inst.z) ? inst.z : 0;
+  var near = Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (var c = 0; c < 8; c++) {
+    var r = c & 1 ? rb.max[0] : rb.min[0], o = c & 2 ? rb.max[1] : rb.min[1], z = c & 4 ? rb.max[2] : rb.min[2];
+    var dx = ox + (r * b.rightX + o * b.outX) * scale - cam.x, dy = oy + (r * b.rightY + o * b.outY) * scale - cam.y;
+    var depth = dx * C.cosAng + dy * C.sinAng;
+    if (!(depth >= 1.001) || !Number.isFinite(depth)) return false;
+    var sx = ((-dx * C.sinAng + dy * C.cosAng) / depth * C.invTanHalf * 0.5 + 0.5) * C.w;
+    var sy = C.horizonY + (C.cameraZ - (oz + z * scale)) / depth * projScale;
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) return false;
+    if (depth < near) near = depth;
+    if (sx < minX) minX = sx; if (sx > maxX) maxX = sx;
+    if (sy < minY) minY = sy; if (sy > maxY) maxY = sy;
+  }
+  var x0 = Math.max(0, Math.floor(minX) - 1), x1 = Math.min(_sceneDepthW - 1, Math.ceil(maxX) + 1);
+  var y0 = Math.max(0, Math.floor(minY) - 1), y1 = Math.min(_sceneDepthH - 1, Math.ceil(maxY) + 1);
+  // Largest inverse depth any face fragment can have, with slack for the
+  // rasterizer's incremental interpolation.
+  var inv = (1 / near) * (1 + 1e-6), bias = 0.15, depthInv = _sceneDepthInv;
+  for (var y = y0; y <= y1; y++) {
+    for (var x = x0, i = y * _sceneDepthW + x0; x <= x1; x++, i++) {
+      var existing = depthInv[i];
+      if (inv * (1 + existing * bias) + 1e-9 >= existing) return false;
+    }
+  }
+  return true;
+}
+function _pmRejectedStatKey(model) {
+  return _pmRejectedKeys[model.key] || (_pmRejectedKeys[model.key] = model.statKeys.faces.replace(/Faces$/, 'Rejected'));
+}
+// A rejected model still returns its anchors, as buildModelFaces writes them
+// (the same per-model map and arithmetic), without building any face.
+function modelAnchorsOnly(model, inst, out) {
+  var maps = out.modelAnchors || (out.modelAnchors = {});
+  var anchors = out.anchors = maps[model.key] || (maps[model.key] = {});
+  var b = _pmInstanceBasis(inst), RX = b.rightX, RY = b.rightY, OX = b.outX, OY = b.outY;
+  var scale = inst.scale > 0 ? inst.scale : 1, ox = inst.x, oy = inst.y, oz = Number.isFinite(inst.z) ? inst.z : 0;
+  out.count = 0;
+  for (var pi = 0; pi < model.parts.length; pi++) {
+    var part = model.parts[pi], hinge = part.hinge, angle = 0;
+    if (hinge && inst.joints && Number.isFinite(inst.joints[hinge.name]))
+      angle = Math.max(hinge.min, Math.min(hinge.max, inst.joints[hinge.name]));
+    var hc = Math.cos(angle), hs = Math.sin(angle);
+    for (var name in part.anchors) {
+      var ap = angle ? _pmRotate(part.anchors[name], hinge.axis, hinge.origin, hc, hs, _pmPoint) : part.anchors[name];
+      var t = anchors[name] || (anchors[name] = {x: 0, y: 0, z: 0});
+      t.x = ox + (ap[0] * RX + ap[1] * OX) * scale;
+      t.y = oy + (ap[0] * RY + ap[1] * OY) * scale;
+      t.z = oz + ap[2] * scale;
+    }
+  }
+  return anchors;
+}
+// phase: 'opaque' (default: every non-translucent part), 'overlay'
+// (translucent parts only) or 'all'. Never call it inside a renderEntities3D
+// bounds callback or another scene-depth clip. Returns the world anchors of
+// this model only, as reused objects that the next draw of the same model
+// overwrites (copy them to keep them); stats, when given, accumulates counters
+// (faces, culled, drawn, hidden, clipped, and tested: pixels the depth test
+// visited), and the model's family frame stats receive faces/culled/drawn/tested.
+// With modelEarlyReject on, a model hidden everywhere (modelHiddenByDepth)
+// builds no faces: it still returns its anchors, adds stats.rejected and the
+// family's mdl<Family>Rejected, and leaves ctx and scene depth untouched.
+function drawWorldModel(inst, model, C, phase, stats) {
+  if (!inst || !model || !C) return null;
+  var out = _propModelScratch || (_propModelScratch = createModelFaceBuffer());
+  // Stage K: a model hidden everywhere its bounds project builds no faces.
+  if (typeof renderFeatureOn === 'function' && renderFeatureOn('modelEarlyReject') && modelHiddenByDepth(inst, model, C)) {
+    if (stats) stats.rejected = (stats.rejected || 0) + 1;
+    if (typeof addRenderFrameStat === 'function') addRenderFrameStat(_pmRejectedStatKey(model), 1);
+    return modelAnchorsOnly(model, inst, out);
+  }
+  var count = buildModelFaces(model, inst, out);
+  var cull = typeof renderFeatureOn === 'function' && renderFeatureOn('modelBackfaceCull');
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase === 'overlay' || phase === 'all';
+  // Stage L (propTextures, 12-world-textures.js): the opaque wood and stone
+  // faces go through the textured sink; off, flat or absent: unchanged.
+  var textured = wantOpaque && typeof beginWorldTexturePropPass === 'function' && beginWorldTexturePropPass(model, C);
+  var surface = null;
+  var camX = cam.x, camY = cam.y, camZ = C.cameraZ, inCave = !!inst.cave, tints = inst.tints;
+  var baseAlpha = ctx.globalAlpha, alpha = baseAlpha;
+  var faces = 0, culled = 0, drawn = 0, hidden = 0, clipped = 0, tested = 0;
+  for (var i = 0; i < count; i++) {
+    var f = out.faces[i], flags = f.flags;
+    if (flags.translucent ? !wantOverlay : !wantOpaque) continue;
+    faces++;
+    var verts = f.vertices, v0 = verts[0], n = f.normal;
+    // Exact: on a closed opaque part, a face turned away is covered by the
+    // part's own front faces. That fails once projectSceneWorldPolygon clips
+    // a front face at the depth-1 near plane, so a part whose bounds reach
+    // it (camera inside included) is never culled. Translucent parts show
+    // their back faces through the front ones, so they are never culled.
+    if (cull && flags.closed && !flags.translucent &&
+        _pmNearDepth(out.parts[f.part], camX, camY, C.cosAng, C.sinAng) >= 1 &&
+        n.x * (camX - v0.x) + n.y * (camY - v0.y) + n.z * (camZ - v0.z) <= 0) { culled++; continue; }
+    var projected = projectSceneWorldPolygon(verts, C);
+    if (projected.length < 3) { clipped++; continue; }
+    var cx = 0, cy = 0;
+    for (var k = 0; k < verts.length; k++) { cx += verts[k].x; cy += verts[k].y; }
+    cx /= verts.length; cy /= verts.length;
+    var dist = Math.abs((cx - camX) * C.cosAng + (cy - camY) * C.sinAng);
+    if (dist < 1) dist = 1;
+    var packed = tints && f.tint !== 'none' && Number.isFinite(tints[f.tint]) ? tints[f.tint] :
+      GAME_MATERIALS[f.material].packed[f.role];
+    var lit = worldFaceColor(packed, n.x, n.y, n.z, cx, cy, worldFaceFog(dist, inCave), inCave, flags.emissive);
+    var want = baseAlpha * worldFaceFadeAlpha(dist) * (flags.translucent ? f.alpha : 1);
+    if (want !== alpha) { ctx.globalAlpha = want; alpha = want; }
+    ctx.fillStyle = rgbQ((lit >>> 16) & 255, (lit >>> 8) & 255, lit & 255);
+    var visible;
+    if (flags.translucent) {
+      _pmTranslucentPoints = projected;
+      visible = withSceneDepthClip(projected, _pmFillTranslucent);
+      _pmTranslucentPoints = null;
+    } else if (textured && (surface = worldTexturePropSurface(f, model.parts[f.part], inst, i, packed, lit, dist, want))) {
+      visible = fillSceneDepthTexturedPolygon(projected, surface);
+    } else {
+      visible = fillSceneDepthPolygon(projected);
+    }
+    // Pixels the depth test visited for this face (visible plus hidden).
+    tested += _sceneDepthClipCount + _sceneDepthClipHidden;
+    if (visible) drawn++; else hidden++;
+  }
+  if (alpha !== baseAlpha) ctx.globalAlpha = baseAlpha;
+  if (textured) endWorldTexturePropPass();
+  if (stats) {
+    stats.faces = (stats.faces || 0) + faces; stats.culled = (stats.culled || 0) + culled;
+    stats.drawn = (stats.drawn || 0) + drawn; stats.hidden = (stats.hidden || 0) + hidden;
+    stats.clipped = (stats.clipped || 0) + clipped; stats.tested = (stats.tested || 0) + tested;
+  }
+  if (typeof addRenderFrameStat === 'function') {
+    addRenderFrameStat(model.statKeys.faces, faces);
+    addRenderFrameStat(model.statKeys.culled, culled);
+    addRenderFrameStat(model.statKeys.drawn, drawn);
+    addRenderFrameStat(model.statKeys.tested, tested);
+  }
+  return out.anchors;
+}
+
+// World position of one named anchor without building faces (hinges apply),
+// for overlay passes that did not draw the opaque parts this call.
+function modelAnchorWorld(model, inst, name, out) {
+  if (!model || !model.parts || !inst) return null;
+  for (var pi = 0; pi < model.parts.length; pi++) {
+    var part = model.parts[pi];
+    if (!Object.prototype.hasOwnProperty.call(part.anchors, name)) continue;
+    var ap = part.anchors[name], hinge = part.hinge;
+    if (hinge && inst.joints && Number.isFinite(inst.joints[hinge.name])) {
+      var angle = Math.max(hinge.min, Math.min(hinge.max, inst.joints[hinge.name]));
+      if (angle) ap = _pmRotate(ap, hinge.axis, hinge.origin, Math.cos(angle), Math.sin(angle), _pmPoint);
+    }
+    return modelLocalToWorld(inst, ap[0], ap[1], ap[2], out);
+  }
+  return null;
+}
+
+// ── Wall props (integration stage F) ──
+// Authored at full size S = 35.2 = 32 x the lgWall tier (1.1), the
+// attachment.size of a wall prop on an unclamped wall; an instance scales by
+// attachment.size / S. Local frame (wallModelBasis, yaw atan2(ny, nx)): the
+// origin is on the wall plane at the attachment, o points out of the wall, r
+// runs along it and z is up from attachment.z (the sprite's centre). The
+// point light stays at 0.5 out and 0.25 S up (attachment.flameZ), so the
+// flame anchor sits at the shaft tip 2.2 out and 1.3 below it. Models are
+// defined on first use (definePropModel needs GAME_MATERIALS). Seen from the
+// front, +r is the viewer's left, so a sprite x offset maps to r = -x.
+// Shields and banners have one model per heraldry family (variant % 3, as
+// the sprite): the field colour and its charge (cross, chevron, roundel).
+var WALL_PROP_MODEL_S = 35.2;
+var WALL_PROP_HERALDRY = Object.freeze(['red', 'blue', 'purple']);
+var WALL_PROP_MODEL_KEYS = Object.freeze({torch: 'wallTorch', sconce: 'wallSconce',
+  shield: Object.freeze(['wallShieldRed', 'wallShieldBlue', 'wallShieldPurple']),
+  banner: Object.freeze(['wallBannerRed', 'wallBannerBlue', 'wallBannerPurple'])});
+var _wallPropModelFailed = Object.create(null), _wallPropCullRadius = Object.create(null);
+var _wallPropInstanceScratch = null;
+function _wallTorchModelDef(S) {
+  var tip = 0.25 * S - 1.3, ref = tip - 0.01 * S, axis = 2.2;   // ref: the sprite's origin
+  return {key: 'wallTorch', family: 'wallProp', parts: [
+    // Iron backplate flush on the wall, 0.3 S x 0.46 S, 0.4 thick.
+    {name: 'backplate', kind: 'box', min: [-0.15 * S, 0, ref - 0.33 * S], max: [0.15 * S, 0.4, ref + 0.13 * S],
+      material: 'wallPropIron', role: 'shadow'},
+    // Bracket from inside the plate out to the shaft axis, inside the lower band.
+    {name: 'bracket', kind: 'box', min: [-0.05 * S, 0.3, ref - 0.225 * S], max: [0.05 * S, axis, ref - 0.185 * S],
+      material: 'wallPropIron', role: 'base'},
+    // Wall-parallel shaft tapering 0.23 S (tip) to 0.15 S over 0.83 S; charred top.
+    {name: 'shaft', kind: 'frustum', center: [0, axis], z0: tip - 0.83 * S, z1: tip, bottom: [0.075 * S, 0.9], top: [0.115 * S, 1.4],
+      material: 'wallPropWood', role: 'base', faceRoles: ['base', 'base', 'base', 'base', 'deep', 'base'],
+      anchors: {flame: [0, axis, tip]}},
+    // Two 0.28 S x 0.07 S retaining bands, 1.5 either side of the axis.
+    {name: 'bandUpper', kind: 'box', min: [-0.14 * S, axis - 1.5, ref - 0.09 * S], max: [0.14 * S, axis + 1.5, ref - 0.02 * S],
+      material: 'wallPropIron', role: 'deep'},
+    {name: 'bandLower', kind: 'box', min: [-0.14 * S, axis - 1.5, ref - 0.24 * S], max: [0.14 * S, axis + 1.5, ref - 0.17 * S],
+      material: 'wallPropIron', role: 'deep'}
+  ]};
+}
+// Wall sconce: a backplate (the sprite's plate ellipse as an octagon), an
+// arm along the normal and a six-sided bowl on its end, wider along the wall
+// than out of it (the sprite's bowl is 0.5 S wide). The bowl's rim is 1.0
+// below the light (0.5 out, attachment.flameZ = S / 6) and its axis 2.7 out,
+// so the flame anchor at the rim centre is 2.4 from the light.
+function _wallSconceModelDef(S) {
+  var axis = 2.7, top = S / 6 - 1.0, bottom = top - 0.09 * S, plateZ = top - 0.16 * S, plate = [];
+  for (var i = 0; i < 8; i++) {
+    var a = (i + 0.5) * Math.PI / 4;
+    plate.push([Math.cos(a) * 0.24 * S, plateZ + Math.sin(a) * 0.28 * S]);
+  }
+  return {key: 'wallSconce', family: 'wallProp', parts: [
+    {name: 'backplate', kind: 'extrude', axis: 'o', profile: plate, from: 0, to: 0.4, material: 'wallPropIron', role: 'shadow',
+      faceRoles: ['deep', 'deep', 'deep', 'deep', 'deep', 'deep', 'deep', 'deep', 'deep', 'shadow']},
+    {name: 'arm', kind: 'box', min: [-0.03 * S, 0.3, bottom - 1.2], max: [0.03 * S, axis, bottom],
+      material: 'wallPropIron', role: 'base'},
+    {name: 'bowl', kind: 'prism', sides: 6, center: [0, axis], radius: [0.09 * S, 1.4], taper: 1.6, z0: bottom, z1: top,
+      material: 'wallPropIron', role: 'deep', faceRoles: ['deep', 'deep', 'deep', 'deep', 'deep', 'deep', 'lit', 'shadow'],
+      anchors: {flame: [0, axis, top]}}
+  ]};
+}
+// The sprite outlines (07-decorations-lighting.js traceWallShieldPath and
+// traceWallBannerCloth) as data at w = h = 1, x right and y down; quadratic
+// segments are flattened at uniform t into WALL_PROP_CURVE_SEGMENTS chords.
+var WALL_PROP_CURVE_SEGMENTS = 4;
+var WALL_SHIELD_OUTLINE = Object.freeze([[-0.44, -0.42], [0, -0.58, 0.44, -0.42], [0.36, 0.12],
+  [0.24, 0.42, 0, 0.58], [-0.24, 0.42, -0.36, 0.12]]);
+var WALL_BANNER_CLOTH = Object.freeze([[-0.39, -0.34], [0.39, -0.34], [0.36, 0.42], [0, 0.28], [-0.36, 0.42]]);
+function _wallPropFlatten(path) {
+  var pts = [path[0].slice()];
+  for (var i = 1; i < path.length; i++) {
+    var p = path[i], last = pts[pts.length - 1];
+    if (p.length === 2) { pts.push(p.slice()); continue; }
+    for (var k = 1; k <= WALL_PROP_CURVE_SEGMENTS; k++) {
+      var t = k / WALL_PROP_CURVE_SEGMENTS, u = 1 - t;
+      pts.push([u * u * last[0] + 2 * u * t * p[0] + t * t * p[2], u * u * last[1] + 2 * u * t * p[1] + t * t * p[3]]);
+    }
+  }
+  return pts;
+}
+// Sprite points (x, y) around (cx, cy) at scale k (of S) -> local (r, z).
+function _wallPropProfile(points, S, k, cx, cy) {
+  return points.map(function(p) { return [-(cx + p[0] * k) * S, -(cy + p[1] * k) * S]; });
+}
+// A flat polygon out o from the wall, wound so its normal points out (+o).
+function _wallPropFace(profile, o) {
+  var area = 0;
+  for (var i = 0; i < profile.length; i++) {
+    var a = profile[i], b = profile[(i + 1) % profile.length];
+    area += a[0] * b[1] - b[0] * a[1];
+  }
+  var pts = profile.map(function(p) { return [p[0], o, p[1]]; });
+  return area > 0 ? pts.reverse() : pts;
+}
+function _wallPropCircle(cx, cy, radius, sides) {
+  var pts = [];
+  for (var i = 0; i < sides; i++) pts.push([cx + Math.cos(i * Math.PI * 2 / sides) * radius, cy + Math.sin(i * Math.PI * 2 / sides) * radius]);
+  return pts;
+}
+// Heraldic charges in sprite units (w = h = 1), as convex pieces: the cross's
+// two bars, the chevron's two arms, or the roundel.
+function _wallPropCharge(family, cross, chevron, roundel) {
+  if (family === 0) return [[[-cross[0], cross[1]], [cross[0], cross[1]], [cross[0], cross[2]], [-cross[0], cross[2]]],
+    [[-cross[3], cross[4]], [cross[3], cross[4]], [cross[3], cross[5]], [-cross[3], cross[5]]]];
+  if (family === 1) return [[[-chevron[0], chevron[1]], [0, chevron[2]], [0, chevron[4]], [-chevron[0], chevron[3]]],
+    [[0, chevron[2]], [chevron[0], chevron[1]], [chevron[0], chevron[3]], [0, chevron[4]]]];
+  return [_wallPropCircle(0, roundel[0], roundel[1], 12)];
+}
+function _wallPropDecals(name, pieces, S, o, material, role) {
+  return pieces.map(function(piece, i) {
+    return {name: name + (pieces.length > 1 ? i : ''), kind: 'poly', vertices: _wallPropFace(_wallPropProfile(piece, S, 1, 0, 0), o),
+      material: material, role: role, flags: {decal: true}};
+  });
+}
+// Wall shield: the sprite's heater outline extruded 1.2 out of the wall
+// (iron, lit face), the heraldic field (the outline at 0.79, 0.01 lower) and
+// its gold charge as decals 0.1 proud of the face, drawn after it (the depth
+// test lets a later face within 0.15 overpaint a nearer one), then a boss
+// frustum (8 sides) standing 1.4 proud of the face.
+function _wallShieldModelDef(S, family) {
+  var outline = _wallPropFlatten(WALL_SHIELD_OUTLINE), face = 1.2, decal = face + 0.1, sides = [];
+  for (var i = 0; i < outline.length; i++) sides.push('base');
+  var parts = [
+    {name: 'body', kind: 'extrude', axis: 'o', profile: _wallPropProfile(outline, S, 1, 0, 0), from: 0, to: face,
+      material: 'wallPropIron', role: 'base', faceRoles: sides.concat(['shadow', 'lit'])},
+    {name: 'field', kind: 'poly', vertices: _wallPropFace(_wallPropProfile(outline, S, 0.79, 0, 0.01), decal),
+      material: 'wallHeraldry', role: WALL_PROP_HERALDRY[family], flags: {decal: true}}
+  ].concat(_wallPropDecals('charge', _wallPropCharge(family, [0.055, -0.35, 0.33, 0.27, -0.07, 0.04],
+    [0.25, -0.16, 0.12, -0.02, 0.27], [-0.03, 0.20]), S, decal, 'wallHeraldry', 'gold'));
+  parts.push({name: 'boss', kind: 'prism', axis: 'o', sides: 8, rotation: Math.PI / 8, center: [0, 0.02 * S], radius: 0.09 * S,
+    taper: 0.55, z0: face, z1: face + 1.4, material: 'wallPropIron', role: 'lit',
+    faceRoles: ['lit', 'lit', 'lit', 'lit', 'lit', 'lit', 'lit', 'lit', 'edge', 'shadow']});
+  return {key: WALL_PROP_MODEL_KEYS.shield[family], family: 'wallProp', parts: parts};
+}
+// Wall banner: a six-sided rod along the wall (the tangent) on a central
+// hanger, a tapered finial at each end, and the sprite's swallowtail cloth as
+// two convex halves 0.7 out, with its gold charge 0.1 proud of the cloth.
+// The cloth stands 0.7 out, not 0.4: a farther torch's flame folds onto the
+// plane 0.5 out (07 WALL_PROP_FLAME_FOLD_OUT) and passes the depth test up to
+// 0.15 behind a surface, so a cloth inside 0.65 would be painted over by it.
+function _wallBannerModelDef(S, family) {
+  var rodO = 1.8, rodZ = 0.40 * S, cloth = 0.7, c = WALL_BANNER_CLOTH;
+  // Split at x = 0 (the notch is not convex): the top edge's midpoint and
+  // the notch point join the two halves.
+  var left = [c[0], [0, c[0][1]], c[3], c[4]], right = [[0, c[1][1]], c[1], c[2], c[3]];
+  var role = WALL_PROP_HERALDRY[family], charge = _wallPropCharge(family, [0.06, -0.22, 0.16, 0.22, -0.08, 0.02],
+    [0.22, -0.13, 0.12, 0.01, 0.26], [-0.04, 0.17]);
+  var parts = [
+    {name: 'rod', kind: 'prism', axis: 'r', sides: 6, rotation: Math.PI / 6, center: [rodO, rodZ], radius: 0.04 * S,
+      z0: -0.49 * S, z1: 0.49 * S, material: 'wallPropWood', role: 'shadow'},
+    {name: 'hanger', kind: 'box', min: [-0.025 * S, 0, 0.33 * S], max: [0.025 * S, rodO, 0.47 * S], material: 'wallPropWood', role: 'shadow'},
+    // Left and right as the viewer sees them (+r is the viewer's left).
+    {name: 'finialRight', kind: 'prism', axis: 'r', sides: 6, rotation: Math.PI / 6, center: [rodO, rodZ], radius: [0.8, 0.035 * S],
+      taper: 2, z0: -0.56 * S, z1: -0.46 * S, material: 'wallPropIron', role: 'lit'},
+    {name: 'finialLeft', kind: 'prism', axis: 'r', sides: 6, rotation: Math.PI / 6, center: [rodO, rodZ], radius: [1.6, 0.07 * S],
+      taper: 0.5, z0: 0.46 * S, z1: 0.56 * S, material: 'wallPropIron', role: 'lit'},
+    {name: 'clothLeft', kind: 'quad', vertices: _wallPropFace(_wallPropProfile(left, S, 1, 0, 0), cloth), material: 'wallHeraldry', role: role},
+    {name: 'clothRight', kind: 'quad', vertices: _wallPropFace(_wallPropProfile(right, S, 1, 0, 0), cloth), material: 'wallHeraldry', role: role}
+  ].concat(_wallPropDecals('charge', charge, S, cloth + 0.1, 'wallHeraldry', 'goldLit'));
+  if (family === 2) parts = parts.concat(_wallPropDecals('roundelCentre', [_wallPropCircle(0, -0.04, 0.07, 12)], S, cloth + 0.1, 'wallHeraldry', 'linen'));
+  return {key: WALL_PROP_MODEL_KEYS.banner[family], family: 'wallProp', parts: parts};
+}
+var _WALL_PROP_MODEL_DEFS = {torch: _wallTorchModelDef, sconce: _wallSconceModelDef, shield: _wallShieldModelDef, banner: _wallBannerModelDef};
+// The model key for a canonical wall decoration type and its variant
+// (getWallDecorationVariant): shields and banners pick their heraldry family
+// as variant % 3, like the sprite. Null for types without a model.
+function wallPropModelKey(type, variant) {
+  if (!Object.prototype.hasOwnProperty.call(WALL_PROP_MODEL_KEYS, type)) return null;
+  var key = WALL_PROP_MODEL_KEYS[type];
+  return typeof key === 'string' ? key : key[((variant >>> 0) || 0) % key.length];
+}
+// The model for a canonical wall decoration type, or null (sprite path).
+// A definition that fails validation is reported once and keeps the sprite.
+function wallPropModelFor(type, variant) {
+  var key = wallPropModelKey(type, variant);
+  if (!key) return null;
+  if (PROP_MODELS[key]) return PROP_MODELS[key];
+  if (_wallPropModelFailed[key] || typeof GAME_MATERIALS === 'undefined') return null;
+  var model, keys = WALL_PROP_MODEL_KEYS[type];
+  try {
+    model = definePropModel(_WALL_PROP_MODEL_DEFS[type](WALL_PROP_MODEL_S, typeof keys === 'string' ? 0 : keys.indexOf(key)));
+  } catch (e) {
+    _wallPropModelFailed[key] = true;
+    if (typeof console !== 'undefined' && console.error) console.error('[wall props] ' + key + ' model rejected; sprite kept: ' + (e && e.message));
+    return null;
+  }
+  return model;
+}
+// World radius of the prop's horizontal bounding circle around its origin:
+// the parts, or the flame billboard around its anchor. The billboard is
+// 0.36 s screen px either side of the anchor (s = size / depth * projScale),
+// which is 0.36 size * flameK world units at any depth, with flameK =
+// projScale / (0.5 w invTanHalf). flameK follows the canvas aspect and FOV
+// (portrait canvases exceed 2), so the caller passes the live value; 1 when
+// omitted.
+function wallPropCullRadius(model, attachment, flameK) {
+  var c = _wallPropCullRadius[model.key];
+  if (c === undefined) {
+    var b = model.bounds, flame = -1;
+    model.parts.forEach(function(part) {
+      var f = part.anchors.flame;
+      if (f) flame = Math.max(flame, Math.hypot(f[0], f[1]));
+    });
+    c = _wallPropCullRadius[model.key] = {flame: flame,
+      parts: Math.hypot(Math.max(-b.min[0], b.max[0]), Math.max(-b.min[1], b.max[1]))};
+  }
+  var k = flameK > 0 && isFinite(flameK) ? flameK : 1;
+  var radius = c.flame < 0 ? c.parts : Math.max(c.parts, c.flame + 0.36 * WALL_PROP_MODEL_S * k);
+  return radius * attachment.size / WALL_PROP_MODEL_S;
+}
+// Instance at the attachment frame (reused object unless `out` is given).
+function wallPropInstance(attachment, inCave, out) {
+  out = out || _wallPropInstanceScratch || (_wallPropInstanceScratch = {x: 0, y: 0, z: 0, basis: {}, scale: 1, cave: false});
+  out.x = attachment.x - attachment.nx * 0.5; out.y = attachment.y - attachment.ny * 0.5;
+  out.z = attachment.z;
+  out.basis = wallModelBasis(attachment.nx, attachment.ny, out.basis || {});
+  out.scale = attachment.size / WALL_PROP_MODEL_S;
+  out.cave = !!inCave;
+  return out;
+}
+
+// ── Treasure chests (integration stage G) ──
+// One model per CHEST_TIER_DEFS tier, material chest<Tier>. Local frame
+// (chestModelBasis, yaw = facing): o is the lock side (the legacy fw), r
+// the legacy rt, the origin the chest centre on its support; the legacy
+// extents (half 7 x 5, body 8, lid 3). The body is open at the top: four
+// closed wall slabs CHEST_MODEL_DIMS.wall thick (their inner faces in the
+// dark interior role) round an interior floor. The lid is a closed box on
+// the body top hinged at its back top edge (o = -5, z = 8, about +r): the
+// joint 'lid' is lidAngle x CHEST_LID_MAX, so it opens 0..100 degrees and
+// its front trim rides the same hinge. The trim band (0.38..0.55 of the
+// body height) and the centre strap (+-0.15 of the half width) stand
+// CHEST_MODEL_DIMS.proud out of the front; the lock plate (2.8 x 2.4,
+// centred at 0.47) runs from the body to as much again out of the strap. The mouth over the opening is emissive
+// and translucent, so it draws only in the overlay phase (the open chest's
+// interior glow). Anchors on the body: glow (its centre), sparkle and label
+// (the legacy sparkle and loot-text points). Defined on first use.
+var CHEST_MODEL_KEYS = Object.freeze({common: 'chestCommon', uncommon: 'chestUncommon', rare: 'chestRare', epic: 'chestEpic'});
+var CHEST_MODEL_DIMS = Object.freeze({hw: 7, hd: 5, bodyH: 8, lidH: 3, wall: 0.7, floor: 0.8, proud: 0.3, uvScale: 14});
+var CHEST_LID_MAX = Math.PI * 100 / 180;
+var _chestModelFailed = Object.create(null), _chestInstanceScratch = null;
+function _chestModelDef(key) {
+  var D = CHEST_MODEL_DIMS, W = D.hw, L = D.hd, H = D.bodyH, T = D.wall, P = D.proud, top = H + D.lidH;
+  var lockZ = H * 0.47, hinge = {name: 'lid', origin: [0, -L, H], axis: [1, 0, 0], min: 0, max: CHEST_LID_MAX};
+  // Box faces: -out, +right, +out, -right, top, bottom; `inner` is the one facing the interior.
+  function wall(name, min, max, inner) {
+    var roles = ['body', 'body', 'body', 'body', 'body', 'body'];
+    roles[inner] = 'interior';
+    return {name: name, kind: 'box', min: min, max: max, material: key, role: 'body', faceRoles: roles, uvScale: D.uvScale};
+  }
+  function box(name, min, max, role, extra) {
+    var part = {name: name, kind: 'box', min: min, max: max, material: key, role: role, uvScale: D.uvScale};
+    for (var k in extra) part[k] = extra[k];
+    return part;
+  }
+  return {key: key, family: 'chest', parts: [
+    wall('wallBack', [-W, -L, 0], [W, -L + T, H], 2),
+    wall('wallFront', [-W, L - T, 0], [W, L, H], 0),
+    wall('wallLeft', [-W, -L + T, 0], [-W + T, L - T, H], 1),
+    wall('wallRight', [W - T, -L + T, 0], [W, L - T, H], 3),
+    {name: 'floor', kind: 'quad', vertices: [[-W + T, -L + T, D.floor], [W - T, -L + T, D.floor], [W - T, L - T, D.floor], [-W + T, L - T, D.floor]],
+      material: key, role: 'interior', uvScale: D.uvScale,
+      anchors: {glow: [0, 0, H * 0.5], sparkle: [0, 0, top + 3], label: [0, 0, top + 8]}},
+    box('lid', [-W, -L, H], [W, L, top], 'lid', {faceRoles: ['lid', 'lid', 'lid', 'lid', 'lid', 'interior'], hinge: hinge}),
+    box('lidTrim', [-W, L, top - 0.8], [W, L + P, top], 'trim', {hinge: hinge}),
+    box('trim', [-W, L, H * 0.38], [W, L + P, H * 0.55], 'trim'),
+    box('strap', [-W * 0.15, L, 0], [W * 0.15, L + P, H], 'trim'),
+    box('lock', [-1.4, L, lockZ - 1.2], [1.4, L + 2 * P, lockZ + 1.2], 'lock'),
+    {name: 'mouth', kind: 'quad', vertices: [[-W + T, -L + T, H], [W - T, -L + T, H], [W - T, L - T, H], [-W + T, L - T, H]],
+      material: key, role: 'glow', uvScale: D.uvScale, flags: {translucent: true, emissive: true}, alpha: 1}
+  ]};
+}
+// The model for a chest tier (unknown tiers use common), or null when its
+// definition was rejected (reported once; chestModelsReady is then false).
+function chestModelFor(tier) {
+  var key = CHEST_MODEL_KEYS[tier] || CHEST_MODEL_KEYS.common;
+  if (PROP_MODELS[key]) return PROP_MODELS[key];
+  if (_chestModelFailed[key] || typeof GAME_MATERIALS === 'undefined') return null;
+  try {
+    return definePropModel(_chestModelDef(key));
+  } catch (e) {
+    _chestModelFailed[key] = true;
+    if (typeof console !== 'undefined' && console.error) console.error('[chests] ' + key + ' model rejected; legacy chest kept: ' + (e && e.message));
+    return null;
+  }
+}
+// True once every tier's model is defined (on first use). False when any
+// was rejected: the caller then keeps the legacy path for every chest.
+function chestModelsReady() {
+  for (var tier in CHEST_MODEL_KEYS) if (!chestModelFor(tier)) return false;
+  return true;
+}
+// Instance for a chest on its render support floorZ (reused unless `out`).
+function chestModelInstance(ch, floorZ, out) {
+  out = out || _chestInstanceScratch || (_chestInstanceScratch = {x: 0, y: 0, z: 0, basis: {}, scale: 1, joints: {lid: 0}, cave: false});
+  out.x = ch.x; out.y = ch.y; out.z = floorZ;
+  out.basis = chestModelBasis(ch, out.basis || {});
+  out.scale = 1;
+  var lid = Number.isFinite(ch.lidAngle) ? Math.max(0, Math.min(1, ch.lidAngle)) : 0;
+  (out.joints || (out.joints = {})).lid = lid * CHEST_LID_MAX;
+  out.cave = !!(ch.underground || ch.caveSpawnId);
+  out.texOwner = ch;   // stage L: keys the prop texture hysteresis per chest
+  return out;
+}
+
+// ── Spawner obelisk (integration stage H, spawnerModel) ──
+// Sized to the projectile hit volume (10-projectile-queries.js: radius 25,
+// height 90 above the feet): a square frustum from half-width 17.6 (corner
+// radius 24.89 <= 25) to 11 at 72, the legacy trapezoid's proportions (0.3
+// and 1.2 x 60 at lgStructure 1.5), capped by a pyramid to 90. Local frame:
+// r and o across the square, z up from the render floor. Each side carries
+// the legacy's three rune bands (at 0.2, 0.45 and 0.7 of the shaft; 0.9,
+// 0.8 and 0.7 of the face's half-width there; 3.6 tall, the legacy stroke)
+// as emissive decal strips 0.1 proud of the face, coloured by the instance
+// tint 'rune' (the pulse). Anchors: glow (the legacy glow centre, 30 up),
+// eye (0.65 of the shaft) and bar (4 above the apex); the eye, glow and HP
+// bar stay billboards (07 draws them in the overlay phase). The yaw is
+// stateless: propInstanceKey of the spawner's world cell and WORLD_SEED,
+// within a quarter turn (the obelisk is square). Defined on first use.
+var SPAWNER_MODEL_KEY = 'spawnerObelisk';
+var SPAWNER_MODEL_DIMS = Object.freeze({base: 17.6, top: 11, shaftH: 72, apex: 90, rune: 3.6, proud: 0.1, uvScale: 24});
+var SPAWNER_RUNE_BANDS = Object.freeze([Object.freeze([0.2, 0.9]), Object.freeze([0.45, 0.8]), Object.freeze([0.7, 0.7])]);
+var _spawnerModelFailed = false, _spawnerInstanceScratch = null, _spawnerModelSalt = 0;
+function _spawnerModelDef() {
+  var D = SPAWNER_MODEL_DIMS, B = D.base, T = D.top, H = D.shaftH;
+  var slope = Math.sqrt(H * H + (B - T) * (B - T)), nh = H / slope, nz = (B - T) / slope;
+  // The frustum's side order (-out, +right, +out, -right): outward d, and t
+  // along the face in its outward winding.
+  var sides = [[0, -1, 1, 0], [1, 0, 0, 1], [0, 1, -1, 0], [-1, 0, 0, -1]];
+  var parts = [{name: 'body', kind: 'frustum', z0: 0, z1: H, apex: D.apex, bottom: [B, B], top: [T, T],
+    material: SPAWNER_MODEL_KEY, role: 'body', uvScale: D.uvScale,
+    anchors: {glow: [0, 0, 30], eye: [0, 0, H * 0.65], bar: [0, 0, D.apex + 4]}}];
+  SPAWNER_RUNE_BANDS.forEach(function (band, bi) {
+    var zc = H * band[0], w = (B + (T - B) * zc / H) * band[1];
+    sides.forEach(function (s, si) {
+      var verts = [[-w, zc - D.rune / 2], [w, zc - D.rune / 2], [w, zc + D.rune / 2], [-w, zc + D.rune / 2]].map(function (p) {
+        var reach = B + (T - B) * p[1] / H + D.proud * nh;
+        return [s[0] * reach + s[2] * p[0], s[1] * reach + s[3] * p[0], p[1] + D.proud * nz];
+      });
+      parts.push({name: 'rune' + bi + '_' + si, kind: 'quad', vertices: verts, material: SPAWNER_MODEL_KEY, role: 'rune',
+        tint: 'rune', uvScale: D.uvScale, flags: {emissive: true, decal: true}});
+    });
+  });
+  return {key: SPAWNER_MODEL_KEY, family: 'spawner', parts: parts};
+}
+// The obelisk model, or null when its definition was rejected (reported
+// once; every spawner then keeps the legacy path).
+function spawnerModelFor() {
+  if (PROP_MODELS[SPAWNER_MODEL_KEY]) return PROP_MODELS[SPAWNER_MODEL_KEY];
+  if (_spawnerModelFailed || typeof GAME_MATERIALS === 'undefined') return null;
+  try {
+    return definePropModel(_spawnerModelDef());
+  } catch (e) {
+    _spawnerModelFailed = true;
+    if (typeof console !== 'undefined' && console.error) console.error('[spawners] ' + SPAWNER_MODEL_KEY + ' model rejected; legacy obelisk kept: ' + (e && e.message));
+    return null;
+  }
+}
+function spawnerModelYaw(sp) {
+  var size = typeof cell === 'number' && cell > 0 ? cell : 12;
+  var endless = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+  var ox = endless && typeof windowOriginX === 'number' ? windowOriginX : 0;
+  var oy = endless && typeof windowOriginY === 'number' ? windowOriginY : 0;
+  if (!_spawnerModelSalt) _spawnerModelSalt = propTypeSalt(SPAWNER_MODEL_KEY);
+  var key = propInstanceKey(_spawnerModelSalt, Math.floor((sp.x + ox) / size), Math.floor((sp.y + oy) / size),
+    typeof WORLD_SEED === 'number' ? WORLD_SEED : 0);
+  return key / 4294967296 * Math.PI * 0.5;
+}
+// The rune strips' colour at a pulse: the legacy rune stroke (alpha 0.8 x
+// pulse over the body) as an opaque blend of the two albedos.
+function spawnerRuneTint(pulse) {
+  var m = GAME_MATERIALS[SPAWNER_MODEL_KEY].packed, a = m.body, b = m.rune;
+  var k = Math.max(0, Math.min(1, 0.8 * (Number.isFinite(pulse) ? pulse : 1)));
+  function mix(shift) { var x = (a >>> shift) & 255; return Math.round(x + (((b >>> shift) & 255) - x) * k); }
+  return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
+// Instance for a spawner on its render support floorZ (reused unless `out`).
+function spawnerModelInstance(sp, floorZ, pulse, out) {
+  out = out || _spawnerInstanceScratch || (_spawnerInstanceScratch = {x: 0, y: 0, z: 0, basis: {}, scale: 1, tints: {rune: 0}, cave: false});
+  out.x = sp.x; out.y = sp.y; out.z = floorZ;
+  out.basis = modelBasis(spawnerModelYaw(sp), out.basis || {});
+  out.scale = 1;
+  (out.tints || (out.tints = {})).rune = spawnerRuneTint(pulse);
+  out.cave = !!(sp.underground || sp.caveSpawnId);
+  out.texOwner = sp;   // stage L: keys the prop texture hysteresis per spawner
+  return out;
+}
+// True when the camera is inside the obelisk body or nearer to it than the
+// farthest on-screen point of the depth-1 near plane. Spawners have no
+// movement collision, so the player can walk in; there the near-plane clip
+// opens the body and drawWorldModel (no back-face cull at the near plane)
+// fills the view with its inside faces, hiding everything drawn later. 07
+// draws such a spawner as the legacy billboard instead. The largest of the
+// nine half-space distances (bottom, 4 sides, 4 cap faces) is a lower bound
+// on the distance to the convex body, so false means the body is clear.
+function spawnerCameraInReach(inst, C) {
+  var D = SPAWNER_MODEL_DIMS, b = _pmInstanceBasis(inst), s = inst.scale > 0 ? inst.scale : 1;
+  var B = D.base, T = D.top, H = D.shaftH, A = D.apex, dx = cam.x - inst.x, dy = cam.y - inst.y;
+  var m = Math.max(Math.abs(dx * b.rightX + dy * b.rightY), Math.abs(dx * b.outX + dy * b.outY)) / s;
+  var z = (C.cameraZ - (Number.isFinite(inst.z) ? inst.z : 0)) / s;
+  var clear = s * Math.max(-z, (m * H + z * (B - T) - B * H) / Math.hypot(H, B - T),
+    (m * (A - H) + z * T - T * A) / Math.hypot(A - H, T));
+  var v = Math.max(Math.abs(C.horizonY), Math.abs(C.h - C.horizonY)) / projScale;
+  return !(clear >= Math.sqrt(1 + 1 / (C.invTanHalf * C.invTanHalf) + v * v));
+}
+// Camera-depth range of the obelisk body seen through a screen rect (clipped
+// to the screen): out.min/out.max, or Infinity/-Infinity when the rect does
+// not overlap the body. Each of the body's nine faces is clipped to the
+// rect's four side planes through the camera; a linear depth over the
+// clipped convex body takes its extremes at those clipped faces' vertices.
+// The runes lie within 0.1 of the body. 07 tests the eye and HP bar in
+// front of the range's min and the glow behind its max.
+var SPAWNER_BODY_FACES = [[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7], [4, 5, 8], [5, 6, 8], [6, 7, 8], [7, 4, 8], [3, 2, 1, 0]];
+var _spawnerCorners = null, _spawnerClipA = null, _spawnerClipB = null, _spawnerPlanes = null;
+function spawnerBodyDepthRange(inst, C, rect, out) {
+  out = out || {};
+  out.min = Infinity; out.max = -Infinity;
+  var x0 = Math.max(0, rect.x), x1 = Math.min(C.w, rect.x + rect.width);
+  var y0 = Math.max(0, rect.y), y1 = Math.min(C.h, rect.y + rect.height);
+  if (!(x1 > x0) || !(y1 > y0)) return out;
+  // Plane k keeps pl[k*3]*depth + pl[k*3+1]*right + pl[k*3+2]*up >= 0.
+  var k = 2 / C.invTanHalf, pl = _spawnerPlanes || (_spawnerPlanes = new Float64Array(12));
+  pl[0] = -(x0 / C.w - 0.5) * k; pl[1] = 1; pl[2] = 0;
+  pl[3] = (x1 / C.w - 0.5) * k; pl[4] = -1; pl[5] = 0;
+  pl[6] = -(C.horizonY - y1) / projScale; pl[7] = 0; pl[8] = 1;
+  pl[9] = (C.horizonY - y0) / projScale; pl[10] = 0; pl[11] = -1;
+  // Corners in camera space (depth, right, up): 4 base, 4 top, the apex.
+  var D = SPAWNER_MODEL_DIMS, b = _pmInstanceBasis(inst), s = inst.scale > 0 ? inst.scale : 1;
+  var P = _spawnerCorners || (_spawnerCorners = new Float64Array(27));
+  var cosA = C.cosAng, sinA = C.sinAng, up0 = (Number.isFinite(inst.z) ? inst.z : 0) - C.cameraZ;
+  for (var i = 0; i < 9; i++) {
+    var hw = i < 4 ? D.base : i < 8 ? D.top : 0, q = i & 3;
+    var r = q === 1 || q === 2 ? hw : -hw, o = q >= 2 ? hw : -hw;
+    var dx = inst.x + (r * b.rightX + o * b.outX) * s - cam.x, dy = inst.y + (r * b.rightY + o * b.outY) * s - cam.y;
+    P[i * 3] = dx * cosA + dy * sinA;
+    P[i * 3 + 1] = -dx * sinA + dy * cosA;
+    P[i * 3 + 2] = up0 + (i < 4 ? 0 : i < 8 ? D.shaftH : D.apex) * s;
+  }
+  var A = _spawnerClipA || (_spawnerClipA = new Float64Array(48)), Bf = _spawnerClipB || (_spawnerClipB = new Float64Array(48));
+  for (var f = 0; f < SPAWNER_BODY_FACES.length; f++) {
+    var face = SPAWNER_BODY_FACES[f], n = face.length, src = A, dst = Bf;
+    for (var v = 0; v < n; v++) { src[v * 3] = P[face[v] * 3]; src[v * 3 + 1] = P[face[v] * 3 + 1]; src[v * 3 + 2] = P[face[v] * 3 + 2]; }
+    for (var p = 0; p < 4 && n > 0; p++) {
+      var cd = pl[p * 3], cr = pl[p * 3 + 1], cu = pl[p * 3 + 2], m = 0;
+      var prev = n - 1, fPrev = cd * src[prev * 3] + cr * src[prev * 3 + 1] + cu * src[prev * 3 + 2];
+      for (var c = 0; c < n; c++) {
+        var fCur = cd * src[c * 3] + cr * src[c * 3 + 1] + cu * src[c * 3 + 2];
+        if ((fPrev >= 0) !== (fCur >= 0)) {
+          var t = fPrev / (fPrev - fCur);
+          for (var e = 0; e < 3; e++) dst[m * 3 + e] = src[prev * 3 + e] + t * (src[c * 3 + e] - src[prev * 3 + e]);
+          m++;
+        }
+        if (fCur >= 0) { dst[m * 3] = src[c * 3]; dst[m * 3 + 1] = src[c * 3 + 1]; dst[m * 3 + 2] = src[c * 3 + 2]; m++; }
+        prev = c; fPrev = fCur;
+      }
+      n = m; var swap = src; src = dst; dst = swap;
+    }
+    for (var w = 0; w < n; w++) {
+      if (src[w * 3] < out.min) out.min = src[w * 3];
+      if (src[w * 3] > out.max) out.max = src[w * 3];
+    }
+  }
+  return out;
+}
+
+// Runs drawFn with the drawRuinDecorFace capture sink installed.
+function captureRuinDecorFaces(drawFn, sink) {
+  var previous = _ruinDecorFaceSink;
+  _ruinDecorFaceSink = sink;
+  try { return drawFn(); } finally { _ruinDecorFaceSink = previous; }
+}
+
+// ── Landmark opaque pass (integration stage G2, landmarkOpaqueEarly) ──
+// draw() runs drawLandmarkOpaque3D right after caveEntrance3D: the ruins'
+// opaque faces and the structures' shells (the fogged far band, or the
+// legacy shell without a model pass) write depth before sceneEntities and
+// every billboard stage, so a farther shell never paints over a nearer
+// sprite. The late ruins3D and structures3D stages (21-frame-loop.js,
+// unchanged) call with no argument; landmarkLatePhase answers 'overlay' for
+// a family whose opaque phase ran in this frame (once), so they draw only
+// their labels, interactables, prompts and ring, depth-clipped. A family
+// whose early call threw, or any call outside that frame, gets undefined:
+// both phases, as before.
+var _landmarkOpaquePass = {frame: -1, ruins: false, structures: false, stalls: false, shrines: false};
+function landmarkOpaqueEarlyOn() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('landmarkOpaqueEarly');
+}
+function _landmarkOpaqueFrameStamp() {
+  return typeof _renderFrameStats === 'object' && _renderFrameStats ? _renderFrameStats.frame : -1;
+}
+function drawLandmarkOpaque3D() {
+  var pass = _landmarkOpaquePass;
+  pass.ruins = pass.structures = pass.stalls = pass.shrines = false;
+  pass.frame = _landmarkOpaqueFrameStamp();
+  if (!landmarkOpaqueEarlyOn()) return;
+  if (typeof drawRuins3D === 'function') { drawRuins3D('opaque'); pass.ruins = true; }
+  if (typeof drawStructures3D === 'function') { drawStructures3D('opaque'); pass.structures = true; }
+  // Stage J1 (landmarkModels): the market stall, guard tower and shrine
+  // models; the late marketStalls3D and shrines3D stages then draw overlays.
+  if (typeof landmarkModelsOn === 'function' && landmarkModelsOn()) {
+    if (typeof drawMarketStalls3D === 'function') { drawMarketStalls3D('opaque'); pass.stalls = true; }
+    if (typeof drawShrines3D === 'function') { drawShrines3D('opaque'); pass.shrines = true; }
+  }
+}
+function landmarkLatePhase(family) {
+  var pass = _landmarkOpaquePass;
+  if (!pass[family] || pass.frame !== _landmarkOpaqueFrameStamp()) return undefined;
+  pass[family] = false;
+  return landmarkOpaqueEarlyOn() ? 'overlay' : undefined;
+}
+
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'modelBackfaceCull', label: 'Model back-face cull', type: 'bool', default: true, legacy: false,
+    title: 'Exact: skips faces of closed opaque model parts that face away from the camera. Kept for bisecting.'});
+  defineRenderFeature({key: 'wallPropModels', label: 'Wall prop models', type: 'bool', default: true, legacy: false,
+    title: 'Wall torches, sconces, shields and banners drawn as depth-correct models on their wall (flames stay billboards; lights unchanged).'});
+  defineRenderFeature({key: 'chestModel', label: 'Chest model', type: 'bool', default: true, legacy: false,
+    title: 'Treasure chests drawn as opaque, depth-writing models with a hinged lid (glow, sparkle and loot label stay billboards).'});
+  defineRenderFeature({key: 'landmarkOpaqueEarly', label: 'Landmarks opaque first', type: 'bool', default: true, legacy: false,
+    title: 'Ruin faces and structure shells draw before props and sprites (only their labels and prompts stay late, depth-clipped), so a farther landmark never paints over a nearer sprite.'});
+  defineRenderFeature({key: 'spawnerModel', label: 'Spawner model', type: 'bool', default: true, legacy: false,
+    title: 'Enemy spawners drawn as opaque, depth-writing obelisks sized to their hit volume, pulsing at their own phase (eye, glow and HP bar stay billboards).'});
+  defineRenderFeature({key: 'modelEarlyReject', label: 'Model early reject', type: 'bool', default: true, legacy: false,
+    title: 'Exact: a model whose bounds are hidden by nearer scene depth everywhere they project builds no faces. Kept for bisecting.'});
+  defineRenderFeature({key: 'decorAnchorCache', label: 'Prop anchor cache', type: 'bool', default: true, legacy: false,
+    title: 'Exact: scatter, wall decorations and ore reject by distance and view before any terrain query, and cache the terrain they stand on or hang from. Kept for bisecting.'});
+}
+// The Endless window copies carry pulsePhase only while spawnerModel is on
+// (05-endless-world.js), so Legacy keeps its in-phase pulse; a switch or
+// preset change re-syncs the current window's copies.
+if (typeof onRenderFeaturesChange === 'function') {
+  onRenderFeaturesChange(function (kind, detail) {
+    if (typeof syncWindowSpawnerPulsePhases === 'function' &&
+        (kind === 'preset' || String(detail).split(',').indexOf('spawnerModel') >= 0)) syncWindowSpawnerPulsePhases();
+  });
+}
+
+// ── Floor props (integration stage I, floorPropModels) ──
+// Volumetric models for the high-value floor-scatter types (I1: crate,
+// barrel, boulder, stone_column, sand_pillar, mesa_boulder; I2: stalagmite,
+// tree_stump, fallen_log, rock_spire, cave_rubble_pile, rock_arch). They are
+// authored in the sprite's own unit s (paintFloorItem's `size`) and scaled
+// per instance by floorPropScale(type) = FLOOR_PROP_UNIT x the type's size
+// tier: at 360x240 (projScale 180) the sprite is 1500 x tierScale / fwd
+// pixels, the projection of 8.33 x tierScale world units, so each model keeps
+// its recipe's proportions of s. Local frame (modelBasis(yaw)): r and o
+// across the footprint, z up from the base. Yaw and shape are stateless:
+// propInstanceKey(propTypeSalt(type), rounded absolute x/y, stored seed),
+// never the sprite's r0..r2 or seed x 2pi (integer Endless seeds would all
+// face one way). The absolute position adds the Endless window origin, so
+// the window slot an item lands in never changes it. Each type has
+// FLOOR_PROP_SHAPES shapes (and the sprite's variant flag: the broken crate,
+// the mossy boulder), all defined together on first use; a rejected
+// definition keeps the whole type on the sprite path (reported once).
+// Jittered hulls are closed triangle meshes (a jittered quad is not planar).
+// The support is the lowest getEntityRenderFloorZ under the base outline
+// and centre (floorPropSupportZ), and the base is sunk FLOOR_PROP_SINK below
+// it, so no prop floats on a slope. 07-decorations-lighting.js draws them.
+var FLOOR_PROP_UNIT = 1500 / 180;
+var FLOOR_PROP_SHAPES = 8;
+var FLOOR_PROP_SINK = 0.15;
+var FLOOR_PROP_MIDPOINT_EDGE = 6;   // world units: a longer base edge also samples its midpoint
+var FLOOR_PROP_TYPES = Object.freeze({
+  crate: Object.freeze({name: 'Crate', alt: _floorPropBrokenCrate, build: _floorCrateDef}),
+  barrel: Object.freeze({name: 'Barrel', alt: null, build: _floorBarrelDef}),
+  boulder: Object.freeze({name: 'Boulder', alt: _floorPropMossyBoulder, build: _floorBoulderDef}),
+  stone_column: Object.freeze({name: 'StoneColumn', alt: null, build: _floorStoneColumnDef}),
+  sand_pillar: Object.freeze({name: 'SandPillar', alt: null, build: _floorSandPillarDef}),
+  mesa_boulder: Object.freeze({name: 'MesaBoulder', alt: null, build: _floorMesaDef}),
+  // I2: the remaining floor props (Tier-7 scatter such as rock_pile, skull
+  // and crystal stays sprites).
+  stalagmite: Object.freeze({name: 'Stalagmite', alt: null, build: _floorStalagmiteDef}),
+  tree_stump: Object.freeze({name: 'TreeStump', alt: null, build: _floorTreeStumpDef}),
+  fallen_log: Object.freeze({name: 'FallenLog', alt: null, build: _floorFallenLogDef}),
+  rock_spire: Object.freeze({name: 'RockSpire', alt: null, build: _floorRockSpireDef}),
+  cave_rubble_pile: Object.freeze({name: 'CaveRubblePile', alt: null, build: _floorRubblePileDef}),
+  rock_arch: Object.freeze({name: 'RockArch', alt: null, build: _floorRockArchDef})
+});
+var _floorPropTables = Object.create(null), _floorPropFailed = Object.create(null), _floorPropSalts = Object.create(null);
+var _floorPropProbe = null;
+function _floorPropBrokenCrate(variant) { return variant === 2; }   // the sprite's broken corner
+function _floorPropMossyBoulder(variant) { return variant > 0; }    // the sprite's moss patch
+function _floorPropSaltOf(type) { return _floorPropSalts[type] || (_floorPropSalts[type] = propTypeSalt(type)); }
+// Definition-time shape draws in [0, 1) for one type and shape (no RNG).
+function _floorPropRandFor(type, shape) {
+  var salt = _floorPropSaltOf(type);
+  return function (i) { return propInstanceKey(salt, shape, i, 0x6d2b79f5) / 4294967296; };
+}
+function _floorPropBox(name, min, max, material, role, faceRoles) {
+  var part = {name: name, kind: 'box', min: min, max: max, material: material, role: role, uvScale: 0.5};
+  if (faceRoles) part.faceRoles = faceRoles;
+  return part;
+}
+// Crate (mdPlant): the sprite's s x s square as a cube of side s (0.92-1.0 s
+// tall by shape) with the sprite's bracing as a belt at 0.47-0.62 of the
+// height and a strap over the top, both 0.03 s proud. The broken variant
+// (sprite variant 2) loses a 0.32 s cube at one top corner, its cut faces
+// interior. Box faces: -out, +right, +out, -right, top, bottom.
+function _floorCrateDef(key, rand, alt) {
+  var h = 0.92 + 0.08 * rand(0), P = 0.03, M = 'crateWood', B = 'base', I = 'interior', parts;
+  var belt = _floorPropBox('belt', [-0.5 - P, -0.5 - P, 0.47 * h], [0.5 + P, 0.5 + P, 0.62 * h], M, 'bracing');
+  if (!alt) {
+    parts = [_floorPropBox('body', [-0.5, -0.5, 0], [0.5, 0.5, h], M, B), belt,
+      _floorPropBox('strap', [-0.075, -0.5 - P, 0], [0.075, 0.5 + P, h + P], M, 'bracing')];
+  } else {
+    var c = 0.32;
+    parts = [_floorPropBox('body', [-0.5, -0.5, 0], [0.5, 0.5, h - c], M, B, [B, B, B, B, I, B]),
+      _floorPropBox('back', [-0.5, -0.5, h - c], [0.5 - c, 0.5, h], M, B, [B, I, B, B, B, B]),
+      _floorPropBox('side', [0.5 - c, -0.5, h - c], [0.5, 0.5 - c, h], M, B, [B, B, I, B, B, B]), belt];
+  }
+  return {key: key, family: 'floorProp', parts: parts};
+}
+// Barrel (mdPlant): the sprite's ellipse (0.28 s half-width, 0.7 s tall) as
+// an 8-sided stave body (0.66-0.74 s) with a lighter head, and the sprite's
+// two iron bands as hoops 0.025 s proud at 0.17-0.25 and 0.75-0.83.
+function _floorBarrelDef(key, rand) {
+  var R = 0.28, H = 0.66 + 0.08 * rand(0), P = 0.025, rot = Math.PI / 8, B = 'base';
+  function hoop(name, z0, z1) {
+    return {name: name, kind: 'prism', sides: 8, radius: R + P, z0: z0 * H, z1: z1 * H, rotation: rot,
+      material: 'floorPropIron', role: 'base', uvScale: 0.5};
+  }
+  return {key: key, family: 'floorProp', parts: [
+    {name: 'body', kind: 'prism', sides: 8, radius: R, z0: 0, z1: H, rotation: rot, material: 'barrelWood', role: B,
+      faceRoles: [B, B, B, B, B, B, B, B, 'head', B], uvScale: 0.5},
+    hoop('hoopLow', 0.17, 0.25), hoop('hoopHigh', 0.75, 0.83)]};
+}
+// Boulder (lgPlant): the sprite's ellipse (R = 0.4-0.55 s, 2.2 R wide, 1.4 R
+// tall) as a jittered hull: a 6-point base ring (0.9 R), a 6-point waist
+// ring (1.1 R, turned half a step, near 0.45 of the height) and an apex at
+// about 1.25 R, 22 triangles. The mossy variant (sprite variant > 0) greens
+// two adjacent top triangles.
+function _floorBoulderDef(key, rand, alt) {
+  var R = 0.4 + 0.15 * rand(0), H = 1.25 * R * (0.9 + 0.15 * rand(1)), N = 6, verts = [], tris = [], roles = [], i;
+  for (i = 0; i < N; i++) {
+    var a = i * Math.PI * 2 / N + (rand(10 + i) - 0.5) * 0.24, r = 0.9 * R * (0.88 + 0.24 * rand(20 + i));
+    verts.push([Math.cos(a) * r, Math.sin(a) * r, 0]);
+  }
+  for (i = 0; i < N; i++) {
+    var b = (i + 0.5) * Math.PI * 2 / N + (rand(30 + i) - 0.5) * 0.24, q = 1.1 * R * (0.88 + 0.24 * rand(40 + i));
+    verts.push([Math.cos(b) * q, Math.sin(b) * q, H * 0.45 * (0.85 + 0.3 * rand(50 + i))]);
+  }
+  verts.push([(rand(2) - 0.5) * 0.4 * R, (rand(3) - 0.5) * 0.4 * R, H]);
+  var apex = 2 * N, moss = Math.floor(rand(4) * N);
+  for (i = 0; i < N; i++) {
+    var j = (i + 1) % N;
+    tris.push([i, j, N + i], [N + i, j, N + j]); roles.push('base', 'base');
+  }
+  for (i = 0; i < N; i++) {
+    tris.push([N + i, N + (i + 1) % N, apex]);
+    roles.push(alt && (i === moss || i === (moss + 1) % N) ? 'moss' : 'base');
+  }
+  for (i = 1; i < N - 1; i++) { tris.push([0, i + 1, i]); roles.push('base'); }
+  return {key: key, family: 'floorProp', parts: [{name: 'hull', kind: 'mesh', vertices: verts, triangles: tris,
+    material: 'floorStone', role: 'base', faceRoles: roles, flags: {closed: true}, uvScale: 0.5}]};
+}
+// Stone column and sand pillar (lgPlant): the sprite's tapered trapezoid
+// (half-width w at the base, taper x w at the top, height h) as a 6-sided
+// tapered hull whose top corners sit up to 0.06 s low (the break) under an
+// off-centre peak `rise` above h (the sprite's jagged cap), 22 triangles.
+function _floorPillarDef(key, rand, material, sideRole, capRole, w, h, taper, rise) {
+  var N = 6, verts = [], tris = [], roles = [], rot = rand(9) * Math.PI * 2 / N, i;
+  for (i = 0; i < N; i++) {
+    var a = rot + i * Math.PI * 2 / N, k = 0.94 + 0.12 * rand(10 + i);
+    verts.push([Math.cos(a) * w * k, Math.sin(a) * w * k, 0]);
+  }
+  for (i = 0; i < N; i++) {
+    var a2 = rot + i * Math.PI * 2 / N, k2 = 0.94 + 0.12 * rand(10 + i);
+    verts.push([Math.cos(a2) * w * taper * k2, Math.sin(a2) * w * taper * k2, h - 0.06 * rand(20 + i)]);
+  }
+  var pa = rand(3) * Math.PI * 2, pd = 0.45 * w * taper;
+  verts.push([Math.cos(pa) * pd, Math.sin(pa) * pd, h + rise]);
+  var peak = 2 * N;
+  for (i = 0; i < N; i++) {
+    var j = (i + 1) % N;
+    tris.push([i, j, N + j], [i, N + j, N + i]); roles.push(sideRole, sideRole);
+  }
+  for (i = 0; i < N; i++) { tris.push([N + i, N + (i + 1) % N, peak]); roles.push(capRole); }
+  for (i = 1; i < N - 1; i++) { tris.push([0, i + 1, i]); roles.push(sideRole); }
+  return {key: key, family: 'floorProp', parts: [{name: 'pillar', kind: 'mesh', vertices: verts, triangles: tris,
+    material: material, role: sideRole, faceRoles: roles, flags: {closed: true}, uvScale: 0.5}]};
+}
+function _floorStoneColumnDef(key, rand) {
+  return _floorPillarDef(key, rand, 'floorStone', 'column', 'broken',
+    0.14 + 0.06 * rand(0), 0.8 + 0.6 * rand(1), 0.7, 0.15 * (0.6 + 0.4 * rand(2)));
+}
+function _floorSandPillarDef(key, rand) {
+  return _floorPillarDef(key, rand, 'sandstone', 'base', 'cap',
+    0.16 + 0.06 * rand(0), 0.75 + 0.5 * rand(1), 0.6, 0.1 * (0.6 + 0.4 * rand(2)));
+}
+// Mesa boulder (lgPlant): the sprite's three strata (half-width W = 0.45-0.6
+// s, height 0.3-0.45 s: bottom to 0.4, middle to 0.75, a flat top) as three
+// stacked frusta with shrinking footprints (1 -> 0.875, 0.825 -> 0.725, 0.7),
+// 0.6-0.85 as deep as wide, the upper two shifted a little; 18 faces.
+function _floorMesaDef(key, rand) {
+  var W = 0.45 + 0.15 * rand(0), H = 0.3 + 0.15 * rand(1), d = 0.6 + 0.25 * rand(2);
+  function layer(name, z0, z1, lo, hi, jr, jo) {
+    return {name: name, kind: 'frustum', center: [jr * W, jo * W], z0: z0 * H, z1: z1 * H,
+      bottom: [lo * W, lo * d * W], top: [hi * W, hi * d * W], material: 'mesaRock', role: name, uvScale: 0.5};
+  }
+  return {key: key, family: 'floorProp', parts: [
+    layer('bottom', 0, 0.4, 1, 0.875, 0, 0),
+    layer('middle', 0.4, 0.75, 0.825, 0.725, (rand(3) - 0.5) * 0.06, (rand(4) - 0.5) * 0.06),
+    layer('top', 0.75, 1, 0.7, 0.7, (rand(5) - 0.5) * 0.04, (rand(6) - 0.5) * 0.04)]};
+}
+// The base outline of a model (its vertices at the lowest z) in angle order
+// round the origin, with the midpoint of every edge longer than
+// FLOOR_PROP_MIDPOINT_EDGE world units at `scale`: flat [r0, o0, r1, o1, ...].
+function _floorPropFootprint(model, scale) {
+  var pts = [], seen = Object.create(null), z0 = model.bounds.min[2], out = [];
+  model.parts.forEach(function (part) {
+    part.faces.forEach(function (face) {
+      face.points.forEach(function (p) {
+        var key = Math.round(p[0] * 1e6) + ',' + Math.round(p[1] * 1e6);
+        if (Math.abs(p[2] - z0) > 1e-9 || seen[key]) return;
+        seen[key] = true; pts.push([p[0], p[1]]);
+      });
+    });
+  });
+  pts.sort(function (a, b) { return Math.atan2(a[1], a[0]) - Math.atan2(b[1], b[0]); });
+  for (var i = 0; i < pts.length; i++) {
+    var a = pts[i], b = pts[(i + 1) % pts.length];
+    out.push(a[0], a[1]);
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) * scale > FLOOR_PROP_MIDPOINT_EDGE) out.push((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+  }
+  return Object.freeze(out);
+}
+// Largest horizontal distance of any vertex from the origin (model units).
+function _floorPropReach(model) {
+  var reach = 0;
+  model.parts.forEach(function (part) {
+    part.faces.forEach(function (face) { face.points.forEach(function (p) { reach = Math.max(reach, Math.hypot(p[0], p[1])); }); });
+  });
+  return reach;
+}
+function floorPropScale(type) {
+  var tier = typeof FLOOR_ITEM_TIER !== 'undefined' && FLOOR_ITEM_TIER[type] || 'medium';
+  return FLOOR_PROP_UNIT * (typeof getScale3D === 'function' ? getScale3D(tier) : 1);
+}
+// True once every shape of the type's models is defined (on first use).
+// False for a type without models or whose definitions were rejected
+// (reported once): its items stay on the sprite path.
+function floorPropTypeReady(type) {
+  if (_floorPropTables[type]) return true;
+  if (typeof type !== 'string' || !Object.prototype.hasOwnProperty.call(FLOOR_PROP_TYPES, type) ||
+      _floorPropFailed[type] || typeof GAME_MATERIALS === 'undefined') return false;
+  var spec = FLOOR_PROP_TYPES[type];
+  try {
+    var scale = floorPropScale(type), table = {models: [[], []], footprints: [[], []], reach: [[], []]};
+    for (var alt = 0; alt < 2; alt++) {
+      for (var k = 0; k < FLOOR_PROP_SHAPES; k++) {
+        if (alt && !spec.alt) {
+          table.models[1][k] = table.models[0][k]; table.footprints[1][k] = table.footprints[0][k]; table.reach[1][k] = table.reach[0][k];
+          continue;
+        }
+        var key = 'floorProp' + spec.name + (alt ? 'Alt' : '') + k;
+        var model = PROP_MODELS[key] || definePropModel(spec.build(key, _floorPropRandFor(type, k), !!alt));
+        table.models[alt][k] = model;
+        table.footprints[alt][k] = _floorPropFootprint(model, scale);
+        table.reach[alt][k] = _floorPropReach(model);
+      }
+    }
+    _floorPropTables[type] = table;
+    return true;
+  } catch (e) {
+    _floorPropFailed[type] = true;
+    if (typeof console !== 'undefined' && console.error) console.error('[floor props] ' + type + ' models rejected; sprites kept: ' + (e && e.message));
+    return false;
+  }
+}
+function floorPropSeedKey(seed) {
+  if (typeof seed !== 'number' || !Number.isFinite(seed)) return 0;
+  return Number.isInteger(seed) ? seed | 0 : Math.floor(seed * 4294967296) | 0;
+}
+// An item's stateless key: its type salt, rounded absolute x/y (the Endless
+// window origin added back) and stored seed.
+function floorPropKey(item) {
+  var inWindow = typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE;
+  var wx = inWindow && typeof windowOriginX === 'number' ? windowOriginX : 0;
+  var wy = inWindow && typeof windowOriginY === 'number' ? windowOriginY : 0;
+  return propInstanceKey(_floorPropSaltOf(item.type), Math.round(item.x + wx), Math.round(item.y + wy), floorPropSeedKey(item.seed));
+}
+// Pose of a floor-scatter item for drawWorldModel: its model (shape and
+// variant flag), yaw basis, scale, cave flag, base outline and horizontal
+// reach (world units). z stays NaN until the caller sets the support.
+// Written into `out` (a new object without one); null when the type has no
+// ready model.
+function floorPropPose(item, out) {
+  if (!item || !floorPropTypeReady(item.type)) return null;
+  var spec = FLOOR_PROP_TYPES[item.type], table = _floorPropTables[item.type], key = floorPropKey(item);
+  var yaw = (key & 0xffffff) / 16777216 * Math.PI * 2;
+  var shape = Math.floor((key >>> 24) * FLOOR_PROP_SHAPES / 256), alt = spec.alt && spec.alt(item.variant) ? 1 : 0;
+  out = out || {};
+  out.x = item.x; out.y = item.y; out.z = NaN; out.yaw = yaw;
+  out.basis = modelBasis(yaw, out.basis || {});
+  out.scale = floorPropScale(item.type); out.cave = !!(item.underground || item.caveSpawnId);
+  out.model = table.models[alt][shape]; out.footprint = table.footprints[alt][shape];
+  out.reach = table.reach[alt][shape] * out.scale; out.shape = shape; out.alt = alt;
+  return out;
+}
+// The support under a posed item: its own renderFloorZ when it carries one,
+// otherwise the lowest getEntityRenderFloorZ at the centre and under every
+// base-outline point (a sample without support is ignored); NaN when the
+// centre has no support.
+function floorPropSupportZ(item, pose) {
+  if (typeof item.renderFloorZ === 'number' && Number.isFinite(item.renderFloorZ)) return item.renderFloorZ;
+  var z = getEntityRenderFloorZ(item);
+  if (!Number.isFinite(z)) return NaN;
+  var probe = _floorPropProbe || (_floorPropProbe = {x: 0, y: 0, feetZ: undefined, underground: false, caveSpawnId: 0});
+  probe.feetZ = item.feetZ; probe.underground = item.underground; probe.caveSpawnId = item.caveSpawnId;
+  var fp = pose.footprint, b = pose.basis, s = pose.scale;
+  for (var i = 0; i < fp.length; i += 2) {
+    probe.x = item.x + (fp[i] * b.rightX + fp[i + 1] * b.outX) * s;
+    probe.y = item.y + (fp[i] * b.rightY + fp[i + 1] * b.outY) * s;
+    var zz = getEntityRenderFloorZ(probe);
+    if (zz < z) z = zz;
+  }
+  return z;
+}
+
+// ── Floor props, I2 types (stalagmite, tree_stump, fallen_log, rock_spire,
+// cave_rubble_pile, rock_arch) ──
+// Same builder contract as the I1 types: (key, rand, alt), proportions of s
+// from the paintFloorItem recipe, one closed model per shape.
+// A closed triangle-mesh part wound outward (by its signed volume).
+function _floorPropSolid(name, verts, tris, material, role) {
+  var volume = 0;
+  tris.forEach(function (t) {
+    var a = verts[t[0]], b = verts[t[1]], c = verts[t[2]];
+    volume += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
+  });
+  if (volume < 0) tris = tris.map(function (t) { return [t[0], t[2], t[1]]; });
+  return {name: name, kind: 'mesh', vertices: verts, triangles: tris, material: material, role: role, flags: {closed: true}, uvScale: 0.5};
+}
+// Stalagmite (mdPlant): the sprite's tapered trapezoid (half-width 0.12-0.2
+// s at the base, 0.3 of it at the top, 0.9-1.4 s tall) as the pillar hull
+// with a blunt off-centre tip: the top ring 0-0.06 s under h, the tip `rise`
+// above it, so h + rise is the sprite's height. 22 triangles.
+function _floorStalagmiteDef(key, rand) {
+  var rise = 0.12 * (0.6 + 0.4 * rand(2));
+  return _floorPillarDef(key, rand, 'caveRock', 'stalagmite', 'stalagmite', 0.12 + 0.08 * rand(0), 0.9 + 0.5 * rand(1) - rise, 0.3, rise);
+}
+// Tree stump (lgPlant): the sprite's trunk (half-width W = 0.2-0.28 s, 0.85
+// W at the top, 0.2-0.3 s tall) as an 8-sided tapered prism with bark sides
+// and a cut top, and three root wedges (the sprite's tendrils, floorPropWood
+// deep) from inside the trunk out to 1.3-1.45 W on the ground. 22 faces.
+function _floorStumpRoot(name, a, W, H, reach) {
+  function at(angle, r, z) { return [Math.cos(angle) * r, Math.sin(angle) * r, z]; }
+  return _floorPropSolid(name, [at(a - 0.3, 0.75 * W, 0), at(a + 0.3, 0.75 * W, 0), at(a, reach, 0), at(a, 0.8 * W, 0.35 * H)],
+    [[0, 1, 2], [0, 2, 3], [2, 1, 3], [1, 0, 3]], 'floorPropWood', 'deep');
+}
+function _floorTreeStumpDef(key, rand) {
+  var W = 0.2 + 0.08 * rand(0), H = 0.2 + 0.1 * rand(1), B = 'shadow', a0 = rand(3) * Math.PI * 2;
+  var parts = [{name: 'trunk', kind: 'prism', sides: 8, radius: W, taper: 0.85, z0: 0, z1: H, rotation: rand(2) * Math.PI / 4,
+    material: 'floorPropWood', role: B, faceRoles: [B, B, B, B, B, B, B, B, 'cut', B], uvScale: 0.5}];
+  for (var k = 0; k < 3; k++)
+    parts.push(_floorStumpRoot('root' + k, a0 + k * Math.PI * 2 / 3 + (rand(10 + k) - 0.5) * 0.6, W, H, W * (1.3 + 0.15 * rand(20 + k))));
+  return {key: key, family: 'floorProp', parts: parts};
+}
+// Fallen log (lgPlant): the sprite's trunk (half-length L = 0.5-0.7 s,
+// radius R = 0.12-0.16 s, a cut end) as an 8-sided prism along r lying on a
+// flat bottom face, narrowing to 0.85-0.95 R at the +r end with the bottom
+// kept flat (so the footprint spans the whole length for the minimum
+// support), bark sides and both ends cut. 10 faces.
+function _floorFallenLogDef(key, rand) {
+  var L = 0.5 + 0.2 * rand(0), R = 0.12 + 0.04 * rand(1), taper = 0.85 + 0.1 * rand(2), zc = R * Math.cos(Math.PI / 8), B = 'shadow';
+  return {key: key, family: 'floorProp', parts: [{name: 'log', kind: 'prism', axis: 'r', sides: 8, rotation: Math.PI / 8,
+    center: [0, zc], radius: R, taper: taper, shift: [0, -zc * (1 - taper)], z0: -L, z1: L,
+    material: 'floorPropWood', role: B, faceRoles: [B, B, B, B, B, B, B, B, 'cut', 'cut'], uvScale: 0.5}]};
+}
+// Rock spire (lgPlant): the sprite's two or three thin spires (half-width
+// 0.07-0.12 s, 0.2 of it at the top, 0.5-1.2 s tall, 0.22 s apart across r
+// with a shared +-0.05 s jitter) in its three swatches, as closed 5-sided
+// tapered prisms, each up to 0.06 s off the row and leaning a quarter of
+// its base half-width. 7 faces per spire.
+function _floorRockSpireDef(key, rand) {
+  var count = 2 + Math.floor(rand(0) * 2), jitter = (rand(1) - 0.5) * 0.1, roles = ['spire', 'spireLit', 'spireDark'], parts = [];
+  for (var k = 0; k < count; k++) {
+    var w = 0.07 + 0.05 * rand(10 + k), lean = rand(30 + k) * Math.PI * 2;
+    parts.push({name: 'spire' + k, kind: 'prism', sides: 5, rotation: rand(40 + k) * Math.PI * 2 / 5,
+      center: [(k - count * 0.5 + 0.5) * 0.22 + jitter, (rand(50 + k) - 0.5) * 0.12], radius: w, taper: 0.2,
+      shift: [Math.cos(lean) * 0.25 * w, Math.sin(lean) * 0.25 * w], z0: 0, z1: 0.5 + 0.7 * rand(20 + k),
+      material: 'caveRock', role: roles[k % 3], uvScale: 0.5});
+  }
+  return {key: key, family: 'floorProp', parts: parts};
+}
+// Cave rubble pile (lgPlant): the sprite's mound (about 1.05 s wide, 0.4 s
+// tall) as a jittered hull (a 6-point base ring at R = 0.5-0.56 s, a waist
+// ring at 0.62 R about half way up, an off-centre apex at H = 0.34-0.42 s),
+// 22 triangles, with three of its rocks (rotated 4-sided blocks 0.12-0.24 s
+// across in the rubble swatches, centred 0.15-0.35 R out, inside the base
+// ring) set into the slope: the base 0.04 s under the mound's surface at
+// its lowest corner, the top 0.5-0.8 of its half-size above the surface at
+// its centre. 40 faces.
+function _floorHullTopZ(verts, tris, x, y) {
+  var top = 0;
+  for (var i = 0; i < tris.length; i++) {
+    var p0 = verts[tris[i][0]], p1 = verts[tris[i][1]], p2 = verts[tris[i][2]];
+    var d = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1]);
+    if (Math.abs(d) < 1e-12) continue;
+    var a = ((x - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (y - p0[1])) / d;
+    var b = ((p1[0] - p0[0]) * (y - p0[1]) - (x - p0[0]) * (p1[1] - p0[1])) / d;
+    if (a >= 0 && b >= 0 && a + b <= 1) top = Math.max(top, p0[2] + a * (p1[2] - p0[2]) + b * (p2[2] - p0[2]));
+  }
+  return top;
+}
+function _floorRubblePileDef(key, rand) {
+  var R = 0.5 + 0.06 * rand(0), H = 0.34 + 0.08 * rand(1), N = 6, rot = rand(2) * Math.PI * 2 / N, verts = [], tris = [], i;
+  for (i = 0; i < N; i++) {
+    var a = rot + i * Math.PI * 2 / N + (rand(10 + i) - 0.5) * 0.3, r = R * (0.88 + 0.24 * rand(20 + i));
+    verts.push([Math.cos(a) * r, Math.sin(a) * r, 0]);
+  }
+  for (i = 0; i < N; i++) {
+    var b = rot + (i + 0.5) * Math.PI * 2 / N + (rand(30 + i) - 0.5) * 0.3, q = 0.62 * R * (0.88 + 0.24 * rand(40 + i));
+    verts.push([Math.cos(b) * q, Math.sin(b) * q, H * 0.5 * (0.85 + 0.3 * rand(50 + i))]);
+  }
+  verts.push([(rand(3) - 0.5) * 0.3 * R, (rand(4) - 0.5) * 0.3 * R, H]);
+  for (i = 0; i < N; i++) tris.push([i, (i + 1) % N, N + i], [N + i, (i + 1) % N, N + (i + 1) % N]);
+  for (i = 0; i < N; i++) tris.push([N + i, N + (i + 1) % N, 2 * N]);
+  for (i = 1; i < N - 1; i++) tris.push([0, i + 1, i]);
+  var parts = [_floorPropSolid('mound', verts, tris, 'caveRock', 'mound')], roles = ['rubble', 'rubbleLit', 'rubbleDark'];
+  for (var k = 0; k < 3; k++) {
+    var t = rot + k * Math.PI * 2 / 3 + (rand(60 + k) - 0.5) * 0.8, d = R * (0.15 + 0.2 * rand(70 + k)), cx = Math.cos(t) * d, cy = Math.sin(t) * d;
+    var ra = 0.06 + 0.06 * rand(80 + k), rb = ra * (0.6 + 0.3 * rand(90 + k)), spin = rand(100 + k) * Math.PI, low = Infinity;
+    for (i = 0; i < 4; i++) {
+      var ca = spin + i * Math.PI / 2;
+      low = Math.min(low, _floorHullTopZ(verts, tris, cx + Math.cos(ca) * ra, cy + Math.sin(ca) * rb));
+    }
+    parts.push({name: 'rock' + k, kind: 'prism', sides: 4, rotation: spin, center: [cx, cy], radius: [ra, rb], taper: 0.6,
+      z0: Math.max(0.01, low - 0.04), z1: _floorHullTopZ(verts, tris, cx, cy) + ra * (0.5 + 0.3 * rand(110 + k)),
+      material: 'caveRock', role: roles[k], uvScale: 0.5});
+  }
+  return {key: key, family: 'floorProp', parts: parts};
+}
+// Rock arch (lgPlant): the sprite's two pillars (0.16 s wide at +-0.55 s,
+// 0.4 A tall, A = 0.5-0.8 s) as boxes 0.2-0.23 s deep, and its span (outer
+// curve from (+-0.65 s, 0.4 A) with the control (0, A); inner curve from
+// (+-0.61 s, 0.3 A) with the control (0, 0.75 A)) as a closed triangle mesh
+// over three segments, 0.02 s shallower than the pillars. 40 faces.
+function _floorRockArchDef(key, rand) {
+  var A = 0.5 + 0.3 * rand(0), d = 0.08 + 0.03 * rand(1), D = d + 0.02, M = 3, verts = [], tris = [], i;
+  function curve(end, endZ, controlZ, sideO) {
+    for (var j = 0; j <= M; j++) {
+      var t = j / M, u = 1 - t;
+      verts.push([(t * t - u * u) * end, sideO, (u * u + t * t) * endZ + 2 * t * u * controlZ]);
+    }
+  }
+  curve(0.65, 0.4 * A, A, -d); curve(0.65, 0.4 * A, A, d); curve(0.61, 0.3 * A, 0.75 * A, -d); curve(0.61, 0.3 * A, 0.75 * A, d);
+  function of(j) { return j; } function ob(j) { return M + 1 + j; } function inf(j) { return 2 * (M + 1) + j; } function inb(j) { return 3 * (M + 1) + j; }
+  function quad(a, b, c, e) { tris.push([a, b, c], [a, c, e]); }
+  for (i = 0; i < M; i++) {
+    quad(of(i), of(i + 1), inf(i + 1), inf(i));   // front cap
+    quad(ob(i), inb(i), inb(i + 1), ob(i + 1));   // back cap
+    quad(of(i), ob(i), ob(i + 1), of(i + 1));     // outer (top) strip
+    quad(inf(i), inf(i + 1), inb(i + 1), inb(i)); // inner (underside) strip
+  }
+  quad(of(0), inf(0), inb(0), ob(0)); quad(of(M), ob(M), inb(M), inf(M));
+  return {key: key, family: 'floorProp', parts: [
+    _floorPropBox('pillarLeft', [-0.63, -D, 0], [-0.47, D, 0.4 * A], 'caveRock', 'arch'),
+    _floorPropBox('pillarRight', [0.47, -D, 0], [0.63, D, 0.4 * A], 'caveRock', 'arch'),
+    _floorPropSolid('span', verts, tris, 'caveRock', 'arch')]};
+}
+
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'floorPropModels', label: 'Floor prop models', type: 'bool', default: true, legacy: false,
+    title: 'Crates, barrels, boulders, stone columns, sand pillars, mesa boulders, stalagmites, tree stumps, fallen logs, rock spires, cave rubble piles and rock arches drawn as opaque, depth-writing models on the terrain under their footprint (other floor scatter stays sprites).'});
+}
+
+// ── Landmark models (integration stage J1, landmarkModels) ──
+// Shrines, market stalls, the guard tower and the fortress keep's forge,
+// lectern and garrison banner as world-face models standing on
+// getEntityRenderFloorZ: the surface support, so a landmark above a cave
+// sits on the surface, not on the lowest layer getFloorHeightAt answers.
+// The draw paths sit next to the legacy painters in 15-render-hud-menu.js
+// and keep the legacy gates (stage J2 replaces those); glows, labels and
+// prompts stay billboards there, depth-clipped. Models are defined on first
+// use; if any is rejected (reported once), every landmark keeps the legacy
+// path. Local frames (modelBasis: o out, r right, z up from the support):
+//  - shrine (yaw 0): the legacy 20 x 20 x 18 pedestal. The crystal is its
+//    own model because it bobs: the legacy octahedron about the legacy
+//    crystalZ (top 2c, bottom -c, equator 0.5c up with radius c = 7),
+//    translucent and emissive, its faces alternating two tints (the legacy
+//    buff colour and its dark shade).
+//  - stall (yaw = facing: o is the legacy front, r its left): the table slab
+//    over the whole STALL_W x STALL_D footprint (34 across, 18 along the
+//    facing: repelFromStalls' collision box in 09-physics.js), two back legs
+//    and two front poles inset 0.15 inside it up into the awning, and the
+//    awning from 44 over the back edge down to 39 at 10 past the front (the
+//    legacy droop and overhang) with the legacy dark stripe. The goods are
+//    their own model, drawn within 200 u like the legacy goods: a crate, a
+//    barrel and two wares boxes on the table (stall-local shapes; stage I's
+//    crate and barrel models can replace them once merged).
+//  - tower (yaw 0): the legacy 16 x 16 x TOWER_HEIGHT box (its top face is
+//    the cap) and two 12-high merlons per side at the legacy 0.15 and 0.65
+//    of each edge, 0.3 of it wide and 2 deep.
+//  - keep props (yaw toward the fortress centre): a 10 x 10 platform with an
+//    anvil (forge), a slanted rest and book (lectern), or a pole whose flag
+//    swings about it (garrison, joint 'wave').
+var LANDMARK_MODEL_KEYS = Object.freeze(['landmarkShrine', 'landmarkShrineCrystal', 'landmarkStall', 'landmarkStallGoods',
+  'landmarkTower', 'landmarkForge', 'landmarkLectern', 'landmarkGarrison']);
+var SHRINE_MODEL_DIMS = Object.freeze({half: 10, height: 18, crystal: 7, lift: 10, bob: 4, label: 30, prompt: 40, alpha: 0.85});
+var STALL_MODEL_DIMS = Object.freeze({w: 34, d: 18, tableH: 18, slab: 2, awningH: 44, droop: 5, awningOut: 10, awningT: 1,
+  leg: 1.6, pole: 2, inset: 0.15, goodsDist: 200});
+var TOWER_MODEL_DIMS = Object.freeze({half: 8, merlonH: 12, merlonT: 2, merlonW: 0.3, merlonAt: Object.freeze([0.15, 0.65]), beacon: 50});
+var KEEP_PROP_DIMS = Object.freeze({pad: 5, padH: 1.5, prompt: 28});
+var _landmarkModelFailed = Object.create(null), _landmarkInstanceScratch = null, _landmarkAnchorScratch = null;
+function _landmarkShrineDef() {
+  var D = SHRINE_MODEL_DIMS, h = D.half, H = D.height;
+  return {key: 'landmarkShrine', family: 'shrine', parts: [
+    {name: 'pedestal', kind: 'box', min: [-h, -h, 0], max: [h, h, H], material: 'landmarkShrine', role: 'stone',
+      faceRoles: ['stone', 'stone', 'stone', 'stone', 'top', 'stone'], uvScale: 20,
+      anchors: {label: [0, 0, H + D.label], prompt: [0, 0, H + D.prompt]}}]};
+}
+function _landmarkShrineCrystalDef() {
+  var c = SHRINE_MODEL_DIMS.crystal, e = c * 0.5;
+  // 0 top, 1 bottom, then the equator +r, +o, -r, -o; every face winds outward.
+  var v = [[0, 0, 2 * c], [0, 0, -c], [c, 0, e], [0, c, e], [-c, 0, e], [0, -c, e]];
+  function half(name, tint, triangles, anchors) {
+    var part = {name: name, kind: 'mesh', vertices: v, triangles: triangles, material: 'landmarkShrine', role: tint, tint: tint,
+      uvScale: 14, flags: {translucent: true, emissive: true}, alpha: SHRINE_MODEL_DIMS.alpha};
+    if (anchors) part.anchors = anchors;
+    return part;
+  }
+  return {key: 'landmarkShrineCrystal', family: 'shrine', parts: [
+    half('crystalLit', 'crystal', [[0, 2, 3], [0, 4, 5], [1, 4, 3], [1, 2, 5]], {glow: [0, 0, 2 * c]}),
+    half('crystalDark', 'crystalDark', [[0, 3, 4], [0, 5, 2], [1, 3, 2], [1, 5, 4]])]};
+}
+function _landmarkStallDef() {
+  var D = STALL_MODEL_DIMS, hw = D.w / 2, hd = D.d / 2, top = D.tableH, i = D.inset, M = 'landmarkStall';
+  var run = D.d + D.awningOut, low = D.awningH - D.droop, s0 = D.awningOut / 2 - 1, s1 = D.awningOut / 2 + 1;
+  function awningTop(o) { return D.awningH - D.droop * (o + hd) / run; }
+  function box(name, min, max, role, extra) {
+    var part = {name: name, kind: 'box', min: min, max: max, material: M, role: role, uvScale: 16};
+    for (var k in extra) part[k] = extra[k];
+    return part;
+  }
+  // Legs and poles end inside the awning slab (half its thickness down).
+  var legTop = awningTop(-hd + i + D.leg) - D.awningT / 2, poleTop = awningTop(hd - i) - D.awningT / 2;
+  return {key: 'landmarkStall', family: 'stall', parts: [
+    box('slab', [-hw, -hd, top - D.slab], [hw, hd, top], 'table', {faceRoles: ['wood', 'wood', 'wood', 'wood', 'table', 'woodDark']}),
+    box('legBackLeft', [-hw + i, -hd + i, 0], [-hw + i + D.leg, -hd + i + D.leg, legTop], 'woodDark'),
+    box('legBackRight', [hw - i - D.leg, -hd + i, 0], [hw - i, -hd + i + D.leg, legTop], 'woodDark'),
+    box('poleFrontLeft', [-hw + i, hd - i - D.pole, 0], [-hw + i + D.pole, hd - i, poleTop], 'wood'),
+    box('poleFrontRight', [hw - i - D.pole, hd - i - D.pole, 0], [hw - i, hd - i, poleTop], 'wood'),
+    {name: 'awning', kind: 'extrude', axis: 'r', from: -hw, to: hw, material: M, role: 'awning', tint: 'awning', uvScale: 24,
+      profile: [[-hd, D.awningH], [hd + D.awningOut, low], [hd + D.awningOut, low - D.awningT], [-hd, D.awningH - D.awningT]]},
+    {name: 'stripe', kind: 'quad', material: M, role: 'awningDark', tint: 'awningDark', uvScale: 24, flags: {decal: true},
+      vertices: [[-hw, s0, awningTop(s0) + 0.05], [hw, s0, awningTop(s0) + 0.05], [hw, s1, awningTop(s1) + 0.05], [-hw, s1, awningTop(s1) + 0.05]]}]};
+}
+function _landmarkStallGoodsDef() {
+  var top = STALL_MODEL_DIMS.tableH, M = 'landmarkStall';
+  return {key: 'landmarkStallGoods', family: 'stall', parts: [
+    {name: 'crate', kind: 'box', min: [-12, -2.5, top], max: [-7, 2.5, top + 5], material: 'crateWood', role: 'base',
+      faceRoles: ['base', 'base', 'base', 'base', 'bracing', 'base'], uvScale: 10},
+    {name: 'wares', kind: 'box', min: [-4.5, -2, top], max: [-0.5, 2, top + 3], material: M, role: 'goods', tint: 'goods', uvScale: 10},
+    {name: 'barrel', kind: 'prism', sides: 8, center: [4.5, 0], radius: 2.4, z0: top, z1: top + 5.5, material: M, role: 'woodLit', uvScale: 10},
+    {name: 'waresSmall', kind: 'box', min: [9, -2.5, top], max: [13, 1.5, top + 2.5], material: M, role: 'goods', tint: 'goods', uvScale: 10}]};
+}
+function _landmarkTowerDef() {
+  var D = TOWER_MODEL_DIMS, h = D.half, H = typeof TOWER_HEIGHT === 'number' && TOWER_HEIGHT > 0 ? TOWER_HEIGHT : 80;
+  var parts = [{name: 'body', kind: 'box', min: [-h, -h, 0], max: [h, h, H], material: 'landmarkTower', role: 'stone',
+    faceRoles: ['stone', 'stone', 'stone', 'stone', 'top', 'stone'], uvScale: 24,
+    anchors: {beacon: [0, 0, H], beaconTop: [0, 0, H + D.beacon]}}];
+  // The legacy corner walk in world (x, y) about the marker; at yaw 0 the
+  // local frame is r = y, o = x. Each merlon runs inward from its face.
+  var corners = [[-h, -h], [h, -h], [h, h], [-h, h]];
+  for (var k = 0; k < 4; k++) {
+    var a = corners[k], b = corners[(k + 1) % 4], nx = Math.sign(a[0] + b[0]), ny = Math.sign(a[1] + b[1]);
+    for (var m = 0; m < D.merlonAt.length; m++) {
+      var xs = [], ys = [], ends = [D.merlonAt[m], D.merlonAt[m] + D.merlonW];
+      for (var e = 0; e < 2; e++) {
+        var px = a[0] + (b[0] - a[0]) * ends[e], py = a[1] + (b[1] - a[1]) * ends[e];
+        xs.push(px, px - nx * D.merlonT); ys.push(py, py - ny * D.merlonT);
+      }
+      parts.push({name: 'merlon' + k + '_' + m, kind: 'box', material: 'landmarkTower', role: 'top', uvScale: 24,
+        min: [Math.min.apply(null, ys), Math.min.apply(null, xs), H], max: [Math.max.apply(null, ys), Math.max.apply(null, xs), H + D.merlonH]});
+    }
+  }
+  return {key: 'landmarkTower', family: 'tower', parts: parts};
+}
+function _keepPlatformPart() {
+  var P = KEEP_PROP_DIMS.pad;
+  return {name: 'platform', kind: 'box', min: [-P, -P, 0], max: [P, P, KEEP_PROP_DIMS.padH], material: 'landmarkKeep', role: 'platform', uvScale: 12};
+}
+function _keepPart(name, kind, fields, role, anchors) {
+  var part = {name: name, kind: kind, material: 'landmarkKeep', role: role, uvScale: 12};
+  for (var k in fields) part[k] = fields[k];
+  if (anchors) part.anchors = anchors;
+  return part;
+}
+function _landmarkForgeDef() {
+  var z = KEEP_PROP_DIMS.padH;
+  return {key: 'landmarkForge', family: 'keep', parts: [_keepPlatformPart(),
+    _keepPart('anvilFoot', 'box', {min: [-3, -2, z], max: [3, 2, z + 4.5]}, 'iron'),
+    _keepPart('anvilWaist', 'box', {min: [-1.8, -1.2, z + 4.5], max: [1.8, 1.2, z + 8.5]}, 'iron'),
+    _keepPart('anvilFace', 'box', {min: [-5, -2.2, z + 8.5], max: [5, 2.2, z + 11.5]}, 'ironLit',
+      {glow: [0, 0, z + 12], prompt: [0, 0, KEEP_PROP_DIMS.prompt]})]};
+}
+function _landmarkLecternDef() {
+  var z = KEEP_PROP_DIMS.padH;
+  // The rest slopes down toward the fortress centre (+o): z = 15.5 - 0.5 o.
+  return {key: 'landmarkLectern', family: 'keep', parts: [_keepPlatformPart(),
+    _keepPart('column', 'box', {min: [-1.2, -1.2, z], max: [1.2, 1.2, 13]}, 'stone'),
+    _keepPart('rest', 'extrude', {axis: 'r', from: -4, to: 4, profile: [[-3, 13], [3, 13], [3, 14], [-3, 17]]}, 'stone'),
+    _keepPart('book', 'extrude', {axis: 'r', from: -3.5, to: 3.5, profile: [[-2.5, 16.75], [2.5, 14.25], [2.5, 15.15], [-2.5, 17.65]]}, 'book',
+      {glow: [0, 0, 17.5], prompt: [0, 0, KEEP_PROP_DIMS.prompt]})]};
+}
+function _landmarkGarrisonDef() {
+  var z = KEEP_PROP_DIMS.padH;
+  return {key: 'landmarkGarrison', family: 'keep', parts: [_keepPlatformPart(),
+    _keepPart('pole', 'box', {min: [-0.8, -0.8, z], max: [0.8, 0.8, 26]}, 'pole', {prompt: [0, 0, KEEP_PROP_DIMS.prompt]}),
+    _keepPart('finial', 'box', {min: [-1.2, -1.2, 26], max: [1.2, 1.2, 27.5]}, 'flag'),
+    _keepPart('flag', 'box', {min: [0.8, -0.2, 12], max: [12.8, 0.2, 24],
+      hinge: {name: 'wave', origin: [0, 0, 0], axis: [0, 0, 1], min: -0.6, max: 0.6}}, 'flag')]};
+}
+var _LANDMARK_MODEL_DEFS = {landmarkShrine: _landmarkShrineDef, landmarkShrineCrystal: _landmarkShrineCrystalDef,
+  landmarkStall: _landmarkStallDef, landmarkStallGoods: _landmarkStallGoodsDef, landmarkTower: _landmarkTowerDef,
+  landmarkForge: _landmarkForgeDef, landmarkLectern: _landmarkLecternDef, landmarkGarrison: _landmarkGarrisonDef};
+// The model for a landmark key, or null when its definition was rejected
+// (reported once; landmarkModelsReady is then false).
+function landmarkModelFor(key) {
+  if (PROP_MODELS[key]) return PROP_MODELS[key];
+  if (_landmarkModelFailed[key] || typeof GAME_MATERIALS === 'undefined' || !_LANDMARK_MODEL_DEFS[key]) return null;
+  try {
+    return definePropModel(_LANDMARK_MODEL_DEFS[key]());
+  } catch (e) {
+    _landmarkModelFailed[key] = true;
+    if (typeof console !== 'undefined' && console.error) console.error('[landmarks] ' + key + ' model rejected; legacy landmarks kept: ' + (e && e.message));
+    return null;
+  }
+}
+function landmarkModelsReady() {
+  for (var i = 0; i < LANDMARK_MODEL_KEYS.length; i++) if (!landmarkModelFor(LANDMARK_MODEL_KEYS[i])) return false;
+  return true;
+}
+// The switch the landmark painters read (typeof-guarded there).
+function landmarkModelsOn() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('landmarkModels') && landmarkModelsReady();
+}
+// Instance at (x, y) on support z (one reused scratch unless `out`).
+function landmarkModelInstance(x, y, z, yaw, out) {
+  out = out || _landmarkInstanceScratch ||
+    (_landmarkInstanceScratch = {x: 0, y: 0, z: 0, basis: {}, scale: 1, joints: {}, tints: {}, cave: false});
+  out.x = x; out.y = y; out.z = z;
+  out.basis = modelBasis(Number.isFinite(yaw) ? yaw : 0, out.basis || {});
+  out.scale = 1; out.cave = false;
+  if (!out.joints) out.joints = {};
+  if (!out.tints) out.tints = {};
+  return out;
+}
+function landmarkTint(hex, fallback) {
+  return typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex) ? parseInt(hex.slice(1), 16) : fallback;
+}
+function shrineModelInstance(shr, floorZ, out) { return landmarkModelInstance(shr.x, shr.y, floorZ, 0, out); }
+// The crystal centred on its (bobbing) crystalZ, tinted with the legacy
+// crystal colour and its dark shade.
+function shrineCrystalInstance(shr, crystalZ, lit, dark, out) {
+  out = landmarkModelInstance(shr.x, shr.y, crystalZ, 0, out);
+  var m = GAME_MATERIALS.landmarkShrine.packed;
+  out.tints.crystal = landmarkTint(lit, m.crystal); out.tints.crystalDark = landmarkTint(dark, m.crystalDark);
+  return out;
+}
+// A stall on its support, tinted with the legacy awning, stripe and goods colours.
+function stallModelInstance(stall, floorZ, awning, awningDark, goods, out) {
+  out = landmarkModelInstance(stall.x, stall.y, floorZ, stall.facing, out);
+  var m = GAME_MATERIALS.landmarkStall.packed, t = out.tints;
+  t.awning = landmarkTint(awning, m.awning); t.awningDark = landmarkTint(awningDark, m.awningDark); t.goods = landmarkTint(goods, m.goods);
+  return out;
+}
+function towerModelInstance(marker, floorZ, out) { return landmarkModelInstance(marker.x, marker.y, floorZ, 0, out); }
+function keepPropModelKey(type) {
+  return type === 'forge' ? 'landmarkForge' : type === 'lectern' ? 'landmarkLectern' : 'landmarkGarrison';
+}
+// A keep prop ({type, ox, oy} from fortressInteractables3D) facing its
+// fortress centre; the garrison flag swings with the legacy wave clock.
+function keepPropInstance(st, item, floorZ, now, out) {
+  var x = st.x + item.ox, y = st.y + item.oy;
+  out = landmarkModelInstance(x, y, floorZ, Math.atan2(st.y - y, st.x - x), out);
+  out.joints.wave = item.type === 'garrison' ? Math.sin((Number.isFinite(now) ? now : 0) * 0.005) * 0.25 : 0;
+  return out;
+}
+// Nearest camera depth of the plan box |r| <= halfR, |o| <= halfO about an
+// instance (depth is linear, so a corner attains it). Overlays tested there
+// are never hidden by their own landmark, only by something nearer.
+function landmarkNearDepth(inst, C, halfR, halfO) {
+  var b = _pmInstanceBasis(inst), dx = inst.x - cam.x, dy = inst.y - cam.y;
+  return dx * C.cosAng + dy * C.sinAng - halfR * Math.abs(b.rightX * C.cosAng + b.rightY * C.sinAng) -
+    halfO * Math.abs(b.outX * C.cosAng + b.outY * C.sinAng);
+}
+// Screen point of a model anchor (hinges apply), or null behind the camera.
+function landmarkAnchorScreen(model, inst, name, C) {
+  var a = modelAnchorWorld(model, inst, name, _landmarkAnchorScratch || (_landmarkAnchorScratch = {x: 0, y: 0, z: 0}));
+  return a ? projToScreen(a.x, a.y, a.z, C) : null;
+}
+// True when the camera is in the box |r|, |o| <= half, z0 <= z <= z1 about
+// an instance, or nearer to it than the farthest on-screen point of the
+// depth-1 near plane (see spawnerCameraInReach): the largest of the box's
+// half-space distances is a lower bound on the distance to it.
+function landmarkCameraInBox(inst, C, half, z0, z1) {
+  var b = _pmInstanceBasis(inst), s = inst.scale > 0 ? inst.scale : 1, dx = cam.x - inst.x, dy = cam.y - inst.y;
+  var m = Math.max(Math.abs(dx * b.rightX + dy * b.rightY), Math.abs(dx * b.outX + dy * b.outY)) / s;
+  var z = (C.cameraZ - (Number.isFinite(inst.z) ? inst.z : 0)) / s;
+  var clear = s * Math.max(m - half, z0 - z, z - z1);
+  var v = Math.max(Math.abs(C.horizonY), Math.abs(C.h - C.horizonY)) / projScale;
+  return !(clear >= Math.sqrt(1 + 1 / (C.invTanHalf * C.invTanHalf) + v * v));
+}
+// The shop stands at the guard tower, which has no movement collision, so
+// the camera can be in it; 15 then keeps the legacy tower body.
+function towerCameraInReach(inst, C) {
+  var H = typeof TOWER_HEIGHT === 'number' && TOWER_HEIGHT > 0 ? TOWER_HEIGHT : 80;
+  return landmarkCameraInBox(inst, C, TOWER_MODEL_DIMS.half, 0, H + TOWER_MODEL_DIMS.merlonH);
+}
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'landmarkModels', label: 'Landmark models', type: 'bool', default: true, legacy: false,
+    title: 'Shrines, market stalls, the guard tower and the fortress forge, lectern and banner drawn as depth-writing models on their surface support (glows, labels and prompts stay billboards, depth-clipped).'});
+}
+
+// ── Landmark bounds gate (integration stage J2, landmarkBoundsGate) ──
+// Landmarks gate on their world bounds instead of their centre point: one is
+// rejected only when its horizontal bounds radius r about its anchor lies
+// wholly behind the depth-1 near plane (fwd + r < 1) or wholly out of range
+// (dist - r > maxDist): entityVisible3D's worldRadius. Its faces are
+// near-plane clipped world faces tested against scene depth, so the legacy
+// centre-column, hill, below-floor and surface/underground tests go, and a
+// camera past a landmark's centre still draws the part ahead of it; a centre
+// behind the camera has no screen point (sx/sy NaN), so its anchored
+// billboards and prompts do not draw. Callers (15-render-hud-menu.js,
+// typeof-guarded):
+//  - shrines (models path): renderEntities3D with sceneDepth + worldRadius;
+//  - stalls and the guard tower (models path): their audited centre gates
+//    stay; landmarkBoundsRescue re-asks only a centre behind the camera or
+//    past range with the bounds, so a reintroduced column/hill gate (the
+//    audit lab's _SHOP_ZERO probe) still rejects;
+//  - structures: sceneDepth + worldRadius, the hill test only for bounds
+//    wholly beyond viewDist (midpointBeyond), every overlay depth-clipped;
+//  - ruins: worldRadius added to their scene-depth gate;
+//  - cave portals: the bounds gate replaces the 900 u and fwd < 1 checks.
+// The legacy landmark painters (landmarkModels off) keep their gates: they
+// paint without a depth test, so the column gate is their only occlusion.
+// Radii are horizontal, about the anchor (tests capture every authored face
+// and check it lies inside): the shrine, stall and tower models' reach
+// bounds (crystal and goods included); the structure shell of
+// drawStructureShellWorld (fortress extent x sqrt 2, the arena ring and its
+// gates, the watchtower's arm rooms); the ruin dressing (debris, waypost,
+// hut beams); the portal's rock cut, frame, lintel and flanks.
+function landmarkBoundsGateOn() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('landmarkBoundsGate');
+}
+var _landmarkPlanRadii = Object.create(null), _landmarkRuinRadii = Object.create(null);
+// Largest horizontal distance from a landmark model's origin to its reach
+// bounds (any yaw; 0 when the model is unavailable).
+function landmarkModelPlanRadius(key) {
+  if (_landmarkPlanRadii[key] >= 0) return _landmarkPlanRadii[key];
+  var model = typeof landmarkModelFor === 'function' ? landmarkModelFor(key) : null;
+  if (!model) return 0;
+  var b = modelReachBounds(model), r = 0;
+  for (var i = 0; i < 4; i++) r = Math.max(r, Math.hypot(i & 1 ? b.max[0] : b.min[0], i & 2 ? b.max[1] : b.min[1]));
+  return (_landmarkPlanRadii[key] = r);
+}
+function landmarkShrineRadius() {
+  return Math.max(landmarkModelPlanRadius('landmarkShrine'), landmarkModelPlanRadius('landmarkShrineCrystal'));
+}
+function landmarkStallRadius() {
+  return Math.max(landmarkModelPlanRadius('landmarkStall'), landmarkModelPlanRadius('landmarkStallGoods'));
+}
+function landmarkTowerRadius() { return landmarkModelPlanRadius('landmarkTower'); }
+// drawStructureShellWorld's extent (plus one cell for the standards).
+function landmarkStructureRadius(st) {
+  var s = st && st.scale || 1, c = typeof cell === 'number' && cell > 0 ? cell : 12;
+  var chunk = typeof CHUNK_SIZE === 'number' && CHUNK_SIZE > 0 ? CHUNK_SIZE : c * 40;
+  if (st && st.type === 'fortress') return chunk * 1.7 * s * Math.SQRT2 + c;
+  if (st && st.type === 'arena') return Math.hypot(chunk * 1.1 * s + c * 0.5, c * 2.8) + c;
+  return c * s * (3 + 14 + 2.5 * 1.08 * Math.SQRT2) + c;   // tower, arm length, arm room roof corner
+}
+// The ruin dressing of drawRuins3D: debris stones (a stone's corner is at
+// most 1.21 x its size from its point), the waypost and its crosspiece, and
+// the hut's two roof beams (41 u).
+function landmarkRuinRadius(ru) {
+  var type = ru && ru.ruinType;
+  if (_landmarkRuinRadii[type] > 0) return _landmarkRuinRadii[type];
+  var layouts = typeof RUIN_DEBRIS_LAYOUTS === 'object' && RUIN_DEBRIS_LAYOUTS ? RUIN_DEBRIS_LAYOUTS : null;
+  if (!layouts || typeof getRuinPostWorld !== 'function') return 90;
+  var layout = layouts[type] || layouts.hut, r = 0;
+  for (var i = 0; i < layout.length; i++) r = Math.max(r, Math.hypot(layout[i][0], layout[i][1]) + layout[i][2] * 1.25);
+  var post = getRuinPostWorld({x: 0, y: 0, ruinType: type, facing: 0}, {});
+  r = Math.max(r, Math.hypot(post.x, post.y) + 9);
+  if (type !== 'hall' && type !== 'tower_base') r = Math.max(r, 41);
+  return (_landmarkRuinRadii[type] = r + 1);
+}
+// drawCaveEntrance3D's portal from its record: the rock cut (-3..16 along
+// the walk axis), the frame, lintel and flanks across it.
+function landmarkPortalRadius(ce) {
+  var style = typeof ce.style === 'number' ? Math.max(0, Math.min(1, ce.style)) : 0.8;
+  var pillar = 8 + style * 6, opening = Math.max(60, (ce.halfWidth || 45) * 2);
+  var rockHalf = ce.halfWidth || 54, rockOuter = rockHalf + Math.min(48, Math.max(30, rockHalf * 0.7));
+  var flank = Math.round((ce.halfWidth || 54) * (0.5 + style * 0.7));
+  var across = Math.max(rockOuter, opening * 0.5 + pillar + 4 + style * 4, opening * 0.5 + pillar + flank);
+  return Math.hypot(across, Math.max(16, pillar * 0.5 + 2)) + 1;
+}
+// A models-path landmark whose audited centre gate rejected it: re-asked
+// with its bounds only when its centre is behind the camera or past range
+// (the only rejections of a scene-depth centre gate), else null.
+function landmarkBoundsRescue(x, y, z, C, maxDist, fadeFraction, r) {
+  if (!landmarkBoundsGateOn() || !(r > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  var dx = x - cam.x, dy = y - cam.y;
+  if (dx * C.cosAng + dy * C.sinAng >= 1 && Math.max(1, Math.hypot(dx, dy)) <= maxDist) return null;
+  return entityVisible3D(x, y, z, C, {maxDist: maxDist, sceneDepth: true, fadeFraction: fadeFraction, worldRadius: r});
+}
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'landmarkBoundsGate', label: 'Landmark bounds gate', type: 'bool', default: true, legacy: false,
+    title: 'Shrines, stalls, the guard tower, structures, ruins and cave portals are culled by their world bounds (wholly behind the camera or out of range), not by their centre point; scene depth hides them behind nearer geometry.'});
+}
+// Structure render models (integration stage D, builder). One merged body +
+// shell model per large structure, built from the real window grid:
+// - Ownership: grid[i] && wallColorR[i] in window chunks whose .structure is
+//   this entry's region, within +-ceil(1.8*scale) chunks of its centre chunk
+//   (ruin huts also author colour, so colour alone is not enough). Cells a
+//   cave touches stay with walls3D, which owns cave material, light and the
+//   ceiling closure: gridCave, a deep-cave centre, a roof tag (wallCapZ), a
+//   roof clamp (wallMaxTopZ), a cave ceiling at any corner (what makes a
+//   walls3D face faceInCave) or a gridCave 4-neighbour.
+// - Body: a production port of the study mesher (tools/game/structure-model.js
+//   meshGrid). Tops and faces use walls3D's own numbers: top z = (fh +
+//   wallBaseH*wh)*25, a face against an empty neighbour spans (wallFaceBase -
+//   0.15)*25 to the top, and any solid neighbour (natural or not) occludes up
+//   to its own top, leaving a riser above it. Runs merge only when kind, top,
+//   base and colour are equal, and split at STRUCTURE_MODEL_SPAN units
+//   anchored on the structure centre.
+// - Shell: drawStructureShellWorld captured once through the drawRuinDecorFace
+//   sink (12-prop-models.js) in structure-local space. Materials are explicit
+//   (stone body and shell, wood standard poles, solid cloth accents) and the
+//   tint is the palette role colour, not the baked ramp.
+// - UVs: STRUCTURE_MODEL_UV_REPEAT units per repeat, on structure-local x/y
+//   and absolute z with the study's axis rules, so a window rebase keeps the
+//   phase.
+// Presentation only: reads world data, never writes it, and makes no RNG
+// draws. Built only in Endless while the structureModels feature is on (at
+// window assembly, or lazily when the feature is switched on). Inert at load:
+// declarations, one feature registration and one change listener.
+var STRUCTURE_MODEL_UV_REPEAT = 32;   // world units per texture repeat
+var STRUCTURE_MODEL_SPAN = 48;        // longest merged run (torch pool and fog granularity)
+var STRUCTURE_MODEL_ROLES = 'wckfpsta';  // every structure palette role letter
+var structureModels = [];             // models for the current window, largeStructures order
+var structureModelOwner = null;       // Uint8Array(gridW*gridH): model index + 1, 0 = walls3D
+var _structureModelsFor = null;       // the window inputs the models were built from
+var structureModelStats = {builds: 0, skipped: 0, lastBuildMs: 0, maxBuildMs: 0, totalBuildMs: 0,
+  structures: 0, faces: 0, owned: 0, excluded: 0, walls: 0, risers: 0, tops: 0, shell: 0, unclassified: 0,
+  failures: 0, lastFailure: ''};
+var _structureModelOwnedCells = null; // Int32Array of owned window indices (walls3D column depth)
+
+function structureModelsEnabled() {
+  return typeof renderFeatureOn === 'function' && renderFeatureOn('structureModels');
+}
+function _structureModelNow() {
+  return typeof performance === 'object' && performance && typeof performance.now === 'function' ?
+    performance.now() : Date.now();
+}
+// Endless only: classic levels keep the last Endless window's largeStructures,
+// chunks and colour arrays (resetLevel does not clear them), so outside
+// Endless nothing is built and no model is current.
+function _structureModelsEndless() {
+  return typeof ENDLESS_MODE !== 'undefined' && !!ENDLESS_MODE;
+}
+// True when the models were built from exactly the current window arrays.
+function structureModelsCurrent() {
+  var f = _structureModelsFor;
+  return !!f && _structureModelsEndless() && f.grid === grid && grid !== null && f.wallFaceBase === wallFaceBase && f.floorMesh === floorMesh &&
+    f.structures === largeStructures && f.originX === windowOriginX && f.originY === windowOriginY;
+}
+// Walls3D's question (stage D2): does an enabled, current model draw this cell?
+function structureModelOwnsCell(index) {
+  return structureModelOwner !== null && structureModelOwner[index] > 0 && structureModelsEnabled() &&
+    structureModelsCurrent();
+}
+function ensureStructureModels() {
+  if (!structureModelsEnabled()) return false;
+  if (!structureModelsCurrent()) buildStructureModels();
+  return structureModelsCurrent();
+}
+function getStructureModelStats() {
+  var out = {};
+  for (var k in structureModelStats) out[k] = structureModelStats[k];
+  out.current = structureModelsCurrent();
+  return out;
+}
+
+// A cave ceiling at a world point: the non-null condition of walls3D's
+// caveCeilAt (12-render-core-walls.js), which makes a face faceInCave.
+function _structureCaveCeilingAt(wx, wy) {
+  if (typeof deepCaveRegions !== 'undefined' && deepCaveRegions.length > 0 && typeof isInDeepCave === 'function') {
+    var ci = isInDeepCave(wx, wy);
+    if (ci && ci.ceilZ > 0) return true;
+  }
+  if (floorMesh && floorMesh.layerCount) {
+    var mx = Math.floor(wx / floorMesh.gridSize), my = Math.floor(wy / floorMesh.gridSize);
+    if (mx >= 0 && mx < floorMesh.w && my >= 0 && my < floorMesh.h) {
+      var mi = my * floorMesh.w + mx, lc = floorMesh.layerCount[mi];
+      for (var li = 0; li < lc; li++) if (floorMesh['l' + li + 'Type'][mi] === 2) return true;
+    }
+  }
+  return false;
+}
+// Cells a cave touches stay with walls3D (see the header).
+function structureModelCaveCell(gx, gy) {
+  var i = gy * gridW + gx, x1 = gx * cell, y1 = gy * cell, x2 = x1 + cell, y2 = y1 + cell;
+  if (gridCave && gridCave[i]) return true;
+  if (wallCapZ && wallCapZ[i] > -Infinity) return true;
+  if (wallMaxTopZ && wallMaxTopZ[i] < Infinity) return true;
+  if (typeof deepCaveRegions !== 'undefined' && deepCaveRegions.length > 0 && typeof isInDeepCave === 'function' &&
+      isInDeepCave(x1 + cell * 0.5, y1 + cell * 0.5)) return true;
+  if (gridCave && ((gx > 0 && gridCave[i - 1]) || (gx < gridW - 1 && gridCave[i + 1]) ||
+      (gy > 0 && gridCave[i - gridW]) || (gy < gridH - 1 && gridCave[i + gridW]))) return true;
+  return _structureCaveCeilingAt(x1, y1) || _structureCaveCeilingAt(x2, y1) ||
+    _structureCaveCeilingAt(x1, y2) || _structureCaveCeilingAt(x2, y2);
+}
+
+// walls3D's top for a solid cell, in render z.
+function _structureCellTopZ(gx, gy, wallBaseH) {
+  var i = gy * gridW + gx, wh = wallHeights ? wallHeights[i] : 1.0;
+  var fh = floorMesh ? getFloorHeightAt((gx + 0.5) * cell, (gy + 0.5) * cell) : 0;
+  var topH = fh + wallBaseH * wh;
+  if (wallMaxTopZ) {
+    var wmax = wallMaxTopZ[i];
+    if (wmax < Infinity && topH > wmax) topH = wmax;
+  }
+  return topH * 25;
+}
+
+// The study's texturedFace UV rule (structure-model.js): horizontal faces map
+// (x, y), faces whose normal is +-x map (y, -z), +-y map (x, -z), and any
+// other face an orthonormal in-plane frame from its first edge. Points are
+// structure-local in x/y; z is absolute. Returns null for a degenerate face.
+function structureModelFaceFrame(points) {
+  var first = points[0], second = points[1], third = points[2], rep = STRUCTURE_MODEL_UV_REPEAT;
+  var ex = second.x - first.x, ey = second.y - first.y, ez = second.z - first.z;
+  var fx = third.x - first.x, fy = third.y - first.y, fz = third.z - first.z;
+  var nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx;
+  var el = Math.hypot(ex, ey, ez), nl = Math.hypot(nx, ny, nz);
+  if (!(el > 0 && nl > 0)) return null;
+  var ux = ex / el, uy = ey / el, uz = ez / el;
+  var vx = (ny * uz - nz * uy) / nl, vy = (nz * ux - nx * uz) / nl, vz = (nx * uy - ny * ux) / nl;
+  var verticalX = Math.abs(nx) > nl * (1 - 1e-10);
+  var verticalY = Math.abs(ny) > nl * (1 - 1e-10);
+  var horizontal = Math.abs(nz) > nl * (1 - 1e-10);
+  var uv = points.map(function(p) {
+    var u, v;
+    if (horizontal) { u = p.x / rep; v = p.y / rep; }
+    else if (verticalX) { u = p.y / rep; v = -p.z / rep; }
+    else if (verticalY) { u = p.x / rep; v = -p.z / rep; }
+    else { u = (p.x * ux + p.y * uy + p.z * uz) / rep; v = (p.x * vx + p.y * vy + p.z * vz) / rep; }
+    return [u, v];
+  });
+  return {uv: uv, normal: {x: nx / nl, y: ny / nl, z: nz / nl}};
+}
+
+// Face record. `local` points are structure-local x/y (absolute z); the
+// stored vertices are window-local (x + ox, y + oy) with the local UVs.
+function _structureModelFace(kind, material, role, tint, local, ox, oy, normal) {
+  var frame = structureModelFaceFrame(local);
+  if (!frame) return null;
+  var verts = [], minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  var sx = 0, sy = 0, sz = 0;
+  for (var i = 0; i < local.length; i++) {
+    var p = local[i], x = p.x + ox, y = p.y + oy;
+    verts.push({x: x, y: y, z: p.z, u: frame.uv[i][0], v: frame.uv[i][1]});
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    sx += x; sy += y; sz += p.z;
+  }
+  var n = local.length;
+  return {kind: kind, material: material, solid: material === 'cloth', twoSided: material === 'cloth',
+    role: role, tint: tint, vertices: verts, normal: normal || frame.normal,
+    minX: minX, minY: minY, minZ: minZ, maxX: maxX, maxY: maxY, maxZ: maxZ, cx: sx / n, cy: sy / n, cz: sz / n};
+}
+
+// Production port of the study mesher over a cell grid.
+// g: {width, height, cell, minCellX, minCellY, uvX, uvY, solid, owned, topZ,
+//     faceBase, colors}; cell (minCellX + x, minCellY + y) spans
+//     [(minCellX + x) * cell, +cell) in output coordinates, and (uvX, uvY)
+//     is the structure centre there. topZ (render z) is read for solid
+//     cells, faceBase (render z; W, E, N, S) and colors (packed RGB) for
+//     owned cells. Out-of-range neighbours are empty, as at the window edge.
+// options: {span: merged-run cap in units (0 = none)}.
+// Walls and risers are appended as merged runs; tops as greedy rectangles
+// of equal top and colour, row-major like the study.
+function meshStructureModelCells(g, options) {
+  var W = g.width, Hc = g.height, cs = g.cell, n = W * Hc;
+  var span = options && options.span > 0 ? options.span : 0;
+  var solid = g.solid, owned = g.owned, topZ = g.topZ, faceBase = g.faceBase, colors = g.colors;
+  var faces = [], groups = Object.create(null), groupList = [], visited = new Uint8Array(n);
+  var stats = {tops: 0, walls: 0, risers: 0, edges: 0, owned: 0};
+  function bucket(v, origin) { return span ? Math.floor((v - origin) / span) : 0; }
+  function edge(kind, dir, plane, start, z0, z1, color) {
+    if (!(z1 > z0)) return;
+    var key = kind + '|' + dir + '|' + plane + '|' + z0 + '|' + z1 + '|' + color;
+    var gr = groups[key];
+    if (!gr) { gr = groups[key] = {kind: kind, dir: dir, plane: plane, z0: z0, z1: z1, color: color, starts: []}; groupList.push(gr); }
+    gr.starts.push(start); stats.edges++;
+  }
+  // A solid neighbour occludes up to its own top; NaN when open.
+  function occluderTop(x, y) {
+    if (x < 0 || y < 0 || x >= W || y >= Hc) return NaN;
+    var j = y * W + x;
+    return solid[j] ? topZ[j] : NaN;
+  }
+  function side(dir, nx, ny, plane, start, base, z1, color) {
+    var t = occluderTop(nx, ny);
+    if (t !== t) edge('wall', dir, plane, start, base, z1, color);
+    else edge('riser', dir, plane, start, t, z1, color);
+  }
+  for (var y = 0; y < Hc; y++) for (var x = 0; x < W; x++) {
+    var i = y * W + x;
+    if (!owned[i]) continue;
+    stats.owned++;
+    var z1 = topZ[i], color = colors[i], wx = (g.minCellX + x) * cs, wy = (g.minCellY + y) * cs;
+    side('W', x - 1, y, wx, wy, faceBase[i * 4], z1, color);
+    side('E', x + 1, y, wx + cs, wy, faceBase[i * 4 + 1], z1, color);
+    side('N', x, y - 1, wy, wx, faceBase[i * 4 + 2], z1, color);
+    side('S', x, y + 1, wy + cs, wx, faceBase[i * 4 + 3], z1, color);
+    if (visited[i]) continue;
+    var bx = bucket(wx, g.uvX), by = bucket(wy, g.uvY), run = 1, rows = 1;
+    var matching = function(px, py) {
+      var m = py * W + px;
+      return owned[m] && !visited[m] && topZ[m] === z1 && colors[m] === color &&
+        bucket((g.minCellX + px) * cs, g.uvX) === bx && bucket((g.minCellY + py) * cs, g.uvY) === by;
+    };
+    while (x + run < W && matching(x + run, y)) run++;
+    for (var extend = true; y + rows < Hc && extend;) {
+      for (var xx = 0; xx < run; xx++) if (!matching(x + xx, y + rows)) { extend = false; break; }
+      if (extend) rows++;
+    }
+    for (var yy = 0; yy < rows; yy++) for (var xx2 = 0; xx2 < run; xx2++) visited[(y + yy) * W + x + xx2] = 1;
+    var tx0 = wx - g.uvX, ty0 = wy - g.uvY, tx1 = tx0 + run * cs, ty1 = ty0 + rows * cs;
+    var top = _structureModelFace('top', 'stone', 'cell', color, [
+      {x: tx0, y: ty0, z: z1}, {x: tx1, y: ty0, z: z1}, {x: tx1, y: ty1, z: z1}, {x: tx0, y: ty1, z: z1}
+    ], g.uvX, g.uvY, {x: 0, y: 0, z: 1});
+    if (top) { faces.push(top); stats.tops++; }
+  }
+  var normals = {W: {x: -1, y: 0, z: 0}, E: {x: 1, y: 0, z: 0}, N: {x: 0, y: -1, z: 0}, S: {x: 0, y: 1, z: 0}};
+  for (var gi = 0; gi < groupList.length; gi++) {
+    var gr = groupList[gi], starts = gr.starts.sort(function(a, b) { return a - b; });
+    var alongY = gr.dir === 'W' || gr.dir === 'E', origin = alongY ? g.uvY : g.uvX;
+    for (var s = 0; s < starts.length;) {
+      var begin = starts[s], end = begin + cs, b0 = bucket(begin, origin);
+      s++;
+      while (s < starts.length && starts[s] === end && bucket(end, origin) === b0) { end += cs; s++; }
+      var a, b;
+      if (gr.dir === 'W') { a = {x: gr.plane, y: end}; b = {x: gr.plane, y: begin}; }
+      else if (gr.dir === 'E') { a = {x: gr.plane, y: begin}; b = {x: gr.plane, y: end}; }
+      else if (gr.dir === 'N') { a = {x: begin, y: gr.plane}; b = {x: end, y: gr.plane}; }
+      else { a = {x: end, y: gr.plane}; b = {x: begin, y: gr.plane}; }
+      var ax = a.x - g.uvX, ay = a.y - g.uvY, bxl = b.x - g.uvX, byl = b.y - g.uvY;
+      var face = _structureModelFace(gr.kind, 'stone', 'cell', gr.color, [
+        {x: ax, y: ay, z: gr.z0}, {x: bxl, y: byl, z: gr.z0}, {x: bxl, y: byl, z: gr.z1}, {x: ax, y: ay, z: gr.z1}
+      ], g.uvX, g.uvY, normals[gr.dir]);
+      if (face) { faces.push(face); if (gr.kind === 'wall') stats.walls++; else stats.risers++; }
+    }
+  }
+  return {faces: faces, stats: stats};
+}
+
+// The shell of one structure as local faces: drawStructureShellWorld is run
+// at the structure-local origin through the capture sink, with every palette
+// role replaced by a sentinel so each ramp colour names its role exactly.
+function captureStructureShellFaces(st, floorZ) {
+  var faces = [], unclassified = 0;
+  if (typeof drawStructureShellWorld !== 'function' || typeof captureRuinDecorFaces !== 'function' ||
+      typeof structureColorRamp !== 'function' || typeof structurePaletteRole !== 'function') return {faces: faces, unclassified: 0};
+  var proxy = Object.create(st), sentinel = {}, roleOf = Object.create(null), letters = STRUCTURE_MODEL_ROLES;
+  proxy.x = 0; proxy.y = 0; proxy.palette = sentinel;
+  for (var li = 0; li < letters.length; li++) sentinel[letters[li]] = [100, 100 + li, 100 + 2 * li];
+  for (var lj = 0; lj < letters.length; lj++) {
+    var ramp = structureColorRamp(proxy, letters[lj]);
+    for (var shade in ramp) roleOf[ramp[shade]] = letters[lj];
+  }
+  var woodHex = Object.create(null), wood = typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.floorPropWood;
+  if (wood) for (var wr in wood.hex) woodHex[wood.hex[wr]] = true;
+  var captured = [];
+  var savedAlpha = typeof ctx !== 'undefined' && ctx ? ctx.globalAlpha : null;
+  try {
+    captureRuinDecorFaces(function() { drawStructureShellWorld(proxy, {floorZ: floorZ}, null); },
+      function(vertices, color) { captured.push({vertices: vertices, color: color}); return 0; });
+  } finally {
+    if (savedAlpha !== null && ctx.globalAlpha !== savedAlpha) ctx.globalAlpha = savedAlpha;
+  }
+  for (var ci = 0; ci < captured.length; ci++) {
+    var c = captured[ci], color = c.color, material, role, tint;
+    if (roleOf[color]) {
+      role = roleOf[color]; material = 'stone';
+      var rgb = structurePaletteRole(st, role);
+      tint = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+    } else if (woodHex[color]) {
+      material = 'wood'; role = 'wood'; tint = wood.packed.base;
+    } else if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+      material = 'cloth'; role = 'accent'; tint = parseInt(color.slice(1), 16);
+    } else {
+      material = 'cloth'; role = 'unknown'; tint = 0x808080; unclassified++;
+    }
+    var local = c.vertices.map(function(p) { return {x: p.x, y: p.y, z: p.z}; });
+    faces.push({material: material, role: role, tint: tint, local: local});
+  }
+  return {faces: faces, unclassified: unclassified};
+}
+
+// Cells of one largeStructures entry that its model owns, as a window mask
+// value (index + 1), counting cave exclusions.
+function _structureModelClaimCells(st, value, owner, counts) {
+  var R = Math.ceil(1.8 * (st.scale || 1));
+  var ccx = Math.floor(st.centerWX / CHUNK_SIZE), ccy = Math.floor(st.centerWY / CHUNK_SIZE);
+  var box = {gx0: Infinity, gy0: Infinity, gx1: -Infinity, gy1: -Infinity};
+  for (var cy = ccy - R; cy <= ccy + R; cy++) for (var cx = ccx - R; cx <= ccx + R; cx++) {
+    var dx = cx - windowCX, dy = cy - windowCY;
+    if (dx < 0 || dy < 0 || dx >= WINDOW_CHUNKS || dy >= WINDOW_CHUNKS) continue;
+    var ch = chunks[cx + ',' + cy];
+    if (!ch || !ch.structure || ch.structure.regionX !== st.regionX || ch.structure.regionY !== st.regionY) continue;
+    for (var ly = 0; ly < CHUNK_CELLS; ly++) for (var lx = 0; lx < CHUNK_CELLS; lx++) {
+      var gx = dx * CHUNK_CELLS + lx, gy = dy * CHUNK_CELLS + ly, i = gy * gridW + gx;
+      if (!grid[i] || !wallColorR[i] || owner[i]) continue;
+      if (structureModelCaveCell(gx, gy)) { counts.excluded++; continue; }
+      owner[i] = value; counts.owned++;
+      if (gx < box.gx0) box.gx0 = gx; if (gx > box.gx1) box.gx1 = gx;
+      if (gy < box.gy0) box.gy0 = gy; if (gy > box.gy1) box.gy1 = gy;
+    }
+  }
+  return box;
+}
+
+// Builds every structure model for the current window. Without
+// {force: true} it only clears the models while the feature is off or after
+// a session failure, and outside Endless it always only clears them. Never
+// throws (window assembly calls it): a failure clears the models, so walls3D
+// and the late shell draw every structure.
+function buildStructureModels(options) {
+  try {
+    return _buildStructureModelsUnchecked(options);
+  } catch (e) {
+    structureModels = []; structureModelOwner = null; _structureModelsFor = null; _structureModelOwnedCells = null;
+    _structureModelsFail(e, 'build');
+    return null;
+  }
+}
+function _buildStructureModelsUnchecked(options) {
+  var force = !!(options && options.force);
+  structureModels = []; structureModelOwner = null; _structureModelsFor = null; _structureModelOwnedCells = null;
+  if (!force && _structureModelsFailed) { structureModelStats.skipped++; return null; }
+  if (!grid || !_structureModelsEndless() || (!force && !structureModelsEnabled())) { structureModelStats.skipped++; return null; }
+  var started = _structureModelNow(), span = options && options.span !== undefined ? options.span : STRUCTURE_MODEL_SPAN;
+  var owner = new Uint8Array(gridW * gridH), wallBaseH = CANVAS_BASE_H / 25;
+  var totals = {faces: 0, owned: 0, excluded: 0, walls: 0, risers: 0, tops: 0, shell: 0, unclassified: 0};
+  var list = largeStructures || [];
+  for (var si = 0; si < list.length && si < 255; si++) {
+    var st = list[si], t0 = _structureModelNow(), counts = {owned: 0, excluded: 0};
+    var box = _structureModelClaimCells(st, si + 1, owner, counts);
+    var uvX = st.centerWX - windowOriginX, uvY = st.centerWY - windowOriginY, faces = [], mesh = null;
+    if (counts.owned) {
+      // The owned bounding box plus a one-cell ring of occluding neighbours.
+      var gx0 = Math.max(0, box.gx0 - 1), gy0 = Math.max(0, box.gy0 - 1);
+      var gx1 = Math.min(gridW - 1, box.gx1 + 1), gy1 = Math.min(gridH - 1, box.gy1 + 1);
+      var w = gx1 - gx0 + 1, h = gy1 - gy0 + 1, n = w * h;
+      var sub = {width: w, height: h, cell: cell, minCellX: gx0, minCellY: gy0, uvX: uvX, uvY: uvY,
+        solid: new Uint8Array(n), owned: new Uint8Array(n), topZ: new Float64Array(n),
+        faceBase: new Float64Array(n * 4), colors: new Uint32Array(n)};
+      for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+        var gx = gx0 + x, gy = gy0 + y, gi = gy * gridW + gx, k = y * w + x;
+        if (!grid[gi]) continue;
+        sub.solid[k] = 1;
+        sub.topZ[k] = _structureCellTopZ(gx, gy, wallBaseH);
+        if (owner[gi] !== si + 1) continue;
+        sub.owned[k] = 1;
+        sub.colors[k] = (wallColorR[gi] << 16) | (wallColorG[gi] << 8) | wallColorB[gi];
+        for (var f = 0; f < 4; f++) {
+          var base = wallFaceBase ? wallFaceBase[gi * 4 + f] :
+            (floorMesh ? getFloorHeightAt((gx + 0.5) * cell, (gy + 0.5) * cell) : 0);
+          sub.faceBase[k * 4 + f] = (base - 0.15) * 25;
+        }
+      }
+      mesh = meshStructureModelCells(sub, {span: span});
+      faces = mesh.faces;
+    }
+    var floorZ = typeof getEntityRenderFloorZ === 'function' ? getEntityRenderFloorZ(st) : 0;
+    var shell = captureStructureShellFaces(st, floorZ), shellCount = 0;
+    for (var fi = 0; fi < shell.faces.length; fi++) {
+      var sf = shell.faces[fi];
+      var face = _structureModelFace('shell', sf.material, sf.role, sf.tint, sf.local, st.x, st.y, null);
+      if (face) { faces.push(face); shellCount++; }
+    }
+    var bounds = {minX: Infinity, minY: Infinity, minZ: Infinity, maxX: -Infinity, maxY: -Infinity, maxZ: -Infinity};
+    for (var bi = 0; bi < faces.length; bi++) {
+      var bf = faces[bi];
+      if (bf.minX < bounds.minX) bounds.minX = bf.minX; if (bf.maxX > bounds.maxX) bounds.maxX = bf.maxX;
+      if (bf.minY < bounds.minY) bounds.minY = bf.minY; if (bf.maxY > bounds.maxY) bounds.maxY = bf.maxY;
+      if (bf.minZ < bounds.minZ) bounds.minZ = bf.minZ; if (bf.maxZ > bounds.maxZ) bounds.maxZ = bf.maxZ;
+    }
+    var model = {key: st.regionX + ',' + st.regionY, index: si, type: st.type, structure: st, floorZ: floorZ,
+      uvX: uvX, uvY: uvY, faces: faces, bounds: bounds, ownedCells: counts.owned, excludedCells: counts.excluded,
+      counts: {walls: mesh ? mesh.stats.walls : 0, risers: mesh ? mesh.stats.risers : 0, tops: mesh ? mesh.stats.tops : 0,
+        shell: shellCount, unclassified: shell.unclassified},
+      buildMs: _structureModelNow() - t0};
+    structureModels.push(model);
+    totals.faces += faces.length; totals.owned += counts.owned; totals.excluded += counts.excluded;
+    totals.walls += model.counts.walls; totals.risers += model.counts.risers; totals.tops += model.counts.tops;
+    totals.shell += shellCount; totals.unclassified += shell.unclassified;
+  }
+  structureModelOwner = owner;
+  var ownedCount = 0;
+  for (var oi = 0; oi < owner.length; oi++) if (owner[oi]) ownedCount++;
+  var ownedCells = new Int32Array(ownedCount);
+  for (var oj = 0, on = 0; oj < owner.length; oj++) if (owner[oj]) ownedCells[on++] = oj;
+  _structureModelOwnedCells = ownedCells;
+  _structureModelsFor = {grid: grid, wallFaceBase: wallFaceBase, floorMesh: floorMesh, structures: largeStructures,
+    originX: windowOriginX, originY: windowOriginY};
+  var ms = _structureModelNow() - started, s = structureModelStats;
+  s.builds++; s.lastBuildMs = ms; s.totalBuildMs += ms; if (ms > s.maxBuildMs) s.maxBuildMs = ms;
+  s.structures = structureModels.length;
+  for (var key in totals) s[key] = totals[key];
+  if (structureModels.length) {
+    console.log('[STRUCTURE-MODEL] ' + structureModels.length + ' models, ' + totals.faces + ' faces (' +
+      totals.walls + ' walls, ' + totals.risers + ' risers, ' + totals.tops + ' tops, ' + totals.shell + ' shell), ' +
+      totals.owned + ' cells owned, ' + totals.excluded + ' left to walls3D by caves, ' + ms.toFixed(1) + 'ms');
+  }
+  return structureModels;
+}
+
+// ── Draw pass (stage D2) ──
+// draw() runs drawStructureModels3D between platforms3D and walls3D while the
+// feature is on, so the opaque, depth-writing model is in the scene depth
+// before walls3D paints its far-to-near faces, inline canopies and fade-band
+// translucency over it. walls3D then takes the pass once: it merges the
+// model's legacy column depth (drawWalls3D resets depthBuffer) and skips the
+// owned cells. The late drawStructures3D skips the shells the model drew and
+// draws shells beyond the model range fogged in colour (Decision 5).
+// Fail-open: any exception in the build or the pass sets a session failure
+// flag and counts it; walls3D and the late shell then draw every structure,
+// from the failing frame on, until the feature is switched off and on again.
+var _structureModelsFailed = false;
+var _structureModelsWasOn = false;
+var _structureModelProject = null;    // test hook: replaces projectSceneWorldPolygon in the pass
+var _structureModelPass = {serial: 0, frame: -1, ok: false, wallsPending: false, owner: null,
+  minX: 0, minY: 0, maxX: -1, maxY: -1};
+var _structureModelColumnDepth = null; // Float64Array(canvas width): the owned cells' legacy column depth
+var _structureModelItems = [], _structureModelItemCount = 0;
+var _structureModelColourCache = Object.create(null);
+var STRUCTURE_MODEL_DEBUG_TINT = 0xaaaaaa; // DEBUG_POLY_TYPES surface-wall grey
+
+function _structureModelsFail(error, where) {
+  _structureModelsFailed = true;
+  structureModelStats.failures++;
+  structureModelStats.lastFailure = where + ': ' + (error && error.message ? error.message : String(error));
+  if (structureModelStats.failures <= 3 && typeof console !== 'undefined' && console && console.error) {
+    console.error('[STRUCTURE-MODEL] ' + structureModelStats.lastFailure + ' -- falling back to walls3D and the late shell');
+  }
+}
+function _structureModelFrameStamp() {
+  return typeof _renderFrameStats === 'object' && _renderFrameStats ? _renderFrameStats.frame : -1;
+}
+function _structureModelStat(name, amount) {
+  if (typeof addRenderFrameStat === 'function') addRenderFrameStat(name, amount);
+}
+// draw()'s question: run the pass this frame?
+function structureModelsPassWanted() {
+  return !_structureModelsFailed && !!grid && _structureModelsEndless() && structureModelsEnabled();
+}
+// True after this frame's pass drew without an exception.
+function structureModelsDrewThisFrame() {
+  var pass = _structureModelPass;
+  return pass.ok && !_structureModelsFailed && pass.frame === _structureModelFrameStamp();
+}
+// walls3D takes the pass once, right after resetting depthBuffer: it merges
+// the owned cells' column depth and gets the owner mask of cells to skip plus
+// the screen box the model painted. null when no pass drew this frame
+// (Legacy, a failure, a stale model or a second walls3D call), so walls3D
+// draws every cell itself.
+function takeStructureModelWallPass(columns, width) {
+  var pass = _structureModelPass;
+  if (!pass.wallsPending) return null;
+  pass.wallsPending = false;
+  if (!structureModelsDrewThisFrame() || !structureModelsEnabled() || !structureModelsCurrent() || !structureModelOwner) return null;
+  var col = _structureModelColumnDepth;
+  if (columns && col && col.length === width) {
+    for (var i = 0; i < width; i++) if (col[i] < columns[i]) columns[i] = col[i];
+  }
+  pass.owner = structureModelOwner;
+  return pass;
+}
+
+// walls3D's per-face column depth (12-render-core-walls.js renderFace) for
+// the owned cells, with walls3D's own cell culls, face tests and numbers, so
+// the merged depthBuffer equals the Legacy one and the legacy entity gates
+// (shrines, structure labels) are unchanged.
+function _structureModelColumn(col, w, C, project, wx1, wy1, wx2, wy2, perpDist) {
+  if (perpDist < 1) perpDist = 1;
+  // Projected x is independent of z (clipping is on depth only).
+  var poly = project([{x: wx1, y: wy1, z: 0}, {x: wx2, y: wy2, z: 0}, {x: wx2, y: wy2, z: 1}, {x: wx1, y: wy1, z: 1}], C);
+  if (poly.length < 3) return;
+  var minSX = w - 1, maxSX = 0;
+  for (var k = 0; k < poly.length; k++) {
+    minSX = Math.min(minSX, Math.max(0, Math.floor(poly[k].x)));
+    maxSX = Math.max(maxSX, Math.min(w - 1, Math.ceil(poly[k].x)));
+  }
+  for (var sx = minSX; sx <= maxSX; sx++) if (perpDist < col[sx]) col[sx] = perpDist;
+}
+function _structureModelColumnDepths(C, project) {
+  var w = C.w, col = _structureModelColumnDepth;
+  if (!col || col.length !== w) col = _structureModelColumnDepth = new Float64Array(w);
+  col.fill(9999);
+  var cells = _structureModelOwnedCells;
+  if (!cells || !cells.length) return col;
+  var cosAng = C.cosAng, sinAng = C.sinAng, tanHalf = 1 / C.invTanHalf, viewDistSq = viewDist * viewDist;
+  var camGX = cam.x / cell, camGY = cam.y / cell, viewRad = viewDist / cell;
+  var gxMin = Math.max(0, Math.floor(camGX - viewRad)), gxMax = Math.min(gridW - 1, Math.ceil(camGX + viewRad));
+  var gyMin = Math.max(0, Math.floor(camGY - viewRad)), gyMax = Math.min(gridH - 1, Math.ceil(camGY + viewRad));
+  for (var k = 0; k < cells.length; k++) {
+    var i = cells[k], gx = i % gridW, gy = (i - gx) / gridW;
+    if (gx < gxMin || gx > gxMax || gy < gyMin || gy > gyMax) continue;
+    var centerX = (gx + 0.5) * cell, centerY = (gy + 0.5) * cell;
+    var ddx = centerX - cam.x, ddy = centerY - cam.y;
+    if (ddx * ddx + ddy * ddy > viewDistSq) continue;
+    var fwdDot = ddx * cosAng + ddy * sinAng;
+    if (fwdDot < -cell) continue;
+    var rgtDot = ddx * (-sinAng) + ddy * cosAng;
+    if (fwdDot > 1 && Math.abs(rgtDot) / fwdDot > tanHalf * 2.5) continue;
+    var x1 = gx * cell, y1 = gy * cell, x2 = (gx + 1) * cell, y2 = (gy + 1) * cell;
+    if (gx === 0 || !grid[gy * gridW + (gx - 1)])
+      _structureModelColumn(col, w, C, project, x1, y2, x1, y1, Math.abs((x1 - cam.x) * cosAng + (y1 + cell * 0.5 - cam.y) * sinAng));
+    if (gx === gridW - 1 || !grid[gy * gridW + (gx + 1)])
+      _structureModelColumn(col, w, C, project, x2, y1, x2, y2, Math.abs((x2 - cam.x) * cosAng + (y1 + cell * 0.5 - cam.y) * sinAng));
+    if (gy === 0 || !grid[(gy - 1) * gridW + gx])
+      _structureModelColumn(col, w, C, project, x1, y1, x2, y1, Math.abs((x1 + cell * 0.5 - cam.x) * cosAng + (y1 - cam.y) * sinAng));
+    if (gy === gridH - 1 || !grid[(gy + 1) * gridW + gx])
+      _structureModelColumn(col, w, C, project, x2, y2, x1, y2, Math.abs((x1 + cell * 0.5 - cam.x) * cosAng + (y2 - cam.y) * sinAng));
+  }
+  return col;
+}
+
+// Shell range (Decision 5): the model draws a structure's shell while the
+// structure is within viewDist, measured as renderEntities3D measures
+// vis.dist; beyond it the late pass draws the legacy shell fogged in colour.
+function _structureModelShellInRange(st) {
+  var d = Math.hypot(st.x - cam.x, st.y - cam.y);
+  return (d < 1 ? 1 : d) <= viewDist;
+}
+function _structureModelItem(face, dist, alpha, flip) {
+  var item = _structureModelItems[_structureModelItemCount];
+  if (!item) item = _structureModelItems[_structureModelItemCount] = {face: null, dist: 0, alpha: 1, flip: false};
+  item.face = face; item.dist = dist; item.alpha = alpha; item.flip = flip;
+  _structureModelItemCount++;
+}
+function _structureModelNearFirst(a, b) { return a.dist - b.dist; }
+// The textured sink's surface for one face (reused), or null for a face that
+// stays flat (cloth, or a material without a catalog texture).
+var _structureModelSurface = {vertices: null, material: '', tint: 0, lit: 0, dist: 0, horizontal: false, key: null};
+function _structureModelTexSurface(face, lit, dist) {
+  var name = worldTextureMaterialName(face.material);
+  if (!name) return null;
+  var s = _structureModelSurface;
+  s.vertices = face.vertices; s.material = name; s.tint = face.tint; s.lit = lit; s.dist = dist;
+  s.horizontal = Math.abs(face.normal.z) > 1 - 1e-9; s.key = face;
+  return s;
+}
+
+// Gathers, culls, sorts near to far and paints every model face in range.
+// Body faces (walls, risers, tops) take the wall fade band; shell faces stay
+// opaque and colour-fogged, continuous with the far-band shell.
+function _drawStructureModelFaces(C, pass, project, textured) {
+  var camX = cam.x, camY = cam.y, camZ = C.cameraZ, cosA = C.cosAng, sinA = C.sinAng;
+  var range = viewDist, rangeSq = range * range;
+  var debugTint = typeof DEBUG_POLY_TYPES !== 'undefined' && DEBUG_POLY_TYPES;
+  var faces = 0, culled = 0, drawn = 0, hidden = 0, clipped = 0;
+  _structureModelItemCount = 0;
+  for (var mi = 0; mi < structureModels.length; mi++) {
+    var m = structureModels[mi], list = m.faces, b = m.bounds;
+    var withShell = _structureModelShellInRange(m.structure);
+    if (withShell) m.shellSerial = pass.serial;
+    if (!list.length) continue;
+    var bdx = Math.max(b.minX - camX, 0, camX - b.maxX), bdy = Math.max(b.minY - camY, 0, camY - b.maxY);
+    var bFar = ((cosA >= 0 ? b.maxX : b.minX) - camX) * cosA + ((sinA >= 0 ? b.maxY : b.minY) - camY) * sinA;
+    var bodyOut = bdx * bdx + bdy * bdy > rangeSq, behind = bFar < 1;
+    for (var fi = 0; fi < list.length; fi++) {
+      var f = list[fi], shell = f.kind === 'shell';
+      if (shell && !withShell) continue;
+      faces++;
+      if (behind || (!shell && bodyOut)) { culled++; continue; }
+      // Body faces end at viewDist like walls3D; a shell in range is drawn
+      // whole (opaque, colour-fogged), like the far-band shell beyond it.
+      var dx = Math.max(f.minX - camX, 0, camX - f.maxX), dy = Math.max(f.minY - camY, 0, camY - f.maxY);
+      if (!shell && dx * dx + dy * dy > rangeSq) { culled++; continue; }
+      var far = ((cosA >= 0 ? f.maxX : f.minX) - camX) * cosA + ((sinA >= 0 ? f.maxY : f.minY) - camY) * sinA;
+      if (far < 1) { culled++; continue; }
+      var n = f.normal, v0 = f.vertices[0];
+      var side = n.x * (camX - v0.x) + n.y * (camY - v0.y) + n.z * (camZ - v0.z);
+      // No back-face cull. The body is open where an owned cell borders a
+      // natural solid (that face is left to walls3D, which may skip it: its
+      // near-camera FOV cull, no risers above lower natural cells), so a face
+      // turned away is what fills such a gap, as Legacy's inner faces do. The
+      // depth test hides it wherever a front face covers it. Faces turned away
+      // are lit with the normal flipped toward the camera.
+      var dist = Math.abs((f.cx - camX) * cosA + (f.cy - camY) * sinA);
+      if (dist < 1) dist = 1;
+      var alpha = shell ? 1 : worldFaceFadeAlpha(dist);
+      if (!(alpha > 0)) { culled++; continue; }
+      _structureModelItem(f, dist, alpha, side < 0);
+    }
+  }
+  var items = _structureModelItems, count = _structureModelItemCount;
+  if (count > 1) {
+    var view = items.length === count ? items : items.slice(0, count);
+    view.sort(_structureModelNearFirst);
+    if (view !== items) for (var si = 0; si < count; si++) items[si] = view[si];
+  }
+  var baseAlpha = ctx.globalAlpha, alphaNow = baseAlpha;
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (var ii = 0; ii < count; ii++) {
+    var it = items[ii], face = it.face, nn = face.normal;
+    var projected = project(face.vertices, C);
+    if (!projected || projected.length < 3) { clipped++; continue; }
+    var sign = it.flip ? -1 : 1;
+    var lit = worldFaceColor(debugTint ? STRUCTURE_MODEL_DEBUG_TINT : face.tint, nn.x * sign, nn.y * sign, nn.z * sign,
+      face.cx, face.cy, worldFaceFog(it.dist, false), false, false);
+    var want = baseAlpha * it.alpha;
+    if (want !== alphaNow) { ctx.globalAlpha = want; alphaNow = want; }
+    ctx.fillStyle = rgbQ((lit >>> 16) & 255, (lit >>> 8) & 255, lit & 255);
+    var surface = textured ? _structureModelTexSurface(face, lit, it.dist) : null;
+    if (surface ? fillSceneDepthTexturedPolygon(projected, surface) : fillSceneDepthPolygon(projected)) {
+      drawn++;
+      for (var pk = 0; pk < projected.length; pk++) {
+        var pp = projected[pk];
+        if (pp.x < minX) minX = pp.x; if (pp.x > maxX) maxX = pp.x;
+        if (pp.y < minY) minY = pp.y; if (pp.y > maxY) maxY = pp.y;
+      }
+    } else hidden++;
+  }
+  if (alphaNow !== baseAlpha) ctx.globalAlpha = baseAlpha;
+  for (var ci = 0; ci < count; ci++) items[ci].face = null;
+  _structureModelItemCount = 0;
+  pass.minX = minX; pass.minY = minY; pass.maxX = maxX; pass.maxY = maxY;
+  _structureModelStat('structFaces', faces); _structureModelStat('structCulled', culled);
+  _structureModelStat('structDrawn', drawn); _structureModelStat('structHidden', hidden);
+  _structureModelStat('structClipped', clipped);
+  return drawn;
+}
+
+// The structureModels3D stage. Never throws: an exception sets the session
+// failure flag, so walls3D and the late shell draw every structure this
+// frame and after.
+function drawStructureModels3D() {
+  var pass = _structureModelPass;
+  pass.serial++; pass.ok = false; pass.wallsPending = false; pass.owner = null; pass.frame = _structureModelFrameStamp();
+  pass.minX = pass.minY = 0; pass.maxX = pass.maxY = -1;
+  if (!structureModelsPassWanted()) return 0;
+  var drawn = 0;
+  ctx.save();
+  try {
+    if (!ensureStructureModels() || _structureModelsFailed) return 0;
+    var C = getCam3D(), project = typeof _structureModelProject === 'function' ? _structureModelProject : projectSceneWorldPolygon;
+    _structureModelColumnDepths(C, project);
+    // Stage E: the whole frame is textured or flat (12-world-textures.js).
+    var textured = typeof beginWorldTexturePass === 'function' && beginWorldTexturePass(C);
+    drawn = _drawStructureModelFaces(C, pass, project, textured);
+    pass.ok = true; pass.wallsPending = true;
+  } catch (e) {
+    pass.ok = false; pass.wallsPending = false;
+    _structureModelsFail(e, 'draw');
+  } finally {
+    ctx.restore();
+    if (typeof endWorldTexturePass === 'function') endWorldTexturePass();
+    _structureModelStat('structBuildMs', Math.round(structureModelStats.lastBuildMs * 10) / 10);
+    if (_structureModelsFailed) _structureModelStat('structFailures', structureModelStats.failures);
+  }
+  return drawn;
+}
+
+// Packed RGB of a shell colour ('rgb(r,g,b)' from rgbQ, or '#rrggbb'); -1 if unknown.
+function _structureModelColourPacked(color) {
+  var cached = _structureModelColourCache[color];
+  if (cached !== undefined) return cached;
+  var packed = -1, m;
+  if (typeof color === 'string') {
+    if ((m = /^#([0-9a-fA-F]{6})$/.exec(color))) packed = parseInt(m[1], 16);
+    else if ((m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(color))) packed = (m[1] << 16) | (m[2] << 8) | (+m[3]);
+  }
+  _structureModelColourCache[color] = packed;
+  return packed;
+}
+// Far-band shell sink: drawRuinDecorFace's own projection and opaque fill,
+// with the colour fogged by the face's camera depth.
+function _structureModelFarShellFace(vertices, color, C) {
+  var projected = projectSceneWorldPolygon(vertices, C);
+  if (!projected || projected.length < 3) return 0;
+  var sx = 0, sy = 0, n = vertices.length;
+  for (var i = 0; i < n; i++) { sx += vertices[i].x; sy += vertices[i].y; }
+  var dist = Math.abs((sx / n - cam.x) * C.cosAng + (sy / n - cam.y) * C.sinAng);
+  var fog = worldFaceFog(dist < 1 ? 1 : dist, false), packed = _structureModelColourPacked(color);
+  ctx.fillStyle = packed < 0 ? color : rgbQ(Math.floor(((packed >>> 16) & 255) * fog),
+    Math.floor(((packed >>> 8) & 255) * fog), Math.floor((packed & 255) * fog));
+  return fillSceneDepthPolygon(projected);
+}
+// drawStructures3D's question for one structure. True when the model drew
+// its shell this frame (skip the legacy shell) or when the structure is
+// beyond the model range, in which case its legacy shell is drawn here fogged
+// in colour (the renderEntities3D gate, midpoint test included, already
+// passed it). False without a model pass this frame (Legacy, a failure):
+// the caller draws the legacy shell.
+function structureModelHandlesShell(st, vis, C) {
+  if (!structureModelsDrewThisFrame()) return false;
+  var model = null;
+  for (var i = 0; i < structureModels.length; i++) if (structureModels[i].structure === st) { model = structureModels[i]; break; }
+  if (!model) return false;
+  if (model.shellSerial === _structureModelPass.serial) return true;
+  // Fail open: an exception here sets the session flag and hands this shell
+  // back to the caller's legacy draw instead of aborting structures3D.
+  try {
+    captureRuinDecorFaces(function() { drawStructureShellWorld(st, vis, C); }, _structureModelFarShellFace);
+  } catch (e) {
+    _structureModelsFail(e, 'far-shell');
+    return false;
+  }
+  _structureModelStat('structFarShells', 1);
+  return true;
+}
+
+// Lazily build when the feature is switched on for an already loaded window;
+// switching it on again also retries after a session failure.
+function _structureModelsFeatureChanged() {
+  var on = structureModelsEnabled();
+  if (on && !_structureModelsWasOn) _structureModelsFailed = false;
+  _structureModelsWasOn = on;
+  if (grid && on && !structureModelsCurrent()) buildStructureModels();
+}
+function getStructureModelDrawState() {
+  var pass = _structureModelPass;
+  return {failed: _structureModelsFailed, failures: structureModelStats.failures, lastFailure: structureModelStats.lastFailure,
+    serial: pass.serial, frame: pass.frame, ok: pass.ok, wallsPending: pass.wallsPending,
+    painted: pass.maxX >= pass.minX ? {minX: pass.minX, minY: pass.minY, maxX: pass.maxX, maxY: pass.maxY} : null};
+}
+
+if (typeof defineRenderFeature === 'function') {
+  defineRenderFeature({key: 'structureModels', label: 'Structure models', type: 'bool', default: true, legacy: false,
+    title: 'One merged, sun-lit model per fortress, arena and watchtower (body and shell) instead of per-cell walls and the late shell.'});
+}
+if (typeof onRenderFeaturesChange === 'function') onRenderFeaturesChange(_structureModelsFeatureChanged);
 // =============================================
 // SECTION 11: RENDERING - CORE
 // =============================================
@@ -14730,6 +20031,12 @@ function drawWalls3D() {
   // Initialize depth buffer
   if (!depthBuffer || depthBuffer.length !== w) depthBuffer = new Array(w);
   for (var di = 0; di < w; di++) depthBuffer[di] = 9999;
+  // Structure models (12-structure-models.js) drew their owned cells before
+  // this pass: take their legacy column depth and skip those cells. null
+  // unless this frame's model pass drew (Legacy, a failure, a harness), so
+  // every cell is drawn here as before.
+  var _smPass = typeof takeStructureModelWallPass === 'function' ? takeStructureModelWallPass(depthBuffer, w) : null;
+  var _smOwner = _smPass !== null ? _smPass.owner : null;
 
   // Spatial culling — only iterate wall cells within view distance
   var camGX = cam.x / cell, camGY = cam.y / cell;
@@ -14931,6 +20238,7 @@ function drawWalls3D() {
   for (var gy = gyMin; gy <= gyMax; gy++) {
     for (var gx = gxMin; gx <= gxMax; gx++) {
       if (!grid[gy * gridW + gx]) continue; // Not a wall cell
+      if (_smOwner !== null && _smOwner[gy * gridW + gx]) continue; // drawn by its structure model
 
       // Quick distance check
       var centerX = (gx + 0.5) * cell, centerY = (gy + 0.5) * cell;
@@ -15145,6 +20453,19 @@ function drawWalls3D() {
 
   // Forest canopy dedup — draw one canopy per tree cell, inline with painter's order
   var _forestCanopyDrawn = {};
+  // Canopies are arcs that write no depth. When structure models drew this
+  // frame (before this pass), a canopy over the model's painted screen box
+  // reads the scene depth at its cell's camera depth, so a nearer structure
+  // wall hides it; the bias of one cell keeps its own trunk from clipping it.
+  // Otherwise (Legacy) it paints unclipped in painter's order as before.
+  function _paintCanopy(paint, px, py, radius, depth) {
+    var bx = px - radius - 1, by = py - radius * 1.2 - 1, bs = radius * 2 + 2;
+    if (_smPass !== null && bx < _smPass.maxX && bx + bs > _smPass.minX && by < _smPass.maxY && by + bs > _smPass.minY) {
+      withSceneDepthBillboard({x: bx, y: by, width: bs, height: bs}, depth, paint, {depthBias: cell});
+    } else {
+      paint();
+    }
+  }
 
   // Render all faces in single sorted pass
   ctx.save();
@@ -15209,23 +20530,26 @@ function drawWalls3D() {
               var cHash = ((Math.floor(cmx * 0.2) * 7919 + Math.floor(cmy * 0.2) * 104729) >>> 0) % 100;
               var gv = 0.75 + cHash * 0.005;
               var savedA = ctx.globalAlpha;
-              // Dark base
-              ctx.globalAlpha = savedA * 0.9;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(csx, csy - crad * 0.2, crad, 0, Math.PI * 2); ctx.fill();
-              // Light highlight
-              ctx.globalAlpha = savedA * 0.6;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(csx - crad * 0.15, csy - crad * 0.45, crad * 0.6, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = savedA;
+              var _paintTopCanopy = function() {
+                // Dark base
+                ctx.globalAlpha = savedA * 0.9;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(csx, csy - crad * 0.2, crad, 0, Math.PI * 2); ctx.fill();
+                // Light highlight
+                ctx.globalAlpha = savedA * 0.6;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(csx - crad * 0.15, csy - crad * 0.45, crad * 0.6, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = savedA;
+              };
+              _paintCanopy(_paintTopCanopy, csx, csy, crad, cFwd);
             }
           }
         }
@@ -15269,21 +20593,24 @@ function drawWalls3D() {
                 cAlpha = Math.max(0, 1.0 - (f.dist - fadeStart) / fadeRange);
                 cAlpha *= cAlpha;
               }
-              ctx.globalAlpha = cAlpha * 0.9;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(cSX, cSY - cRadius * 0.2, cRadius, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = cAlpha * 0.6;
-              ctx.fillStyle = rgbQ(
-                Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
-                Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
-              );
-              ctx.beginPath(); ctx.arc(cSX - cRadius * 0.15, cSY - cRadius * 0.45, cRadius * 0.6, 0, Math.PI * 2); ctx.fill();
-              ctx.globalAlpha = 1.0;
+              var _paintSideCanopy = function() {
+                ctx.globalAlpha = cAlpha * 0.9;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(30 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(80 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(20 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(cSX, cSY - cRadius * 0.2, cRadius, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = cAlpha * 0.6;
+                ctx.fillStyle = rgbQ(
+                  Math.max(0, Math.min(255, Math.floor(55 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(120 * gv * leafShade))),
+                  Math.max(0, Math.min(255, Math.floor(35 * gv * leafShade)))
+                );
+                ctx.beginPath(); ctx.arc(cSX - cRadius * 0.15, cSY - cRadius * 0.45, cRadius * 0.6, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 1.0;
+              };
+              _paintCanopy(_paintSideCanopy, cSX, cSY, cRadius, cFwd);
             }
           }
         }
@@ -19619,6 +24946,16 @@ var _shrineBuffColors = { damage: '#ff4444', speed: '#44ffff', regen: '#44ff44',
 var _shrineBuffColorsDark = { damage: '#661111', speed: '#116666', regen: '#116611', armor: '#664411' };
 
 function drawShrines3D() {
+  // landmarkModels (12-prop-models.js): the shrine models, phased like the
+  // other landmarks ('opaque' from draw()'s landmarkOpaque3D stage; with no
+  // argument, landmarkLatePhase's 'overlay' after that pass, else both).
+  // Off: the legacy painter below, which draws nothing for 'opaque'.
+  if (typeof landmarkModelsOn === 'function' && landmarkModelsOn()) {
+    drawShrineModels3D(arguments.length ? arguments[0] :
+      typeof landmarkLatePhase === 'function' ? landmarkLatePhase('shrines') : undefined);
+    return;
+  }
+  if (arguments[0] === 'opaque') return;
   renderEntities3D(shrines, {maxDist: viewDist * 0.8, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
     function(shr, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
@@ -19704,6 +25041,100 @@ function drawShrines3D() {
     });
 }
 
+// Shrine models (landmarkModels, integration stage J1). With
+// landmarkBoundsGate (stage J2) the gate is the shrine's world bounds (the
+// pedestal and crystal) with scene depth; otherwise the legacy
+// renderEntities3D call's options. The pedestal stands on getEntityRenderFloorZ, so a shrine above a cave sits on the
+// surface (the legacy floorZ is the lowest layer). Opaque phase, near to
+// far: the pedestal at the range fade only (colour fog replaces the legacy
+// see-through alpha), writing depth. Overlay phase, far to near, at the
+// legacy overlay alphas and sizes: the translucent crystal at the legacy bob
+// (depth-tested, no depth write), then the glow, the buff label and the
+// 'Press E' prompt, each a billboard tested at the pedestal's nearest depth,
+// so the shrine never hides its own overlays while anything nearer does.
+var _shrineModelVisible = [];
+function _collectShrineModel(shr, vis) {
+  // A fully faded shrine (only the bounds gate reaches past the range fade)
+  // would write depth without paint.
+  if (!(vis.fade > 0)) return;
+  var floorZ = getEntityRenderFloorZ(shr);
+  if (Number.isFinite(floorZ)) _shrineModelVisible.push({shr: shr, vis: vis, floorZ: floorZ});
+}
+function drawShrineModels3D(phase) {
+  var list = _shrineModelVisible, wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
+  list.length = 0;
+  if (typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn())
+    renderEntities3D(shrines, {maxDist: viewDist * 0.8, sceneDepth: true, groundAnchor: true, worldRadius: landmarkShrineRadius(),
+      fadeFraction: 0.8, sort: true, mode3dOnly: true}, _collectShrineModel);
+  else renderEntities3D(shrines, {maxDist: viewDist * 0.8, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
+    _collectShrineModel);
+  if (!list.length) return;
+  var C = getCam3D(), now = gameTimeNow();
+  for (var n = list.length - 1; wantOpaque && n >= 0; n--) drawShrineModelOpaque(list[n], C);
+  for (var f = 0; wantOverlay && f < list.length; f++) drawShrineModelOverlay(list[f], C, now);
+  list.length = 0;
+}
+function drawShrineModelOpaque(entry, C) {
+  var alpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha * entry.vis.fade;   // the range fade only
+  drawWorldModel(shrineModelInstance(entry.shr, entry.floorZ), landmarkModelFor('landmarkShrine'), C, 'opaque', null);
+  ctx.globalAlpha = alpha;
+}
+function drawShrineModelOverlay(entry, C, now) {
+  var shr = entry.shr, vis = entry.vis, fwd = vis.fwd, D = SHRINE_MODEL_DIMS;
+  var pedestal = landmarkModelFor('landmarkShrine'), crystal = landmarkModelFor('landmarkShrineCrystal');
+  var fogAlpha = Math.max(0.5, 1.0 - fwd / viewDist * 0.4) * vis.fade;
+  var crystalColor = shr.used ? '#555555' : (_shrineBuffColors[shr.buffType] || '#ffffff');
+  var darkColor = shr.used ? '#444444' : (_shrineBuffColorsDark[shr.buffType] || '#888888');
+  var crystalZ = entry.floorZ + D.height + D.lift + Math.sin(now * 0.003 + vis.dist * 0.01) * D.bob;
+  ctx.save();
+  ctx.globalAlpha = vis.fade;
+  var inst = shrineCrystalInstance(shr, crystalZ, crystalColor, darkColor);
+  drawWorldModel(inst, crystal, C, 'overlay', null);
+  var ct = landmarkAnchorScreen(crystal, inst, 'glow', C);
+  inst = shrineModelInstance(shr, entry.floorZ);
+  var depth = Math.max(1, landmarkNearDepth(inst, C, D.half, D.half));
+  if (!shr.used && ct) {
+    var glowR = Math.max(16, Math.min(80, 28 * getScale3D('lgGlow') * projScale / fwd));
+    var pulse = 0.5 + 0.3 * Math.sin(now * 0.004 + vis.dist * 0.01), glowY = ct.sy - glowR * 0.3;
+    withSceneDepthBillboard({x: ct.sx - glowR, y: glowY - glowR, width: glowR * 2, height: glowR * 2}, depth, function() {
+      ctx.globalAlpha = fogAlpha * pulse * 0.5;
+      var grad = ctx.createRadialGradient(ct.sx, glowY, 0, ct.sx, glowY, glowR);
+      grad.addColorStop(0, crystalColor); grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(ct.sx, glowY, glowR, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  if (!shr.used && vis.dist < viewDist * 0.5) {
+    var buffLabel = shr.buffType === 'damage' ? 'Power' : shr.buffType === 'speed' ? 'Swiftness' : shr.buffType === 'regen' ? 'Regeneration' : 'Protection';
+    var labelProj = landmarkAnchorScreen(pedestal, inst, 'label', C);
+    if (labelProj) {
+      var labelSize = Math.max(11, Math.floor(22 * getScale3D('smText') * projScale / fwd));
+      var labelHalf = buffLabel.length * labelSize * 0.33 + 2;
+      withSceneDepthBillboard({x: labelProj.sx - labelHalf, y: labelProj.sy - labelSize, width: labelHalf * 2, height: labelSize * 1.4}, depth, function() {
+        ctx.globalAlpha = fogAlpha * Math.min(1, 0.4 + 0.6 * (1 - vis.dist / (viewDist * 0.5)));
+        ctx.fillStyle = crystalColor;
+        ctx.font = 'bold ' + labelSize + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(buffLabel, labelProj.sx, labelProj.sy);
+      });
+    }
+  }
+  if (nearestShrine === shr && !shr.used) {
+    var promptProj = landmarkAnchorScreen(pedestal, inst, 'prompt', C);
+    if (promptProj) {
+      var promptSize = Math.max(14, Math.floor(28 * getScale3D('lgText') * projScale / fwd)), promptHalf = 7 * promptSize * 0.33 + 2;
+      withSceneDepthBillboard({x: promptProj.sx - promptHalf, y: promptProj.sy - promptSize, width: promptHalf * 2, height: promptSize * 1.4}, depth, function() {
+        ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold ' + promptSize + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Press E', promptProj.sx, promptProj.sy);
+      });
+    }
+  }
+  ctx.restore();
+}
+
 // Ruin dressing is authored in structure-local world units. Local +Y points
 // out through the ruin's open face and local +X points to its right. Keeping
 // these positions independent of camera distance prevents the old rubble ring
@@ -19762,6 +25193,9 @@ function ruinDecorSurfaceZ(wx, wy, fallbackZ) {
 }
 
 function drawRuinDecorFace(vertices, color, C) {
+  // A capture sink (12-prop-models.js) takes the world face instead of it
+  // being drawn; with none installed, drawing is unchanged.
+  if (typeof _ruinDecorFaceSink === 'function') return _ruinDecorFaceSink(vertices, color, C);
   var projected = projectSceneWorldPolygon(vertices, C);
   if (!projected || projected.length < 3) return 0;
   ctx.fillStyle = color;
@@ -19806,56 +25240,75 @@ function drawRuinDecorBox(center, z0, z1, halfRight, halfOut, colors, C) {
 }
 
 function drawRuins3D() {
+  // Phase: 'opaque' draws the depth-writing debris, post and beams (draw()'s
+  // landmarkOpaque3D stage, landmarkOpaqueEarly); 'overlay' only the
+  // depth-clipped label. The late ruins3D stage calls with no argument:
+  // landmarkLatePhase (12-prop-models.js) makes that the overlay after this
+  // frame's early pass; otherwise both phases draw, as before. The phase is
+  // read from arguments so the declaration line stays byte-identical.
+  var phase = arguments.length ? arguments[0] :
+    typeof landmarkLatePhase === 'function' ? landmarkLatePhase('ruins') : undefined;
+  var wantOpaque = phase !== 'overlay', wantOverlay = phase !== 'opaque';
   // Match the wall renderer's range: opaque dressing is too small to notice at
   // the horizon, and no longer hard-culls while its wall remnants are visible.
+  // landmarkBoundsGate (12-prop-models.js, stage J2): the dressing's world
+  // bounds, not the ruin's centre, must be behind the camera to reject it.
+  var ruinRadius = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn() ? landmarkRuinRadius : undefined;
   renderEntities3D(ruins, {maxDist: viewDist, groundAnchor: true, sceneDepth: true,
-    fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true},
+    fadeFraction: 0.8, sort: true, minDist: 3, mode3dOnly: true, worldRadius: ruinRadius},
     function(ru, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
       var fwd = vis.fwd;
+      // The bounds extend only the near-plane test: past viewDist (the wall
+      // renderer's and terrain's range) the opaque dressing keeps the centre
+      // limit, so it never pops in beyond the terrain edge.
+      if (ruinRadius !== undefined && vis.dist > viewDist) return;
+      if (!wantOpaque && !(fwd < viewDist * 0.3)) return;   // overlay only, and no label this far
       ctx.save();
       // These faces write opaque scene depth, so their paint must be opaque as
       // well. Distance fading is reserved for the non-opaque location label.
       var labelAlpha = Math.max(0.3, 1.0 - fwd / viewDist * 0.6) * vis.fade;
       ctx.globalAlpha = 1;
 
-      var stoneColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.rubbleStone) ?
-        GAME_MATERIALS.rubbleStone.hex : {base:'#787060',shadow:'#686058',lit:'#888070',dark:'#504840'};
-      var debrisLayout = RUIN_DEBRIS_LAYOUTS[ru.ruinType] || RUIN_DEBRIS_LAYOUTS.hut;
-      var debrisPoint = {};
-      for (var rbi = 0; rbi < debrisLayout.length; rbi++) {
-        getRuinDebrisWorld(ru, rbi, debrisPoint);
-        var debrisZ = ruinDecorSurfaceZ(debrisPoint.x, debrisPoint.y, vis.floorZ);
-        drawRuinStone(debrisPoint, debrisZ, stoneColors, C);
+      if (wantOpaque) {
+        var stoneColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.rubbleStone) ?
+          GAME_MATERIALS.rubbleStone.hex : {base:'#787060',shadow:'#686058',lit:'#888070',dark:'#504840'};
+        var debrisLayout = RUIN_DEBRIS_LAYOUTS[ru.ruinType] || RUIN_DEBRIS_LAYOUTS.hut;
+        var debrisPoint = {};
+        for (var rbi = 0; rbi < debrisLayout.length; rbi++) {
+          getRuinDebrisWorld(ru, rbi, debrisPoint);
+          var debrisZ = ruinDecorSurfaceZ(debrisPoint.x, debrisPoint.y, vis.floorZ);
+          drawRuinStone(debrisPoint, debrisZ, stoneColors, C);
+        }
+
+        // A small solid waypost sits to the right of the open face. Both its
+        // stem and crosspiece are world boxes, so they retain their orientation
+        // instead of turning into screen-space lines as the camera moves.
+        var post = getRuinPostWorld(ru, {});
+        var postZ = ruinDecorSurfaceZ(post.x, post.y, vis.floorZ);
+        var woodColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.palisadeWood) ?
+          GAME_MATERIALS.palisadeWood.hex : {lit:'#7a4c2a',mid:'#6b4226',dark:'#5a3720',deep:'#3a2412'};
+        drawRuinDecorBox(post, postZ + 0.2, postZ + 21, 0.9, 0.9, woodColors, C);
+        drawRuinDecorBox(post, postZ + 14, postZ + 19, 8.5, 1.0, woodColors, C);
+
+        // Two fixed roof-frame remnants give the hut a readable shelter
+        // silhouette without closing it in. They use the same facing basis as
+        // the waypost and stay attached to the rear/left wall runs.
+        if (ru.ruinType === 'hut') {
+          var rearBeam = ruinLocalToWorld(ru, 0, -27, {});
+          rearBeam.rightX = post.rightX; rearBeam.rightY = post.rightY;
+          rearBeam.outX = post.outX; rearBeam.outY = post.outY;
+          var rearBeamZ = ruinDecorSurfaceZ(rearBeam.x, rearBeam.y, vis.floorZ);
+          drawRuinDecorBox(rearBeam, rearBeamZ + 52, rearBeamZ + 56, 28, 1.8, woodColors, C);
+          var sideBeam = ruinLocalToWorld(ru, -27, -5, {});
+          sideBeam.rightX = post.rightX; sideBeam.rightY = post.rightY;
+          sideBeam.outX = post.outX; sideBeam.outY = post.outY;
+          var sideBeamZ = ruinDecorSurfaceZ(sideBeam.x, sideBeam.y, vis.floorZ);
+          drawRuinDecorBox(sideBeam, sideBeamZ + 38, sideBeamZ + 42, 1.8, 18, woodColors, C);
+        }
       }
 
-      // A small solid waypost sits to the right of the open face. Both its
-      // stem and crosspiece are world boxes, so they retain their orientation
-      // instead of turning into screen-space lines as the camera moves.
-      var post = getRuinPostWorld(ru, {});
-      var postZ = ruinDecorSurfaceZ(post.x, post.y, vis.floorZ);
-      var woodColors = (typeof GAME_MATERIALS !== 'undefined' && GAME_MATERIALS.palisadeWood) ?
-        GAME_MATERIALS.palisadeWood.hex : {lit:'#7a4c2a',mid:'#6b4226',dark:'#5a3720',deep:'#3a2412'};
-      drawRuinDecorBox(post, postZ + 0.2, postZ + 21, 0.9, 0.9, woodColors, C);
-      drawRuinDecorBox(post, postZ + 14, postZ + 19, 8.5, 1.0, woodColors, C);
-
-      // Two fixed roof-frame remnants give the hut a readable shelter
-      // silhouette without closing it in. They use the same facing basis as
-      // the waypost and stay attached to the rear/left wall runs.
-      if (ru.ruinType === 'hut') {
-        var rearBeam = ruinLocalToWorld(ru, 0, -27, {});
-        rearBeam.rightX = post.rightX; rearBeam.rightY = post.rightY;
-        rearBeam.outX = post.outX; rearBeam.outY = post.outY;
-        var rearBeamZ = ruinDecorSurfaceZ(rearBeam.x, rearBeam.y, vis.floorZ);
-        drawRuinDecorBox(rearBeam, rearBeamZ + 52, rearBeamZ + 56, 28, 1.8, woodColors, C);
-        var sideBeam = ruinLocalToWorld(ru, -27, -5, {});
-        sideBeam.rightX = post.rightX; sideBeam.rightY = post.rightY;
-        sideBeam.outX = post.outX; sideBeam.outY = post.outY;
-        var sideBeamZ = ruinDecorSurfaceZ(sideBeam.x, sideBeam.y, vis.floorZ);
-        drawRuinDecorBox(sideBeam, sideBeamZ + 38, sideBeamZ + 42, 1.8, 18, woodColors, C);
-      }
-
-      if (fwd < viewDist * 0.3) {
+      if (wantOverlay && fwd < viewDist * 0.3) {
         var labelLift = ru.ruinType === 'hut' ? 68 : ru.ruinType === 'hall' ? 74 : 62;
         var labelP = proj(ru.x, ru.y, vis.floorZ + labelLift);
         if (labelP && labelP.fwd > 1) {
@@ -20029,39 +25482,71 @@ function drawStructureShellWorld(st, vis, C) {
 }
 
 function drawStructures3D() {
-  renderEntities3D(largeStructures, {maxDist: viewDist * 2.6, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.92, sort: true, minDist: 3, mode3dOnly: true, groundAnchor:true},
+  // Phase: 'opaque' draws the shell (draw()'s landmarkOpaque3D stage,
+  // landmarkOpaqueEarly); 'overlay' the label, keep interactables, prompts
+  // and sealed ring, each depth-clipped (structureOverlayDraw), since no
+  // shell paints after them any more. The late structures3D stage calls
+  // with no argument: landmarkLatePhase (12-prop-models.js) makes that the
+  // overlay after this frame's early pass; otherwise both phases draw
+  // unclipped, as before. The phase is read from arguments so the
+  // declaration line stays byte-identical.
+  var phase = arguments.length ? arguments[0] :
+    typeof landmarkLatePhase === 'function' ? landmarkLatePhase('structures') : undefined;
+  // landmarkModels (12-prop-models.js): the keep interactables' models draw
+  // with the shell, and every overlay is depth-clipped (the models write depth).
+  var keepModels = typeof landmarkModelsOn === 'function' && landmarkModelsOn();
+  // landmarkBoundsGate (stage J2): the shell's world bounds with scene depth
+  // replace the centre-column gate; the hill test stays only for bounds
+  // wholly beyond viewDist. Every overlay is then depth-clipped too.
+  var structBounds = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn();
+  var wantShell = phase !== 'overlay', wantOverlay = phase !== 'opaque', clip = phase === 'overlay' || keepModels || structBounds;
+  renderEntities3D(largeStructures, structBounds ? {maxDist: viewDist * 2.6, sceneDepth: true, groundAnchor: true,
+    worldRadius: landmarkStructureRadius, checkMidpoint: true, midpointBeyond: viewDist, fadeFraction: 0.92, sort: true, mode3dOnly: true} :
+    {maxDist: viewDist * 2.6, depthOffset: 2, checkMidpoint: true, fadeFraction: 0.92, sort: true, minDist: 3, mode3dOnly: true, groundAnchor:true},
     function(st, vis, C, ctx, now) {
       function proj(wx, wy, wz) { return projToScreen(wx, wy, wz, C); }
       var fwd = vis.fwd;
+      // Past the range fade (reached only through the bounds) the shell
+      // would write depth without paint.
+      if (structBounds && !(vis.fade > 0)) return;
+      if (!wantShell && !(fwd < viewDist * 0.6) && st.type !== 'fortress') return;   // overlay only, nothing to draw
       ctx.save();
       ctx.globalAlpha = vis.fade;
-      drawStructureShellWorld(st,vis,C);
+      // Structure models (12-structure-models.js) drew this shell, or draw it
+      // fogged beyond their range; otherwise (Legacy, a failure) as before.
+      if (wantShell && !(typeof structureModelHandlesShell === 'function' && structureModelHandlesShell(st, vis, C)))
+        drawStructureShellWorld(st,vis,C);
       ctx.globalAlpha = vis.fade;
+      if (wantShell && keepModels && st.type === 'fortress') drawFortressInteractableModels(st, vis, C);
 
-      if (fwd < viewDist * 0.6) {
+      if (wantOverlay && fwd < viewDist * 0.6) {
         var labelP = proj(st.x, st.y, vis.floorZ + 40);
         if (labelP) {
           var labelSize = Math.max(10, Math.floor(16 * projScale / labelP.fwd));
-          ctx.fillStyle = (st.type === 'fortress') ? '#e8c868' : (st.type === 'arena') ? '#e87848' : '#88c8e8';
-          ctx.font = 'bold ' + labelSize + 'px monospace';
-          ctx.textAlign = 'center';
           var label = (st.type === 'fortress') ? 'Ancient Fortress' : (st.type === 'arena') ? 'Battle Arena' : 'Watchtower';
-          ctx.fillText(label, labelP.sx, labelP.sy);
-          ctx.fillStyle = '#aaa';
-          ctx.font = Math.max(8, labelSize - 3) + 'px monospace';
-          ctx.fillText('Danger Zone', labelP.sx, labelP.sy + labelSize + 2);
+          // Both lines' box: bold monospace is about 0.6 em per character.
+          // Its test depth is the front of the core round the anchor (the
+          // fortress keep roof, the watchtower's tower, the arena pedestal),
+          // so the structure never hides its own label; anything in front
+          // of that core does.
+          var labelHalf = Math.max(label.length, 11) * labelSize * 0.33 + 2;
+          var labelDepth = Math.max(1, labelP.fwd - cell * (st.type === 'fortress' ? 10 : st.type === 'arena' ? 0.8 : 3.3) * (st.scale || 1));
+          structureOverlayDraw(clip, [{sx: labelP.sx - labelHalf, sy: labelP.sy - labelSize, fwd: labelDepth},
+            {sx: labelP.sx + labelHalf, sy: labelP.sy + labelSize * 1.5 + 2, fwd: labelDepth}], 2, function() {
+            ctx.fillStyle = (st.type === 'fortress') ? '#e8c868' : (st.type === 'arena') ? '#e87848' : '#88c8e8';
+            ctx.font = 'bold ' + labelSize + 'px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, labelP.sx, labelP.sy);
+            ctx.fillStyle = '#aaa';
+            ctx.font = Math.max(8, labelSize - 3) + 'px monospace';
+            ctx.fillText('Danger Zone', labelP.sx, labelP.sy + labelSize + 2);
+          });
         }
       }
 
       // ── Fortress keep interactables (forge, lectern, garrison banner) ──
-      if (st.type === 'fortress') {
-        var _fKey2 = st.regionX + ',' + st.regionY;
-        var _fComp2 = completedFortresses[_fKey2] || {};
-        var _interacts3d = [
-          {type: 'forge',    ox: 0,         oy: -cell * 4, used: !!_fComp2.forge,    color: '#ff8800', label: '[E] Enchantment Forge'},
-          {type: 'lectern',  ox: cell * 4,  oy: cell * 2,  used: !!_fComp2.lectern,  color: '#6688ff', label: '[E] Ancient Lectern'},
-          {type: 'garrison', ox: -cell * 4, oy: cell * 2,  used: !!_fComp2.garrison, color: '#c8a028', label: '[E] Rally Garrison'}
-        ];
+      if (wantOverlay && st.type === 'fortress') {
+        var _interacts3d = fortressInteractables3D(st);
         for (var _ii3d = 0; _ii3d < _interacts3d.length; _ii3d++) {
           var _int3d = _interacts3d[_ii3d];
           if (_int3d.used) continue;
@@ -20071,59 +25556,70 @@ function drawStructures3D() {
           var ib1 = proj(ix + 4, iy - 4, vis.floorZ);
           var ib2 = proj(ix + 4, iy + 4, vis.floorZ);
           var ib3 = proj(ix - 4, iy + 4, vis.floorZ);
-          if (ib0 && ib1 && ib2 && ib3) {
-            ctx.fillStyle = '#333'; ctx.globalAlpha = 0.8;
-            ctx.beginPath(); ctx.moveTo(ib0.sx, ib0.sy); ctx.lineTo(ib1.sx, ib1.sy);
-            ctx.lineTo(ib2.sx, ib2.sy); ctx.lineTo(ib3.sx, ib3.sy); ctx.closePath(); ctx.fill();
-          }
-          // Object body
           var ip0 = proj(ix, iy, vis.floorZ);
           var ip1 = proj(ix, iy, vis.floorZ + 18);
-          if (ip0 && ip1 && ip0.fwd > 1) {
-            var ipw = Math.max(3, Math.floor(8 * projScale / ip0.fwd));
-            if (_int3d.type === 'forge') {
-              // Anvil: dark trapezoid
-              ctx.fillStyle = '#444'; ctx.fillRect(ip0.sx - ipw, ip1.sy, ipw * 2, ip0.sy - ip1.sy);
-              ctx.fillStyle = '#666'; ctx.fillRect(ip0.sx - ipw * 1.3, ip1.sy, ipw * 2.6, (ip0.sy - ip1.sy) * 0.3);
-              // Orange glow
-              ctx.globalAlpha = 0.4 + 0.2 * Math.sin(gameTimeNow() * 0.004);
-              ctx.fillStyle = '#ff6600';
-              ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
-            } else if (_int3d.type === 'lectern') {
-              // Thin pedestal + book
-              ctx.fillStyle = '#555'; ctx.fillRect(ip0.sx - ipw * 0.4, ip1.sy, ipw * 0.8, ip0.sy - ip1.sy);
-              ctx.fillStyle = '#8866cc'; ctx.fillRect(ip0.sx - ipw, ip1.sy - ipw * 0.5, ipw * 2, ipw);
-              // Blue glow
-              ctx.globalAlpha = 0.3 + 0.2 * Math.sin(gameTimeNow() * 0.003);
-              ctx.fillStyle = '#4466ff';
-              ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy - ipw * 0.3, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
-            } else {
-              // Garrison banner pole + flag
-              ctx.strokeStyle = '#5a4a3a'; ctx.lineWidth = Math.max(2, ipw * 0.4);
-              ctx.beginPath(); ctx.moveTo(ip0.sx, ip0.sy); ctx.lineTo(ip1.sx, ip1.sy); ctx.stroke();
-              var flagW = Math.max(4, ipw * 1.5);
-              var flagH = Math.max(6, ipw * 2);
-              var wave = Math.sin(gameTimeNow() * 0.005) * flagW * 0.2;
-              ctx.fillStyle = _int3d.color;
-              ctx.beginPath();
-              ctx.moveTo(ip1.sx, ip1.sy);
-              ctx.lineTo(ip1.sx + flagW + wave, ip1.sy + flagH * 0.3);
-              ctx.lineTo(ip1.sx + flagW * 0.8, ip1.sy + flagH);
-              ctx.lineTo(ip1.sx, ip1.sy + flagH * 0.8);
-              ctx.closePath(); ctx.fill();
+          // The platform and object as one overlay; the pad covers the
+          // glow disc (1.5 x its half-width) and the flag.
+          var ipPad = ip0 ? Math.max(6, Math.floor(8 * projScale / Math.max(1, ip0.fwd)) * 2) : 6;
+          if (keepModels) drawFortressInteractableGlow(st, C, _int3d);
+          else structureOverlayDraw(clip, [ib0, ib1, ib2, ib3, ip0, ip1], ipPad, function() {
+            if (ib0 && ib1 && ib2 && ib3) {
+              ctx.fillStyle = '#333'; ctx.globalAlpha = 0.8;
+              ctx.beginPath(); ctx.moveTo(ib0.sx, ib0.sy); ctx.lineTo(ib1.sx, ib1.sy);
+              ctx.lineTo(ib2.sx, ib2.sy); ctx.lineTo(ib3.sx, ib3.sy); ctx.closePath(); ctx.fill();
             }
-            ctx.globalAlpha = vis.fade;
-          }
+            // Object body
+            if (ip0 && ip1 && ip0.fwd > 1) {
+              var ipw = Math.max(3, Math.floor(8 * projScale / ip0.fwd));
+              if (_int3d.type === 'forge') {
+                // Anvil: dark trapezoid
+                ctx.fillStyle = '#444'; ctx.fillRect(ip0.sx - ipw, ip1.sy, ipw * 2, ip0.sy - ip1.sy);
+                ctx.fillStyle = '#666'; ctx.fillRect(ip0.sx - ipw * 1.3, ip1.sy, ipw * 2.6, (ip0.sy - ip1.sy) * 0.3);
+                // Orange glow
+                ctx.globalAlpha = 0.4 + 0.2 * Math.sin(gameTimeNow() * 0.004);
+                ctx.fillStyle = '#ff6600';
+                ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
+              } else if (_int3d.type === 'lectern') {
+                // Thin pedestal + book
+                ctx.fillStyle = '#555'; ctx.fillRect(ip0.sx - ipw * 0.4, ip1.sy, ipw * 0.8, ip0.sy - ip1.sy);
+                ctx.fillStyle = '#8866cc'; ctx.fillRect(ip0.sx - ipw, ip1.sy - ipw * 0.5, ipw * 2, ipw);
+                // Blue glow
+                ctx.globalAlpha = 0.3 + 0.2 * Math.sin(gameTimeNow() * 0.003);
+                ctx.fillStyle = '#4466ff';
+                ctx.beginPath(); ctx.arc(ip0.sx, ip1.sy - ipw * 0.3, ipw * 1.5, 0, Math.PI * 2); ctx.fill();
+              } else {
+                // Garrison banner pole + flag
+                ctx.strokeStyle = '#5a4a3a'; ctx.lineWidth = Math.max(2, ipw * 0.4);
+                ctx.beginPath(); ctx.moveTo(ip0.sx, ip0.sy); ctx.lineTo(ip1.sx, ip1.sy); ctx.stroke();
+                var flagW = Math.max(4, ipw * 1.5);
+                var flagH = Math.max(6, ipw * 2);
+                var wave = Math.sin(gameTimeNow() * 0.005) * flagW * 0.2;
+                ctx.fillStyle = _int3d.color;
+                ctx.beginPath();
+                ctx.moveTo(ip1.sx, ip1.sy);
+                ctx.lineTo(ip1.sx + flagW + wave, ip1.sy + flagH * 0.3);
+                ctx.lineTo(ip1.sx + flagW * 0.8, ip1.sy + flagH);
+                ctx.lineTo(ip1.sx, ip1.sy + flagH * 0.8);
+                ctx.closePath(); ctx.fill();
+              }
+              ctx.globalAlpha = vis.fade;
+            }
+          });
+          if (clip) ctx.globalAlpha = vis.fade;
           // Prompt text when player is near
           if (nearestFortressInteract && nearestFortressInteract.type === _int3d.type &&
               nearestFortressInteract.structure === st) {
-            var tp3 = proj(ix, iy, vis.floorZ + 28);
+            var tp3 = keepModels ? fortressInteractablePoint(st, C, _int3d, 'prompt') : proj(ix, iy, vis.floorZ + 28);
             if (tp3) {
               var fs3 = Math.max(10, Math.floor(18 * getScale3D('lgText') * projScale / (tp3.fwd || 10)));
-              ctx.globalAlpha = 1.0;
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold ' + fs3 + 'px monospace'; ctx.textAlign = 'center';
-              ctx.fillText(_int3d.label, tp3.sx, tp3.sy);
+              var tpHalf = _int3d.label.length * fs3 * 0.33 + 2;
+              structureOverlayDraw(clip, [{sx: tp3.sx - tpHalf, sy: tp3.sy - fs3, fwd: tp3.fwd},
+                {sx: tp3.sx + tpHalf, sy: tp3.sy + fs3 * 0.4, fwd: tp3.fwd}], 2, function() {
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold ' + fs3 + 'px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(_int3d.label, tp3.sx, tp3.sy);
+              });
             }
           }
         }
@@ -20155,22 +25651,31 @@ function drawStructures3D() {
             for (var _sk = 0; _sk < _sealN; _sk++) if (!_sealPts[_sk]) { _sealVisible = false; break; }
             if (_sealVisible && _sealPts[0].fwd > 1) {
               ctx.save();
-              ctx.globalAlpha = vis.fade * (0.4 + 0.35 * _sealPulse);
-              ctx.strokeStyle = 'rgba(255,60,20,0.9)';
-              ctx.lineWidth = Math.max(2, Math.floor(4 * projScale / _sealPts[0].fwd));
-              ctx.shadowBlur = 14; ctx.shadowColor = '#ff3300';
-              ctx.beginPath(); ctx.moveTo(_sealPts[0].sx, _sealPts[0].sy);
-              for (var _sk2 = 1; _sk2 < _sealN; _sk2++) ctx.lineTo(_sealPts[_sk2].sx, _sealPts[_sk2].sy);
-              ctx.closePath(); ctx.stroke();
-              ctx.shadowBlur = 0;
+              // One overlay at the ring's nearest depth; the pad covers the
+              // stroke and its 14 px shadow.
+              var _sealW = Math.max(2, Math.floor(4 * projScale / _sealPts[0].fwd));
+              structureOverlayDraw(clip, _sealPts, _sealW + 16, function() {
+                ctx.globalAlpha = vis.fade * (0.4 + 0.35 * _sealPulse);
+                ctx.strokeStyle = 'rgba(255,60,20,0.9)';
+                ctx.lineWidth = _sealW;
+                ctx.shadowBlur = 14; ctx.shadowColor = '#ff3300';
+                ctx.beginPath(); ctx.moveTo(_sealPts[0].sx, _sealPts[0].sy);
+                for (var _sk2 = 1; _sk2 < _sealN; _sk2++) ctx.lineTo(_sealPts[_sk2].sx, _sealPts[_sk2].sy);
+                ctx.closePath(); ctx.stroke();
+                ctx.shadowBlur = 0;
+              });
               // "SEALED" label at top of ring
               if (fortressLockedNear && fortressLockedNear.structure === st) {
                 var _slP = proj(st.x, st.y, vis.floorZ + 20);
                 if (_slP && _slP.fwd > 1) {
                   var _slFs = Math.max(9, Math.floor(14 * projScale / _slP.fwd));
-                  ctx.globalAlpha = vis.fade;
-                  ctx.fillStyle = '#ff6644'; ctx.font = 'bold ' + _slFs + 'px monospace'; ctx.textAlign = 'center';
-                  ctx.fillText('SEALED — defeat all enemies', _slP.sx, _slP.sy);
+                  var _slHalf = 27 * _slFs * 0.33 + 2;
+                  structureOverlayDraw(clip, [{sx: _slP.sx - _slHalf, sy: _slP.sy - _slFs, fwd: _slP.fwd},
+                    {sx: _slP.sx + _slHalf, sy: _slP.sy + _slFs * 0.4, fwd: _slP.fwd}], 2, function() {
+                    ctx.globalAlpha = vis.fade;
+                    ctx.fillStyle = '#ff6644'; ctx.font = 'bold ' + _slFs + 'px monospace'; ctx.textAlign = 'center';
+                    ctx.fillText('SEALED — defeat all enemies', _slP.sx, _slP.sy);
+                  });
                 }
               }
               ctx.restore();
@@ -20181,6 +25686,70 @@ function drawStructures3D() {
       }
       ctx.restore();
     });
+}
+
+// Fortress keep interactables: offsets from the fortress centre and used
+// flags from completedFortresses, shared by the legacy overlay and the
+// landmark models.
+function fortressInteractables3D(st) {
+  var _fComp2 = completedFortresses[st.regionX + ',' + st.regionY] || {};
+  return [
+    {type: 'forge',    ox: 0,         oy: -cell * 4, used: !!_fComp2.forge,    color: '#ff8800', label: '[E] Enchantment Forge'},
+    {type: 'lectern',  ox: cell * 4,  oy: cell * 2,  used: !!_fComp2.lectern,  color: '#6688ff', label: '[E] Ancient Lectern'},
+    {type: 'garrison', ox: -cell * 4, oy: cell * 2,  used: !!_fComp2.garrison, color: '#c8a028', label: '[E] Rally Garrison'}
+  ];
+}
+
+// Keep interactable models (landmarkModels, integration stage J1): each
+// unused one on its own getEntityRenderFloorZ, facing the fortress centre,
+// drawn in the structures' opaque phase with the shell (drawStructures3D's
+// plain callback) within viewDist, where its faces have faded out. The
+// overlay phase keeps the forge and lectern glows (legacy colours, pulses
+// and sizes) as billboards tested at the prop's nearest depth, so its own
+// model never hides them, and the prompt at the model's prompt anchor.
+var _keepPropProbe = {x: 0, y: 0};
+function fortressInteractableFloorZ(st, item) {
+  _keepPropProbe.x = st.x + item.ox; _keepPropProbe.y = st.y + item.oy;
+  return getEntityRenderFloorZ(_keepPropProbe);
+}
+function drawFortressInteractableModels(st, vis, C) {
+  var list = fortressInteractables3D(st), now = gameTimeNow();
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    if (item.used || Math.hypot(st.x + item.ox - cam.x, st.y + item.oy - cam.y) > viewDist) continue;
+    var floorZ = fortressInteractableFloorZ(st, item);
+    if (!Number.isFinite(floorZ)) continue;
+    drawWorldModel(keepPropInstance(st, item, floorZ, now), landmarkModelFor(keepPropModelKey(item.type)), C, 'opaque', null);
+  }
+}
+function fortressInteractablePoint(st, C, item, anchor) {
+  var floorZ = fortressInteractableFloorZ(st, item);
+  if (!Number.isFinite(floorZ)) return null;
+  return landmarkAnchorScreen(landmarkModelFor(keepPropModelKey(item.type)), keepPropInstance(st, item, floorZ, gameTimeNow()), anchor, C);
+}
+function drawFortressInteractableGlow(st, C, item) {
+  if (item.type !== 'forge' && item.type !== 'lectern') return;
+  var floorZ = fortressInteractableFloorZ(st, item);
+  if (!Number.isFinite(floorZ)) return;
+  var now = gameTimeNow(), inst = keepPropInstance(st, item, floorZ, now), forge = item.type === 'forge';
+  var p = landmarkAnchorScreen(landmarkModelFor(keepPropModelKey(item.type)), inst, 'glow', C);
+  if (!p) return;
+  var r = Math.max(3, Math.floor(8 * projScale / p.fwd)) * 1.5;
+  withSceneDepthBillboard({x: p.sx - r, y: p.sy - r, width: r * 2, height: r * 2},
+    Math.max(1, landmarkNearDepth(inst, C, KEEP_PROP_DIMS.pad, KEEP_PROP_DIMS.pad)), function() {
+      ctx.globalAlpha = forge ? 0.4 + 0.2 * Math.sin(now * 0.004) : 0.3 + 0.2 * Math.sin(now * 0.003);
+      ctx.fillStyle = forge ? '#ff6600' : '#4466ff';
+      ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2); ctx.fill();
+    });
+}
+
+// A structures3D overlay: drawn inline for the unclipped (legacy) call, or,
+// after the early landmark pass, depth-clipped over its points' padded screen
+// box at their nearest depth (marketPropDepthClip), so a nearer wall hides it.
+function structureOverlayDraw(clip, points, pad, draw) {
+  if (!clip) { draw(); return 1; }
+  var box = marketPropDepthClip(points, pad);
+  return box ? withSceneDepthBillboard(box.bounds, box.depth, draw) : 0;
 }
 
 // Screen bounds and nearest camera depth of a directly painted prop's
@@ -20202,6 +25771,14 @@ function marketPropDepthClip(points, pad) {
 
 function drawMarketStalls3D() {
   if (!marketStalls || !marketStalls.length || !MODE3D) return;
+  // landmarkModels (12-prop-models.js): the stall and guard tower models,
+  // phased like the other landmarks ('opaque' from draw()'s
+  // landmarkOpaque3D stage; with no argument, landmarkLatePhase's 'overlay'
+  // after that pass, else 'all'). Off (stallPhase undefined): the legacy
+  // painters below, which draw nothing for 'opaque'.
+  var stallPhase = typeof landmarkModelsOn === 'function' && landmarkModelsOn() ?
+    (arguments.length ? arguments[0] : typeof landmarkLatePhase === 'function' ? landmarkLatePhase('stalls') : undefined) || 'all' : undefined;
+  if (stallPhase === undefined && arguments[0] === 'opaque') return;
   var C = getCam3D();
   var w = C.w, h = C.h, cosAng = C.cosAng, sinAng = C.sinAng;
   var invTanHalf = C.invTanHalf, horizonY = C.horizonY, cameraZ = C.cameraZ;
@@ -20249,7 +25826,10 @@ function drawMarketStalls3D() {
   var POLE_R = 1.5;   // pole visual radius (not used for collision)
 
   // Draw tower first so stalls paint over it (tower is at center, stalls surround it)
-  drawGuardTower3D(C, proj, fillQuad, strokeQuad);
+  // With the models, 'all' is the opaque phase and then the overlay phase
+  // (the beacon after the stall models), as the early pass splits them.
+  drawGuardTower3D(C, proj, fillQuad, strokeQuad, stallPhase === 'all' ? 'opaque' : stallPhase);
+  if (stallPhase === 'overlay') return;   // the stall models have no overlays
 
   // Sort stalls back-to-front so near stalls occlude far ones (painter's algorithm)
   var sortedStalls = [];
@@ -20259,10 +25839,19 @@ function drawMarketStalls3D() {
     // scene-depth clip below, not legacy column/hill gates, hides the stall.
     var _ssZ = floorMesh ? getFloorHeightAt(_ss.x, _ss.y) * 25 : 0;
     var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});
+    // landmarkBoundsGate (stage J2, models only): a centre behind the
+    // camera or out of range is re-asked with the stall's bounds.
+    if (!_sv && stallPhase !== undefined && typeof landmarkBoundsRescue === 'function')
+      _sv = landmarkBoundsRescue(_ss.x, _ss.y, _ssZ, C, viewDist * 0.8, 0.8, landmarkStallRadius());
     if (!_sv) continue;
     sortedStalls.push({idx: si, dist: _sv.dist, vis: _sv});
   }
   sortedStalls.sort(function(a, b) { return b.dist - a.dist; });
+  if (stallPhase !== undefined) {
+    if (typeof drawMarketStallModels3D === 'function') drawMarketStallModels3D(sortedStalls, C, awningColors, awningDark);
+    if (stallPhase === 'all') drawGuardTower3D(C, proj, fillQuad, strokeQuad, 'overlay');
+    return;
+  }
 
   for (var ssi = 0; ssi < sortedStalls.length; ssi++) {
     var stall = marketStalls[sortedStalls[ssi].idx];
@@ -20383,6 +25972,37 @@ function drawMarketStalls3D() {
 
 }
 
+// Market stall models (landmarkModels, integration stage J1) for the stalls
+// the stall pass's gate (sorted far to near; bounds with landmarkBoundsGate):
+// each on its getEntityRenderFloorZ, drawn near to far, writing depth, and
+// tinted with the legacy awning, stripe and goods colours; the goods model
+// within the legacy goods range.
+function drawMarketStallModels3D(sorted, C, awningColors, awningDark) {
+  var model = landmarkModelFor('landmarkStall'), goods = landmarkModelFor('landmarkStallGoods');
+  for (var n = sorted.length - 1; n >= 0; n--) {
+    var stall = marketStalls[sorted[n].idx], floorZ = getEntityRenderFloorZ(stall), type = stall.stallType;
+    if (!Number.isFinite(floorZ)) continue;
+    var inst = stallModelInstance(stall, floorZ, awningColors[type] || '#886633', awningDark[type] || '#553311',
+      awningColors[type] || '#aa8844');
+    drawWorldModel(inst, model, C, 'opaque', null);
+    if (sorted[n].dist < STALL_MODEL_DIMS.goodsDist) drawWorldModel(inst, goods, C, 'opaque', null);
+  }
+}
+
+// Guard tower model (landmarkModels, integration stage J1). Returns the
+// support z it stands on when it owns the tower body (drawn now unless the
+// phase is 'overlay'), or NaN: no model, no support, or the camera in or at
+// the tower (the shop stands there; towerCameraInReach), where the legacy
+// body is drawn with the beacon instead.
+function drawGuardTowerModel3D(C, phase) {
+  var model = landmarkModelFor('landmarkTower'), floorZ = getEntityRenderFloorZ(shopMarker);
+  if (!model || !Number.isFinite(floorZ)) return NaN;
+  var inst = towerModelInstance(shopMarker, floorZ);
+  if (towerCameraInReach(inst, C)) return NaN;
+  if (phase !== 'overlay') drawWorldModel(inst, model, C, 'opaque', null);
+  return floorZ;
+}
+
 // Guard tower — stone column with golden glow on top, drawn at market center.
 // Extracted from drawMarketStalls3D for clarity; uses early returns instead of deep nesting.
 function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
@@ -20392,7 +26012,23 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
   var bgz = bfh * 25;
   var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});
+  // landmarkBoundsGate (stage J2, models only; arguments[4] is their phase):
+  // a centre behind the camera or past 900 u is re-asked with the tower's
+  // bounds. The line above stays the audited centre gate (the audit lab's
+  // _SHOP_ZERO probe replaces it), so a reintroduced column/hill gate still
+  // rejects the tower.
+  if (!towerVis && arguments[4] !== undefined && typeof landmarkBoundsRescue === 'function')
+    towerVis = landmarkBoundsRescue(shopMarker.x, shopMarker.y, bgz, C, 900, 0.8, landmarkTowerRadius());
   if (!towerVis) return;
+  // landmarkModels: arguments[4] is the stall pass's phase. The model (on
+  // getEntityRenderFloorZ) draws in 'opaque'/'all' and then owns the body;
+  // the beacon stays a billboard for 'overlay'/'all', on the model's top. A
+  // camera in or at the tower keeps the legacy body, drawn with the beacon.
+  var towerPhase = arguments[4];
+  var towerModelZ = towerPhase !== undefined && typeof drawGuardTowerModel3D === 'function' ?
+    drawGuardTowerModel3D(C, towerPhase) : NaN;
+  if (towerPhase === 'opaque') return;
+  if (Number.isFinite(towerModelZ)) bgz = towerModelZ;
 
   var bDist = towerVis.dist;
   var bFwd = towerVis.fwd;
@@ -20416,7 +26052,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   }
 
   // Draw tower body, clipped to opaque scene depth at its nearest point
-  var towerClip = (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
+  var towerClip = !Number.isFinite(towerModelZ) && (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
   if (towerClip) withSceneDepthBillboard(towerClip.bounds, towerClip.depth, function() {
     ctx.save();
     var stoneLit = '#9b8b7b', stoneDark = '#6b5d4b', stoneTop = '#8b7d6b';
@@ -20539,10 +26175,19 @@ function drawCaveEntrance3D() {
   var STONE_SHADOW = stoneColors.shadow;
 
   var visibleCaves = [];
+  // landmarkBoundsGate (12-prop-models.js, stage J2): the portal's world
+  // bounds replace the 900 u and fwd < 1 centre checks (its faces are
+  // near-plane clipped), so a mouth seen sideways from inside still draws.
+  var portalBounds = typeof landmarkBoundsGateOn === 'function' && landmarkBoundsGateOn();
   for (var ei = 0; ei < deepCaveEntrances.length; ei++) {
     var ce = deepCaveEntrances[ei];
     var dx = ce.x - cam.x, dy = ce.y - cam.y;
     var dist = Math.hypot(dx, dy);
+    if (portalBounds) {
+      if (entityVisible3D(ce.x, ce.y, 0, C, {maxDist: 900, sceneDepth: true, fadeFraction: 1, worldRadius: landmarkPortalRadius(ce)}))
+        visibleCaves.push({ce: ce, dist: dist});
+      continue;
+    }
     if (dist < 1 || dist > 900) continue;
     var fwd = dx * C.cosAng + dy * C.sinAng;
     if (fwd < 1) continue;
@@ -21609,6 +27254,12 @@ function drawHudOverlay() {
     ctx.fillStyle = _fpsSmooth > 45 ? '#44ff44' : _fpsSmooth > 25 ? '#ffcc00' : '#ff4444';
     var _fpsY = pad + (ENDLESS_MODE ? (DEBUG_3D ? 86 : 52) : 26) * S;
     ctx.fillText(Math.round(_fpsSmooth) + ' FPS', w - pad, _fpsY);
+    // Render path A/B line (visible in fullscreen): preset, texture use, fallbacks.
+    if (typeof renderHudStatusLine === 'function') {
+      ctx.font = Math.max(8, Math.floor(9 * S)) + 'px monospace';
+      ctx.fillStyle = '#c8d4e8';
+      ctx.fillText(renderHudStatusLine(), w - pad, _fpsY + 12 * S);
+    }
   }
 
   // Inventory overlay (I key toggle)
@@ -21825,14 +27476,21 @@ function applySettings() {
       requestAnimationFrame(function() { assembleWindow(_rebuildPcx, _rebuildPcy); });
     }
   }
-  // Resolution scaling — apply to canvas if in fullscreen
+  // Resolution scaling — apply to canvas if in fullscreen. Entering
+  // fullscreen uses the same size rule, including the fullscreen row cap.
   var fs = document.fullscreenElement || document.webkitFullscreenElement
          || document.mozFullScreenElement || document.msFullscreenElement;
   if (fs === canvas) {
     var baseW = window.innerWidth || screen.width;
     var baseH = window.innerHeight || screen.height;
-    canvas.width  = Math.floor(baseW * settings.resolution);
-    canvas.height = Math.floor(baseH * settings.resolution);
+    if (typeof fullscreenCanvasSize === 'function') {
+      var fsSize = fullscreenCanvasSize(baseW, baseH, settings.resolution, settings.fullscreenRows);
+      canvas.width = fsSize.width;
+      canvas.height = fsSize.height;
+    } else {
+      canvas.width  = Math.floor(baseW * settings.resolution);
+      canvas.height = Math.floor(baseH * settings.resolution);
+    }
   }
 }
 
@@ -22987,17 +28645,39 @@ function draw() {
     _floorCacheTick = (_floorCacheTick + 1) | 0;  // invalidate floor cache each frame
     _pt('lightGrid', function(){ if ((++_lightGridFrameCount) % 5 === 0) updateLightGrid(); });
     beginSceneDepthFrame(canvas.width, canvas.height);
+    if (typeof beginRenderFrameStats === 'function') beginRenderFrameStats();
     _pt('skybox3D', function(){ drawSkybox3D(); });
     _pt('ceiling3D', function(){ if (!DEBUG_HIDE_CEIL) drawLayersCeiling3D(); });
     _pt('platforms3D', function(){ if (!DEBUG_HIDE_PLATS) drawLayersFloor3D(); });
+    // Structure models (12-structure-models.js): opaque and depth-writing,
+    // before walls3D paints its canopies and fade band over them.
+    if (typeof structureModelsPassWanted === 'function' && structureModelsPassWanted())
+      _pt('structureModels3D', function(){ if (!DEBUG_HIDE_WALLS) drawStructureModels3D(); });
     _pt('walls3D', function(){ if (!DEBUG_HIDE_WALLS) drawWalls3D(); });
     _pt('caveEntrance3D', function(){ drawCaveEntrance3D(); });
+    // landmarkOpaqueEarly (12-prop-models.js): ruin faces and structure
+    // shells write depth here, before any prop or sprite; the late ruins3D
+    // and structures3D stages then draw only their depth-clipped overlays.
+    // With landmarkModels (stage J1) the stall, guard tower, shrine and keep
+    // prop models draw here too, and marketStalls3D and shrines3D keep only
+    // their overlays.
+    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())
+      _pt('landmarkOpaque3D', function(){ drawLandmarkOpaque3D(); });
+    // Opaque first: every family's depth-writing model parts, then every
+    // family's billboards and legacy sprites in the same order. A family
+    // whose model feature is off draws nothing in the opaque phase and all
+    // of its legacy work in the overlay phase, in today's order.
     _pt('sceneEntities', function(){
-      drawFloorScatter3D();
-      drawTreasureChests3D();
-      drawEnemySpawners3D();
-      drawOreVeins();
-      drawWallDecorations();
+      drawFloorScatter3D('opaque');
+      drawTreasureChests3D('opaque');
+      drawEnemySpawners3D('opaque');
+      drawOreVeins('opaque');
+      drawWallDecorations('opaque');
+      drawFloorScatter3D('overlay');
+      drawTreasureChests3D('overlay');
+      drawEnemySpawners3D('overlay');
+      drawOreVeins('overlay');
+      drawWallDecorations('overlay');
     });
     _pt('goalMarker3D', function(){ drawGoalMarker3D(); });
   } else {
@@ -25175,6 +30855,21 @@ function drawPerfHud() {
     lines.push('enemies: ' + (enemies ? enemies.length : 0) +
                '   proj: ' + (projectiles ? projectiles.length : 0) +
                '   impacts: ' + (impacts ? impacts.length : 0));
+    // Render-feature counters: every numeric per-frame field, generically, so
+    // a new counter needs no HUD edit.
+    if (typeof getRenderFeatureStats === 'function') {
+      var rStats = getRenderFeatureStats();
+      lines.push('─── RENDER ' + rStats.preset + ' · textures ' + (rStats.textures ? 'on' : 'off') +
+                 ' · ' + rStats.canvas + ' ───');
+      for (var rKey in rStats.frame) {
+        var rValue = rStats.frame[rKey];
+        if (typeof rValue !== 'number') continue;
+        lines.push((rKey + '                  ').slice(0, 18) + ' ' +
+                   (Number.isInteger(rValue) ? String(rValue) : rValue.toFixed(2)));
+      }
+      var rFeatures = Object.keys(rStats.features);
+      if (rFeatures.length) lines.push('features: ' + rFeatures.map(function(k) { return k + '=' + rStats.features[k]; }).join(' '));
+    }
     if (performance && performance.memory) {
       var used = performance.memory.usedJSHeapSize / 1048576;
       var lim = performance.memory.jsHeapSizeLimit / 1048576;
@@ -26203,7 +31898,9 @@ async function startCaveBrowserProfile(mode) {
       'Stage times are inclusive; do not add parent draw() to its children.',
       'Ambient particles, exploration and lighting are canonical temporary inputs; real-world references are restored afterward.',
       job.verifyPixels?'Pixel verification can change the browser Canvas backend; reload before a fresh performance comparison.':'Pixel verification is disabled; no main-canvas readback is performed.',
-      mode==='viewport-size'?'Viewport-size fallback is not native fullscreen.':'No resolution or quality reduction was applied.'];
+      mode==='viewport-size'?'Viewport-size fallback is not native fullscreen.':
+        mode==='fullscreen'?'Native fullscreen follows the Resolution setting ('+settings.resolution+') and the fullscreen row cap ('+settings.fullscreenRows+').':
+        'No resolution or quality reduction was applied.'];
   }catch(error){
     result.status=job.cancelReason?'cancelled':'failed';result.reason=error.message||String(error);
     result.completedSamples=job.renderMs.length;
@@ -27356,6 +33053,10 @@ function prepareGameRun() {
   dashUntil = 0; dashCooldownUntil = 0; dashFovPunch = 0;
   jumpVelZ = 0; jumpAirborne = false;
   resetSimulationFrame();
+  // Stage E: build the texture catalog before the first frame (a one-time
+  // cost); the first engaged frame builds it lazily otherwise.
+  if (typeof worldTexturesWanted === 'function' && worldTexturesWanted() &&
+      typeof ensureWorldTextureCatalog === 'function') ensureWorldTextureCatalog();
 }
 
 function startGame() {
@@ -27487,6 +33188,326 @@ function stopLogPoller() {
   if (__gamesLogPoll) { try { clearInterval(__gamesLogPoll); } catch (_) {} __gamesLogPoll = null; }
 }
 // =============================================
+// LANDMARK FINDER (developer action)
+// =============================================
+// "Go to nearest landmark" finds the nearest fortress, arena or watchtower
+// with the generator's own region rule (05-endless-world.js, "Multi-chunk
+// structures"), assembles that window as a walk-in would, and lands the
+// player on an open, walkable surface cell outside the structure footprint.
+// It is user-invoked only (Graphics row or window.goToNearestLandmark); the
+// only load-time work is registering the action. On any failure the player
+// is returned to the starting window and position.
+var LANDMARK_REGION_CHUNKS = 3;      // generator: every 3x3 chunks is a region
+var LANDMARK_FINDER_MAX_RINGS = 24;  // regions searched outward from the player
+var LANDMARK_LANDING_GAP = {min: 48, target: 160, max: 480, far: 720}; // world units outside the footprint
+var LANDMARK_SPAWNER_GAP = 340;      // spawners wake within 300 u with line of sight (19-companions-loot.js)
+var LANDMARK_SAFE_SECONDS = 4;       // preferred straight-line walk time for the nearest enemy
+// Per run: landmarks already visited (the next press cycles onward) and ones
+// that could not be reached (skipped until the cycle wraps).
+var _landmarkFinderVisited = {seed: null, keys: [], failed: []};
+function resetLandmarkFinder() { _landmarkFinderVisited = {seed: null, keys: [], failed: []}; }
+
+// The generator's presence rule, biome exclusion and type roll for one
+// region, without generating any chunk. Null when the region has none.
+function landmarkRegionStructure(rX, rY) {
+  if (rX === 0 && rY === 0) return null;              // none near spawn
+  if (CAVE_TEST_MODE && !caveTestFlags.structures) return null;
+  var rng = chunkRng(rX, rY, 80);
+  if (rng() > 0.012) return null;
+  var cx = rX * LANDMARK_REGION_CHUNKS + Math.floor(LANDMARK_REGION_CHUNKS / 2);
+  var cy = rY * LANDMARK_REGION_CHUNKS + Math.floor(LANDMARK_REGION_CHUNKS / 2);
+  var wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2, wy = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
+  var biome = getBiomeAt(wx, wy);
+  if (biome === 'cave' || biome === 'ice') return null;
+  var roll = rng(), type;
+  if (biome === 'expanse') type = roll < 0.25 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
+  else if (biome === 'ground') type = roll < 0.5 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
+  else if (biome === 'forest') type = roll < 0.55 ? 'fortress' : roll < 0.70 ? 'arena' : 'watchtower';
+  else type = roll < 0.4 ? 'fortress' : roll < 0.7 ? 'arena' : 'watchtower';
+  return {regionX: rX, regionY: rY, centerCX: cx, centerCY: cy, centerWX: wx, centerWY: wy,
+    type: type, scale: 0.85 + rng() * 0.3, biome: biome};
+}
+
+// Nearest structure centre by straight-line distance, ring by ring. A region
+// k rings out is at least (k - 0.5) region spans away, so the search stops
+// once a closer candidate cannot exist.
+function findNearestLandmarkRegion(fromWX, fromWY, options) {
+  options = options || {};
+  var span = LANDMARK_REGION_CHUNKS * CHUNK_SIZE, exclude = options.exclude || [];
+  var baseX = Math.floor(fromWX / span), baseY = Math.floor(fromWY / span);
+  var maxRings = options.maxRings || LANDMARK_FINDER_MAX_RINGS, best = null, bestDist = Infinity;
+  for (var ring = 0; ring <= maxRings; ring++) {
+    if (best && (ring - 1) * span > bestDist) break;
+    for (var dy = -ring; dy <= ring; dy++) {
+      for (var dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+        var found = landmarkRegionStructure(baseX + dx, baseY + dy);
+        if (!found || (options.type && found.type !== options.type)) continue;
+        if (exclude.indexOf(found.regionX + ',' + found.regionY) >= 0) continue;
+        var d = Math.hypot(found.centerWX - fromWX, found.centerWY - fromWY);
+        if (d < bestDist) { best = found; bestDist = d; }
+      }
+    }
+  }
+  if (best) best.distance = bestDist;
+  return best;
+}
+
+function landmarkFinderBlockedReason() {
+  if (!ENDLESS_MODE || !grid || !floorMesh || !floorMesh.layerCount) return 'Start Endless Mode first.';
+  if (gameOverState) return 'The run is over.';
+  if (CAVE_TEST_MODE && !caveTestFlags.structures) return 'Cave Test has structures turned off.';
+  if (arenaChallenge) return 'Finish the arena challenge first.';
+  if (shopOpen || forgeOpen || settingsOpen) return 'Close the open panel first.';
+  if (typeof _caveBrowserProfile !== 'undefined' && _caveBrowserProfile) return 'A browser profile is running.';
+  if (typeof _castingStudio !== 'undefined' && _castingStudio) return 'Close Casting studio first.';
+  if (typeof caveVisibilityFixturesEnabled === 'function' && caveVisibilityFixturesEnabled()) return 'Turn off visibility fixtures first.';
+  return '';
+}
+
+function landmarkInWindow(target) {
+  for (var i = 0; i < largeStructures.length; i++) {
+    var st = largeStructures[i];
+    if (st.regionX === target.regionX && st.regionY === target.regionY) return st;
+  }
+  return null;
+}
+
+// Open, flat, walkable surface at a window cell centre: returns the support
+// height, or null. The 5x5 block is free of solid cells (at least 30 u to the
+// nearest wall), the top walkable layer has no roof over it (the test that
+// sets playerUnderground; open ground may sit below height 0), its 3x3
+// neighbours are within 0.3 of it, and no water, entrance reserve, stall or
+// enemy is there, nor a live spawner within waking range.
+function landmarkLandingCell(gx, gy) {
+  if (gx < 2 || gy < 2 || gx >= gridW - 2 || gy >= gridH - 2) return null;
+  for (var oy = -2; oy <= 2; oy++) {
+    for (var ox = -2; ox <= 2; ox++) if (grid[(gy + oy) * gridW + gx + ox]) return null;
+  }
+  var mesh = floorMesh;
+  if (!mesh || !mesh.layerCount || mesh.gridSize !== cell || gx >= mesh.w || gy >= mesh.h) return null;
+  var li = getTopWalkableLayerIdx(gx, gy);
+  if (li < 0) return null;
+  var i = gy * mesh.w + gx, h = meshLayerHeight(mesh, i, li);
+  if (!Number.isFinite(h)) return null;
+  var x = (gx + 0.5) * cell, y = (gy + 0.5) * cell;
+  if (getCaveSpaceAt(x, y, h).underground) return null;
+  if (mesh.water && mesh.water[i]) return null;
+  if (inEntranceReserve(x, y)) return null;
+  for (var ny = -1; ny <= 1; ny++) {
+    for (var nx = -1; nx <= 1; nx++) {
+      var lj = getTopWalkableLayerIdx(gx + nx, gy + ny);
+      if (lj < 0 || Math.abs(meshLayerHeight(mesh, (gy + ny) * mesh.w + gx + nx, lj) - h) > 0.3) return null;
+    }
+  }
+  for (var si = 0; si < marketStalls.length; si++) {
+    if (Math.hypot(marketStalls[si].x - x, marketStalls[si].y - y) < 48) return null;
+  }
+  for (var ei = 0; ei < enemies.length; ei++) {
+    if (Math.hypot(enemies[ei].x - x, enemies[ei].y - y) < 36) return null;
+  }
+  for (var pi = 0; pi < enemySpawners.length; pi++) {
+    var sp = enemySpawners[pi];
+    if (sp.active && sp.hp > 0 && Math.hypot(sp.x - x, sp.y - y) < LANDMARK_SPAWNER_GAP) return null;
+  }
+  return h;
+}
+
+// Seconds the quickest live enemy needs to walk straight to within 40 u of
+// (x, y); walls are ignored, which errs toward caution.
+function landmarkEnemyArrival(x, y) {
+  var soonest = Infinity;
+  for (var ei = 0; ei < enemies.length; ei++) {
+    var e = enemies[ei];
+    if (!(e.health > 0) || !(e.speed > 0)) continue;
+    soonest = Math.min(soonest, Math.max(0, Math.hypot(e.x - x, e.y - y) - 40) / e.speed);
+  }
+  return soonest;
+}
+
+// Convex hull (counter-clockwise) of the footprint: structure-coloured solid
+// cells inside the generator's overlap box. Convex, so arena gates and
+// courtyards count as inside. Null when no footprint cell is in the window.
+function landmarkFootprintHull(st) {
+  var half = CHUNK_SIZE * (st.type === 'fortress' ? 1.8 : st.type === 'arena' ? 1.3 : 1.5) * (st.scale || 1);
+  var x0 = Math.max(0, Math.floor((st.x - half) / cell)), x1 = Math.min(gridW - 1, Math.floor((st.x + half) / cell));
+  var y0 = Math.max(0, Math.floor((st.y - half) / cell)), y1 = Math.min(gridH - 1, Math.floor((st.y + half) / cell));
+  var pts = [];
+  for (var gy = y0; gy <= y1; gy++) {        // a row's outermost cells carry its hull corners
+    var lo = -1, hi = -1;
+    for (var gx = x0; gx <= x1; gx++) {
+      var i = gy * gridW + gx;
+      if (grid[i] && (wallColorR[i] | wallColorG[i] | wallColorB[i])) { if (lo < 0) lo = gx; hi = gx; }
+    }
+    if (lo >= 0) pts.push([lo * cell, gy * cell], [lo * cell, (gy + 1) * cell], [(hi + 1) * cell, gy * cell], [(hi + 1) * cell, (gy + 1) * cell]);
+  }
+  if (!pts.length) return null;
+  pts.sort(function(a, b) { return a[0] - b[0] || a[1] - b[1]; });
+  function turn(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+  var lower = [], upper = [];
+  for (var k = 0; k < pts.length; k++) {
+    while (lower.length > 1 && turn(lower[lower.length - 2], lower[lower.length - 1], pts[k]) <= 0) lower.pop();
+    lower.push(pts[k]);
+  }
+  for (var j = pts.length - 1; j >= 0; j--) {
+    while (upper.length > 1 && turn(upper[upper.length - 2], upper[upper.length - 1], pts[j]) <= 0) upper.pop();
+    upper.push(pts[j]);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+// Distance from (x, y) to the hull; negative inside it.
+function landmarkHullGap(hull, x, y) {
+  var inside = true, best = Infinity;
+  for (var k = 0; k < hull.length; k++) {
+    var a = hull[k], b = hull[(k + 1) % hull.length], ex = b[0] - a[0], ey = b[1] - a[1], px = x - a[0], py = y - a[1];
+    if (ex * py - ey * px < 0) inside = false;
+    var t = Math.max(0, Math.min(1, (px * ex + py * ey) / (ex * ex + ey * ey)));
+    best = Math.min(best, Math.hypot(px - t * ex, py - t * ey));
+  }
+  return inside ? -best : best;
+}
+
+// Pick a landing 48-480 u outside the footprint hull (up to `far`, inside
+// viewDist, only when nothing nearer is safe). Safety comes first: a cell no
+// enemy can reach within LANDMARK_SAFE_SECONDS beats every other; then the
+// nearer ring; then the cell closest to 160 u out on the side the player
+// came from. `hull` may be passed in (window coordinates) when the window no
+// longer holds the whole footprint.
+function chooseLandmarkLanding(st, approachAngle, bounds, hull) {
+  hull = hull || landmarkFootprintHull(st);
+  if (!hull) return null;
+  var maxGap = Math.max(LANDMARK_LANDING_GAP.max, Math.min(LANDMARK_LANDING_GAP.far, viewDist - 120));
+  var reach = 0, best = null;
+  for (var k = 0; k < hull.length; k++) reach = Math.max(reach, Math.hypot(hull[k][0] - st.x, hull[k][1] - st.y));
+  reach += maxGap + cell;
+  var cx0 = Math.max(2, Math.floor((st.x - reach) / cell)), cx1 = Math.min(gridW - 3, Math.floor((st.x + reach) / cell));
+  var cy0 = Math.max(2, Math.floor((st.y - reach) / cell)), cy1 = Math.min(gridH - 3, Math.floor((st.y + reach) / cell));
+  if (bounds) {
+    cx0 = Math.max(cx0, bounds.gx0); cx1 = Math.min(cx1, bounds.gx1);
+    cy0 = Math.max(cy0, bounds.gy0); cy1 = Math.min(cy1, bounds.gy1);
+  }
+  for (var cy = cy0; cy <= cy1; cy++) {
+    for (var cx = cx0; cx <= cx1; cx++) {
+      var x = (cx + 0.5) * cell, y = (cy + 0.5) * cell, dx = x - st.x, dy = y - st.y;
+      if (Math.hypot(dx, dy) > reach) continue;
+      var gap = landmarkHullGap(hull, x, y);
+      if (gap < LANDMARK_LANDING_GAP.min || gap > maxGap) continue;
+      var score = Math.abs(gap - LANDMARK_LANDING_GAP.target) + (gap > LANDMARK_LANDING_GAP.max ? 1000 : 0);
+      var off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - approachAngle), Math.cos(Math.atan2(dy, dx) - approachAngle)));
+      score += off * 120;
+      if (best && score >= best.score) continue;
+      var h = landmarkLandingCell(cx, cy);
+      if (h === null) continue;
+      var arrival = landmarkEnemyArrival(x, y);
+      if (arrival < LANDMARK_SAFE_SECONDS) score += 3000 + (LANDMARK_SAFE_SECONDS - arrival) * 250;
+      if (!best || score < best.score) best = {gx: cx, gy: cy, x: x, y: y, h: h, gap: gap, score: score, arrival: arrival};
+    }
+  }
+  return best;
+}
+
+function landmarkFinderReturnHome(home) {
+  try {
+    var half = Math.floor(WINDOW_CHUNKS / 2);
+    if (windowCX + half !== home.cx || windowCY + half !== home.cy) assembleWindow(home.cx, home.cy);
+  } catch (e) {
+    console.error('[LANDMARK] could not restore the starting window:', e && e.message);
+  }
+  pos.x = home.x - windowOriginX; pos.y = home.y - windowOriginY; pos.floorZ = home.floorZ;
+  vel.x = 0; vel.y = 0;
+  cam.x = pos.x; cam.y = pos.y; cam.z = pos.floorZ; cam.ang = home.ang; cam.pitch = home.pitch;
+  resetRenderInterpolation();
+}
+
+function goToNearestLandmark(options) {
+  options = options || {};
+  var blocked = landmarkFinderBlockedReason();
+  if (blocked) return {ok: false, reason: blocked};
+  var memo = _landmarkFinderVisited;
+  if (memo.seed !== WORLD_SEED) { resetLandmarkFinder(); memo = _landmarkFinderVisited; memo.seed = WORLD_SEED; }
+  var fromX = pos.x + windowOriginX, fromY = pos.y + windowOriginY;
+  var search = {type: options.type, maxRings: options.maxRings, exclude: options.revisit ? [] : memo.keys.concat(memo.failed)};
+  var target = findNearestLandmarkRegion(fromX, fromY, search);
+  if (!target && search.exclude.length) {
+    memo.keys = []; memo.failed = []; search.exclude = [];   // all visited or failed: start the cycle again
+    target = findNearestLandmarkRegion(fromX, fromY, search);
+  }
+  if (!target) {
+    return {ok: false, reason: 'No ' + (options.type || 'landmark') + ' within ' +
+      (options.maxRings || LANDMARK_FINDER_MAX_RINGS) + ' regions.'};
+  }
+  var half = Math.floor(WINDOW_CHUNKS / 2), key = target.regionX + ',' + target.regionY;
+  var home = {cx: windowCX + half, cy: windowCY + half, x: fromX, y: fromY,
+    floorZ: pos.floorZ, ang: cam.ang, pitch: cam.pitch};
+  if (typeof cancelPendingMissileCasts === 'function') cancelPendingMissileCasts(true);
+  var st = null, landing = null, failure = '';
+  try {
+    assembleWindow(target.centerCX, target.centerCY);
+    st = landmarkInWindow(target);
+    var hull = st && landmarkFootprintHull(st), hullOX = windowOriginX, hullOY = windowOriginY;   // whole footprint in this window
+    if (!st) failure = 'the generator placed no structure there';
+    else landing = chooseLandmarkLanding(st, Math.atan2(fromY - st.centerWY, fromX - st.centerWX), null, hull);
+    if (st && !landing) failure = 'no open walkable surface cell outside it';
+    if (landing) {
+      // Centre the window on the landing chunk, exactly as walking there would.
+      var lwx = landing.x + windowOriginX, lwy = landing.y + windowOriginY;
+      var lcx = Math.floor(lwx / CHUNK_SIZE), lcy = Math.floor(lwy / CHUNK_SIZE);
+      if (lcx !== windowCX + half || lcy !== windowCY + half) assembleWindow(lcx, lcy);
+      st = landmarkInWindow(target);
+      var gx = Math.floor((lwx - windowOriginX) / cell), gy = Math.floor((lwy - windowOriginY) / cell);
+      // Keep the cell if it is still open and no newly loaded enemy is closer in time.
+      if (st && landmarkLandingCell(gx, gy) !== null &&
+          landmarkEnemyArrival(lwx - windowOriginX, lwy - windowOriginY) >= Math.min(landing.arrival, LANDMARK_SAFE_SECONDS)) {
+        landing = {gx: gx, gy: gy, x: lwx - windowOriginX, y: lwy - windowOriginY, gap: landing.gap};
+      } else if (st) {
+        // Choose again inside the new window's centre chunk only, so the next
+        // updateChunks() does not re-centre again, against the first window's
+        // hull (this window may cut the footprint off).
+        var c0 = half * CHUNK_CELLS;
+        landing = chooseLandmarkLanding(st, Math.atan2(fromY - st.centerWY, fromX - st.centerWX),
+          {gx0: c0, gx1: c0 + CHUNK_CELLS - 1, gy0: c0, gy1: c0 + CHUNK_CELLS - 1},
+          hull.map(function(p) { return [p[0] + hullOX - windowOriginX, p[1] + hullOY - windowOriginY]; }));
+        if (!landing) failure = 'the landing cell changed after re-centring';
+      } else {
+        landing = null; failure = 'the structure left the window after re-centring';
+      }
+    }
+  } catch (e) {
+    landing = null; failure = 'window assembly failed: ' + (e && e.message || e);
+  }
+  if (!landing) {
+    landmarkFinderReturnHome(home);
+    if (memo.failed.indexOf(key) < 0) memo.failed.push(key);   // the next press moves on
+    return {ok: false, reason: 'Could not reach the ' + target.type + ' in region ' + key + ': ' + failure + '.', target: target};
+  }
+  pos.x = landing.x; pos.y = landing.y;
+  settlePlayerAtSpawn(true);                 // support height, no vertical motion, camera follows
+  if (typeof clearGameplayInput === 'function') clearGameplayInput();
+  vel.x = 0; vel.y = 0; jumpVelZ = 0; jumpAirborne = false; jumpPressed = false; dashPressed = false;
+  cam.ang = Math.atan2(st.y - pos.y, st.x - pos.x); cam.pitch = 0;
+  updateChunks();                            // walk-in bookkeeping (biome physics); already centred
+  resetRenderInterpolation();                // a teleport, not motion to blend
+  memo.keys.push(key);
+  var arrival = landmarkEnemyArrival(pos.x, pos.y), safe = arrival >= LANDMARK_SAFE_SECONDS;
+  var message = 'Landed ' + Math.round(landing.gap) + ' u outside ' + (st.type === 'arena' ? 'an ' : 'a ') + st.type + ' (region ' + key + ', ' +
+    Math.round(Math.hypot(st.x - pos.x, st.y - pos.y)) + ' u to its centre).' +
+    (safe ? '' : ' No calmer spot: an enemy can reach you in ' + arrival.toFixed(1) + ' s.');
+  if (typeof pushToast === 'function') pushToast('Landmark: ' + st.type + ' ahead' + (safe ? '' : ' (enemies close)'), '#ffd27f', 2500);
+  return {ok: true, message: message, type: st.type, predictedType: target.type, safe: safe, enemySeconds: arrival,
+    regionX: target.regionX, regionY: target.regionY, gap: landing.gap,
+    landing: {x: pos.x, y: pos.y, wx: pos.x + windowOriginX, wy: pos.y + windowOriginY, floorZ: pos.floorZ},
+    centerDistance: Math.hypot(st.x - pos.x, st.y - pos.y)};
+}
+
+if (typeof defineRenderAction === 'function') {
+  defineRenderAction({key: 'goToNearestLandmark', label: 'Go to nearest landmark',
+    title: 'Developer teleport: loads the nearest fortress, arena or watchtower as a walk-in would and lands outside it. Press again for the next one.',
+    run: function(options) { return goToNearestLandmark(options); }});
+}
+// Console: goToNearestLandmark({type:'arena'}) is already a window property.
+// =============================================
 // SECTION 19: EVENT LISTENERS & INIT
 // =============================================
 
@@ -27508,6 +33529,17 @@ function isGamePageControlTarget(target) {
   var tag = (target.tagName || '').toLowerCase();
   return target.isContentEditable || /^(input|textarea|select|button|a)$/.test(tag) ||
     !!(target.closest && target.closest('[contenteditable="true"],button,a'));
+}
+
+function handleRenderPresetHotkey(e) {
+  if (e.key !== 'g' && e.key !== 'G') return false;
+  if (e.defaultPrevented || isGamePageControlTarget(e.target)) return false;
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || shopOpen || settingsOpen) return false;
+  if (typeof toggleRenderPreset !== 'function') return false;
+  var preset = toggleRenderPreset();
+  pushToast('Render: ' + (preset === 'legacy' ? 'Legacy (reference)' : 'Recommended') + ' \u00b7 G to switch', '#9fd0ff', 1800);
+  e.preventDefault();
+  return true;
 }
 
 function requestGamePointerLock() {
@@ -27727,10 +33759,139 @@ function previewCaveView(view) {
 
 document.getElementById('btnView2D').addEventListener('click', function() { MODE3D = false; if (overviewActive) toggleOverview(); });
 document.getElementById('btnView3D').addEventListener('click', function() { MODE3D = true; if (overviewActive) toggleOverview(); });
+// Texture master: textured render paths engage only while USE_TEXTURES is on.
 document.getElementById('btnToggleTex').addEventListener('click', function() {
   USE_TEXTURES = !USE_TEXTURES;
   this.textContent = USE_TEXTURES ? 'Disable Textures' : 'Enable Textures';
+  if (typeof _notifyRenderFeatures === 'function') _notifyRenderFeatures('textures', USE_TEXTURES ? 'on' : 'off');
 });
+
+// ── Graphics row, generated from the render-feature registry ──
+// Features and actions registered by any fragment appear here, so later
+// stages never edit page.html. Values live in memory only (see 01-config).
+var _renderFeaturesRowControls = null;
+function renderFeatureControlValue(def, raw) {
+  // DOM controls report strings; map back to the declared value.
+  for (var i = 0; i < def.values.length; i++) if (String(def.values[i]) === String(raw)) return def.values[i];
+  return undefined;
+}
+function renderFeatureStatus(text) {
+  var status = _renderFeaturesRowControls && _renderFeaturesRowControls.status;
+  if (status) status.textContent = text;
+}
+// Hand keyboard focus back to the game after a Graphics-row control is used.
+// A focused control swallows game keys, and Space would re-click a focused
+// action button (the landmark finder would teleport again on every jump).
+function releaseGamePageControl(control) {
+  if (control && typeof control.blur === 'function') control.blur();
+}
+function runRenderActionFromUi(key) {
+  var result;
+  try { result = runRenderAction(key); }
+  catch (e) { result = {ok: false, reason: e && e.message || String(e)}; }
+  var text = result && result.ok ? (result.message || 'Done.') : 'Not done: ' + (result && result.reason || 'no result');
+  renderFeatureStatus(text);
+  if (!(result && result.ok)) pushToast(text, '#ffb080', 3500);
+  return result;
+}
+function buildRenderFeaturesRow() {
+  var row = document.getElementById('renderFeaturesRow');
+  if (!row || typeof RENDER_FEATURE_DEFS === 'undefined') return null;
+  row.textContent = '';
+  function make(tag, text) { var node = document.createElement(tag); if (text !== undefined) node.textContent = text; return node; }
+  function labelled(text, control, title) {
+    var label = make('label');
+    label.title = title || '';
+    label.style.cssText = 'display:inline-flex;align-items:center;gap:4px;cursor:pointer';
+    label.appendChild(make('span', text)); label.appendChild(control);
+    row.appendChild(label);
+    return control;
+  }
+  function option(select, value, text) {
+    var node = make('option', text); node.value = String(value); select.appendChild(node); return node;
+  }
+  var controls = {features: {}, custom: null, preset: null, rows: null, status: null};
+  var heading = make('strong', 'Graphics');
+  row.appendChild(heading);
+  controls.preset = labelled('Render', make('select'), 'Recommended uses every verified render path; Legacy is the pre-integration reference. G toggles them.');
+  option(controls.preset, 'recommended', 'Recommended');
+  option(controls.preset, 'legacy', 'Legacy');
+  controls.custom = option(controls.preset, 'custom', 'Custom');
+  controls.custom.disabled = true;
+  controls.preset.addEventListener('change', function() {
+    if (this.value === 'recommended' || this.value === 'legacy') applyRenderPreset(this.value);
+    releaseGamePageControl(this);
+  });
+  RENDER_FEATURE_DEFS.forEach(function(def) {
+    var control;
+    if (def.type === 'bool') {
+      control = make('input'); control.type = 'checkbox';
+      var box = make('label');
+      box.title = def.title;
+      box.style.cssText = 'display:inline-flex;align-items:center;gap:4px;cursor:pointer';
+      box.appendChild(control); box.appendChild(make('span', def.label));
+      row.appendChild(box);
+      control.addEventListener('change', function() { setRenderFeature(def.key, !!this.checked); releaseGamePageControl(this); });
+    } else {
+      control = labelled(def.label, make('select'), def.title);
+      def.values.forEach(function(value) { option(control, value, String(value)); });
+      control.addEventListener('change', function() {
+        var value = renderFeatureControlValue(def, this.value);
+        if (value !== undefined) setRenderFeature(def.key, value);
+        releaseGamePageControl(this);
+      });
+    }
+    controls.features[def.key] = control;
+  });
+  if (!RENDER_FEATURE_DEFS.length) row.appendChild(make('span', '(no switchable render paths yet)'));
+  controls.rows = labelled('Fullscreen rows', make('select'), 'Caps the fullscreen canvas height after the Resolution setting; Native keeps the scaled screen size.');
+  FULLSCREEN_ROW_CHOICES.forEach(function(value) { option(controls.rows, value, value === 'native' ? 'Native' : String(value)); });
+  controls.rows.addEventListener('change', function() {
+    var value = this.value === 'native' ? 'native' : Number(this.value);
+    if (FULLSCREEN_ROW_CHOICES.indexOf(value) < 0) return;
+    settings.fullscreenRows = value;
+    applyFullscreenCanvasSize();
+    syncRenderFeaturesRow();
+    releaseGamePageControl(this);
+  });
+  RENDER_ACTIONS.forEach(function(action) {
+    var button = make('button', action.label);
+    button.className = 'btn btn-small'; button.title = action.title;
+    button.addEventListener('click', function() { releaseGamePageControl(this); runRenderActionFromUi(action.key); });
+    row.appendChild(button);
+  });
+  controls.status = make('output');
+  controls.status.style.cssText = 'color:#b9c8d8';
+  row.appendChild(controls.status);
+  _renderFeaturesRowControls = controls;
+  syncRenderFeaturesRow();
+  return controls;
+}
+function syncRenderFeaturesRow() {
+  var controls = _renderFeaturesRowControls;
+  if (!controls) return;
+  var preset = renderPresetName();
+  controls.custom.disabled = preset !== 'custom';
+  controls.preset.value = preset;
+  RENDER_FEATURE_DEFS.forEach(function(def) {
+    var control = controls.features[def.key];
+    if (!control) return;
+    if (def.type === 'bool') control.checked = RENDER_FEATURES[def.key] === true;
+    else control.value = String(RENDER_FEATURES[def.key]);
+  });
+  controls.rows.value = String(settings.fullscreenRows);
+}
+if (typeof onRenderFeaturesChange === 'function') {
+  onRenderFeaturesChange(function(kind) {
+    // A definition or action added after the row exists rebuilds it.
+    if (kind === 'define' || kind === 'action') { if (_renderFeaturesRowControls) buildRenderFeaturesRow(); return; }
+    syncRenderFeaturesRow();
+    // A render switch invalidates a running profile, and paused fixtures redraw.
+    if (typeof cancelCaveBrowserProfile === 'function') cancelCaveBrowserProfile();
+    if (caveVisibilityFixturesEnabled()) drawCaveVisibilityFixtures();
+  });
+  buildRenderFeaturesRow();
+}
 document.getElementById('btnOverview').addEventListener('click', function() { toggleOverview(); });
 document.getElementById('btnEndless').addEventListener('click', function() {
   prepareGameRun();
@@ -27902,6 +34063,10 @@ document.getElementById('chkPolyTypes').addEventListener('change', function() { 
     if (isGamePageControlTarget(e.target)) return;
     if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); e.preventDefault(); }
   });
+
+  // G — Recommended/Legacy render A/B at the current view. Presentation only:
+  // never world data, simulation, resolution or the random streams.
+  document.addEventListener('keydown', handleRenderPresetHotkey);
 
   document.addEventListener('keydown', function(e) {
     if (isGamePageControlTarget(e.target)) return;
@@ -28114,7 +34279,7 @@ if (chkTextures) { USE_TEXTURES = true; chkTextures.textContent = 'Disable Textu
 var chk3dDebug = document.getElementById('chk3dDebug');
 if (chk3dDebug) { chk3dDebug.checked = false; DEBUG_3D = false; }
 var chkTexDebug = document.getElementById('chkTexDebug');
-if (chkTexDebug) { chkTexDebug.checked = true; DEBUG_TEXTURE = true; }
+if (chkTexDebug) { chkTexDebug.checked = false; DEBUG_TEXTURE = false; }
 var chkFloorDebug = document.getElementById('chkFloorDebug');
 if (chkFloorDebug) { chkFloorDebug.checked = false; DEBUG_FLOOR = false; }
 var chkDecorDebug = document.getElementById('chkDecorDebug');

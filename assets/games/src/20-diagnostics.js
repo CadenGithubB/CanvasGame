@@ -436,6 +436,21 @@ function drawPerfHud() {
     lines.push('enemies: ' + (enemies ? enemies.length : 0) +
                '   proj: ' + (projectiles ? projectiles.length : 0) +
                '   impacts: ' + (impacts ? impacts.length : 0));
+    // Render-feature counters: every numeric per-frame field, generically, so
+    // a new counter needs no HUD edit.
+    if (typeof getRenderFeatureStats === 'function') {
+      var rStats = getRenderFeatureStats();
+      lines.push('─── RENDER ' + rStats.preset + ' · textures ' + (rStats.textures ? 'on' : 'off') +
+                 ' · ' + rStats.canvas + ' ───');
+      for (var rKey in rStats.frame) {
+        var rValue = rStats.frame[rKey];
+        if (typeof rValue !== 'number') continue;
+        lines.push((rKey + '                  ').slice(0, 18) + ' ' +
+                   (Number.isInteger(rValue) ? String(rValue) : rValue.toFixed(2)));
+      }
+      var rFeatures = Object.keys(rStats.features);
+      if (rFeatures.length) lines.push('features: ' + rFeatures.map(function(k) { return k + '=' + rStats.features[k]; }).join(' '));
+    }
     if (performance && performance.memory) {
       var used = performance.memory.usedJSHeapSize / 1048576;
       var lim = performance.memory.jsHeapSizeLimit / 1048576;

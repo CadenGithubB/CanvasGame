@@ -200,7 +200,16 @@ class SourceFixtureTests(unittest.TestCase):
 
 
 class TexturePreviewSourceTests(unittest.TestCase):
-    """Fail closed when a standalone pilot loses or corrupts its real imports."""
+    """Fail closed when a standalone pilot loses or corrupts its real imports.
+
+    The mapper now ships as src/12-texture-mapping.js, so the fixture keeps it
+    under the source root. Every negative case starts from a fixture that
+    builds, then requires the SourceError to name the injected defect: a
+    missing or misrouted import must not satisfy an unrelated failure check.
+    """
+
+    MARKER_ERROR = "texture preview must contain each production camera, depth, texture mapping, and temporal marker exactly once"
+    ANCHOR_ERROR = "texture preview camera extraction requires unique, ordered production camera anchors"
 
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory(prefix="hw1-texture-preview-")
@@ -220,7 +229,7 @@ class TexturePreviewSourceTests(unittest.TestCase):
         self.paths = {
             "config": self.source / "src/01-config-state.js",
             "depth": self.source / "src/12-scene-depth.js",
-            "mapping": self.tooling / "texture-mapping.js",
+            "mapping": self.source / "src/12-texture-mapping.js",
             "temporal": self.tooling / "texture-temporal.js",
             "page": self.tooling / "texture-preview.html",
         }
@@ -228,12 +237,18 @@ class TexturePreviewSourceTests(unittest.TestCase):
                            ("mapping", "var TexturePilot = {};\n"),
                            ("temporal", "var TextureTemporal = {};\n"), ("page", self.page)):
             self.paths[name].write_text(text, encoding="utf-8")
+        # Precondition for every negative case below: the unmodified fixture builds.
+        self.good = self.preview()
 
     def preview(self) -> str:
         return dev.texture_preview_html(self.source, self.tooling).decode("utf-8")
 
+    def assertPreviewFails(self, message: str) -> None:
+        with self.assertRaisesRegex(dev.SourceError, re.escape(message)):
+            self.preview()
+
     def test_camera_import_is_exact_and_does_not_start_other_game_state(self) -> None:
-        page = self.preview()
+        page = self.good
         self.assertIn(self.camera, page)
         self.assertIn(self.paths["depth"].read_text(encoding="utf-8"), page)
         self.assertIn(self.paths["mapping"].read_text(encoding="utf-8"), page)
@@ -242,17 +257,31 @@ class TexturePreviewSourceTests(unittest.TestCase):
         self.assertNotIn("unrelatedAfter", page)
         self.assertNotIn("@PRODUCTION_", page)
 
+    def test_mapper_is_read_from_the_shipping_source_not_a_tooling_copy(self) -> None:
+        """Contract since the mapper shipped: one source, src/12-texture-mapping.js.
+
+        A stale tools/game copy must never be served instead, and removing the
+        shipping file must fail with an error that names that file.
+        """
+        decoy = "var TexturePilot = {staleToolingCopy: true};\n"
+        (self.tooling / "texture-mapping.js").write_text(decoy, encoding="utf-8")
+        page = self.preview()
+        self.assertIn(self.paths["mapping"].read_text(encoding="utf-8"), page)
+        self.assertNotIn("staleToolingCopy", page)
+        self.paths["mapping"].unlink()
+        self.assertPreviewFails("cannot read src/12-texture-mapping.js")
+
     def test_missing_duplicate_and_unknown_injection_markers_fail_closed(self) -> None:
         markers = ("/* @PRODUCTION_CAMERA@ */", "/* @PRODUCTION_DEPTH@ */",
                    "/* @TEXTURE_MAPPING@ */", "/* @TEXTURE_TEMPORAL@ */")
-        invalid_pages = [page for marker in markers
+        invalid_pages = [(page, self.MARKER_ERROR) for marker in markers
                          for page in (self.page.replace(marker, ""), self.page + marker)]
-        invalid_pages.extend((self.page + "/* @UNREVIEWED_IMPORT@ */", self.page + "@UNRESOLVED@"))
-        for page in invalid_pages:
+        invalid_pages.extend(((self.page + "/* @UNREVIEWED_IMPORT@ */", self.MARKER_ERROR),
+                              (self.page + "@UNRESOLVED@", "texture preview contains an unresolved injection marker")))
+        for page, message in invalid_pages:
             with self.subTest(page=page):
                 self.paths["page"].write_text(page, encoding="utf-8")
-                with self.assertRaises(dev.SourceError):
-                    self.preview()
+                self.assertPreviewFails(message)
 
     def test_camera_anchor_drift_or_ambiguity_does_not_silently_fork_import(self) -> None:
         end = "// Projects a world point to screen coordinates."
@@ -261,19 +290,20 @@ class TexturePreviewSourceTests(unittest.TestCase):
                        self.config + end, end + "\n" + self.camera):
             with self.subTest(config=config):
                 self.paths["config"].write_text(config, encoding="utf-8")
-                with self.assertRaises(dev.SourceError):
-                    self.preview()
+                self.assertPreviewFails(self.ANCHOR_ERROR)
 
     def test_injected_code_cannot_close_script_or_reinject_another_fragment(self) -> None:
-        for name in ("config", "depth", "mapping", "temporal"):
+        markers = {"config": "/* @PRODUCTION_CAMERA@ */", "depth": "/* @PRODUCTION_DEPTH@ */",
+                   "mapping": "/* @TEXTURE_MAPPING@ */", "temporal": "/* @TEXTURE_TEMPORAL@ */"}
+        for name, marker in markers.items():
             original = self.paths[name].read_text(encoding="utf-8")
-            for token in ('var bad = "</ScRiPt>";\n', "/* @TEXTURE_MAPPING@ */\n"):
+            for token, defect in (('var bad = "</ScRiPt>";\n', "contains a closing script tag"),
+                                  ("/* @TEXTURE_MAPPING@ */\n", "contains an unresolved injection marker")):
                 with self.subTest(fragment=name, token=token):
                     mutated = (original.replace("return {w:", token + "return {w:")
                                if name == "config" else original + token)
                     self.paths[name].write_text(mutated, encoding="utf-8")
-                    with self.assertRaises(dev.SourceError):
-                        self.preview()
+                    self.assertPreviewFails(f"texture preview {marker}: {defect}")
                     self.paths[name].write_text(original, encoding="utf-8")
 
 
@@ -309,7 +339,15 @@ class RepositorySourceTests(unittest.TestCase):
         self.assertIn(assembled.css, preview)
         self.assertIn(assembled.html, preview)
 
-    def test_texture_pilot_uses_real_camera_and_depth_but_does_not_enter_shipping_page(self) -> None:
+    def test_texture_study_uses_real_camera_depth_and_the_shipped_mapper(self) -> None:
+        """Renamed from ..._but_does_not_enter_shipping_page when the mapper shipped.
+
+        The old contract (TexturePilot absent from the game) no longer holds:
+        src/12-texture-mapping.js is a MAIN fragment. The study must still use
+        the exact production camera, depth buffer and now the one shipped
+        mapper; its temporal harness still stays out of the game. The
+        once-only and study-only guards below cover the rest of the old risk.
+        """
         assembled = dev.assemble()
         normal = dev.preview_html(assembled).decode("utf-8")
         fixture = dev.texture_preview_html().decode("utf-8")
@@ -317,17 +355,17 @@ class RepositorySourceTests(unittest.TestCase):
         camera = config[config.index("function getCam3D() {"):
                         config.index("// Projects a world point to screen coordinates.")]
         depth = (dev.SOURCE_ROOT / "src/12-scene-depth.js").read_text(encoding="utf-8")
-        mapping = (dev.REPO_ROOT / "tools/game/texture-mapping.js").read_text(encoding="utf-8")
+        mapping = (dev.SOURCE_ROOT / "src/12-texture-mapping.js").read_text(encoding="utf-8")
         temporal = (dev.REPO_ROOT / "tools/game/texture-temporal.js").read_text(encoding="utf-8")
+        self.assertFalse((dev.REPO_ROOT / "tools/game/texture-mapping.js").exists(),
+                         "a second tooling copy of the mapper would fork the shipped code")
         self.assertEqual(1, fixture.count(camera), "pilot camera must remain the exact production implementation")
         self.assertEqual(1, fixture.count(depth), "pilot depth buffer must remain the entire unmodified production implementation")
-        self.assertEqual(1, fixture.count(mapping))
+        self.assertEqual(1, fixture.count(mapping), "pilot must inject the shipped mapper exactly once")
         self.assertEqual(1, fixture.count(temporal))
         self.assertNotIn(temporal, normal)
         self.assertNotIn(temporal, assembled.header.decode("utf-8"))
         self.assertIn("TexturePilot", fixture)
-        self.assertNotIn("TexturePilot", normal)
-        self.assertNotIn("TexturePilot", assembled.header.decode("utf-8"))
         self.assertNotIn(assembled.scripts[1], fixture, "standalone materials must not bootstrap gameplay")
         self.assertIsNone(re.search(r"(?i)<script\b[^>]*\bsrc\s*=", fixture))
         self.assertIsNone(re.search(r"@[A-Za-z_][A-Za-z_0-9]*@", fixture))
@@ -340,6 +378,225 @@ class RepositorySourceTests(unittest.TestCase):
             if len(pair) == 1:
                 pair.append("// no second preview script\n")
             dev.syntax_check(replace(assembled, scripts=tuple(pair)))
+
+    def test_shipped_texture_mapper_appears_exactly_once_in_main_and_each_study(self) -> None:
+        name = "src/12-texture-mapping.js"
+        mapping = (dev.SOURCE_ROOT / name).read_text(encoding="utf-8")
+        manifest = json.loads((dev.SOURCE_ROOT / "manifest.json").read_text(encoding="utf-8"))
+        main = manifest["parts"]["MAIN"]
+        self.assertEqual(1, main.count(name), "the mapper must be listed once in MAIN")
+        self.assertNotIn(name, manifest["parts"]["BOOTSTRAP"])
+        # Its planned users (scene-depth before it, the render passes after it)
+        # depend on this position in the one shared classic script. Restated
+        # in stage C: the integration plan places the inert 12-* core
+        # fragments (world textures, prop models, structure models) between
+        # the mapper and the first render pass, so the contract is "right
+        # after scene depth, before every render pass, with only those core
+        # fragments in between" rather than "immediately before the walls".
+        self.assertEqual(main.index("src/12-scene-depth.js") + 1, main.index(name))
+        walls = main.index("src/12-render-core-walls.js")
+        self.assertLess(main.index(name), walls)
+        core = {"src/12-world-textures.js", "src/12-prop-models.js", "src/12-structure-models.js"}
+        self.assertLessEqual(set(main[main.index(name) + 1:walls]), core, main[main.index(name) + 1:walls])
+        assembled = dev.assemble()
+        self.assertEqual([name], [span.source for span in assembled.sources if span.text == mapping])
+        declaration = re.compile(r"(?m)^var TexturePilot = ")
+        self.assertEqual(1, len(declaration.findall(mapping)))
+        pages = {
+            "MAIN script": assembled.scripts[1],
+            "assembled header": assembled.header.decode("utf-8"),
+            "checked-in header": dev.HEADER.read_text(encoding="utf-8"),
+            "/game.html": dev.preview_html(assembled).decode("utf-8"),
+            "/textures.html": dev.texture_preview_html().decode("utf-8"),
+            "/structures.html": dev.structure_preview_html().decode("utf-8"),
+        }
+        for page, text in pages.items():
+            with self.subTest(page=page):
+                self.assertEqual(1, text.count(mapping), f"{page} must carry the shipped mapper exactly once")
+                self.assertEqual(1, len(declaration.findall(text)), f"{page} must declare TexturePilot exactly once")
+        self.assertNotIn("TexturePilot", assembled.scripts[0], "the bootstrap script stays independent")
+
+    def test_only_declared_fragments_reference_the_texture_mapper(self) -> None:
+        """Stage A shipped the mapper inert; every caller is a reviewed decision.
+
+        A later stage that starts texturing adds its fragment here, in the same
+        change. Stage E1 adds src/12-world-textures.js, the only production
+        caller: the structure model reaches the mapper through its sink.
+        """
+        users = {"src/12-texture-mapping.js", "src/12-world-textures.js"}
+        assembled = dev.assemble()
+        main = [span for span in assembled.sources if span.source.startswith("src/")]
+        referencing = {span.source for span in main if "TexturePilot" in span.text}
+        self.assertIn("src/12-texture-mapping.js", referencing, "positive control: the mapper names itself")
+        self.assertEqual(users, referencing)
+
+    # ── Stage E2: the game's texture defaults are the structure study's selection ──
+    @staticmethod
+    def _study_texture_selection(page: str) -> dict:
+        """The structure study's selected controls and caps, read as HTML
+        (structure-preview.html:12-16) plus the one strip-cap literal in its
+        benchmark body; independent of the game's source."""
+        from html.parser import HTMLParser
+
+        class Controls(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.select = None
+                self.selected: dict[str, list[str]] = {}
+                self.options: dict[str, list[str]] = {}
+                self.checked: dict[str, bool] = {}
+
+            def handle_starttag(self, tag, attrs):
+                a = dict(attrs)
+                if tag == "select":
+                    self.select = a.get("id")
+                elif tag == "option" and self.select:
+                    self.options.setdefault(self.select, []).append(a.get("value"))
+                    if "selected" in a:
+                        self.selected.setdefault(self.select, []).append(a.get("value"))
+                elif tag == "input" and a.get("type") == "checkbox":
+                    self.checked[a.get("id")] = "checked" in a
+
+            def handle_endtag(self, tag):
+                if tag == "select":
+                    self.select = None
+
+        parser = Controls()
+        parser.feed(page)
+        out = {}
+        for key, control in (("mapping", "mapping"), ("tile", "tile"), ("budget", "budget")):
+            picked = parser.selected.get(control, [])
+            if len(picked) != 1:
+                raise AssertionError(f"study control #{control} must have exactly one selected option, has {picked}")
+            out[key] = picked[0]
+        out["ownedPixels"] = parser.checked.get("owned")
+        out["mappings"] = parser.options.get("mapping")
+        out["tiles"] = parser.options.get("tile")
+        out["budgets"] = parser.options.get("budget")
+        caps = re.findall(r"maxStrips:Math\.min\((\d+),remaining\)", page)
+        if len(caps) != 1:
+            raise AssertionError(f"expected one study strip cap, found {caps}")
+        out["maxStrips"] = caps[0]
+        tess = re.findall(r"var T=TexturePilot\.STRUCTURE_TESSELLATION,work=TexturePilot\.tessellate\(", page)
+        out["tessellation"] = "TexturePilot.STRUCTURE_TESSELLATION" if len(tess) == 1 else None
+        filters = set(re.findall(r"filter:diagnostic\?diagnostic\.filter:'(\w+)'", page))
+        out["filter"] = filters.pop() if len(filters) == 1 else None
+        return out
+
+    @staticmethod
+    def _world_texture_selection(source: str) -> dict:
+        """WORLD_TEXTURE_DEFAULTS and the registered parameter values, read
+        from src/12-world-textures.js as text."""
+        block = re.findall(r"(?s)var WORLD_TEXTURE_DEFAULTS = Object\.freeze\(\{(.*?)\n\}\);", source)
+        if len(block) != 1:
+            raise AssertionError("expected one WORLD_TEXTURE_DEFAULTS block")
+        body = block[0]
+
+        def one(pattern: str) -> str:
+            found = re.findall(pattern, body)
+            if len(found) != 1:
+                raise AssertionError(f"{pattern!r} matched {found} in WORLD_TEXTURE_DEFAULTS")
+            return found[0]
+
+        def values(key: str) -> list[str]:
+            found = re.findall(r"defineRenderFeature\(\{key: '" + key + r"', label: '[^']+', type: 'enum', values: \[([^\]]*)\]", source)
+            if len(found) != 1:
+                raise AssertionError(f"expected one registration of {key}, found {len(found)}")
+            return [v.strip().strip("'") for v in found[0].split(",")]
+
+        return {
+            "mapping": one(r"\bmapping: '(\w+)'"),
+            "tile": one(r"\btile: (\d+)"),
+            "budget": one(r"\bbudget: (\d+)"),
+            "ownedPixels": one(r"\bownedPixels: (true|false)") == "true",
+            "mappings": values("textureMapping"),
+            "tiles": sorted(values("textureTile"), key=int),
+            "budgets": values("textureBudget"),
+            "maxStrips": one(r"\bmaxStrips: (\d+)"),
+            "tessellation": "TexturePilot.STRUCTURE_TESSELLATION" if "tessellation: typeof TexturePilot !== 'undefined' && TexturePilot.STRUCTURE_TESSELLATION" in body else None,
+            "filter": one(r"\bfilter: '(\w+)'"),
+        }
+
+    def test_world_texture_defaults_equal_the_structure_study_selection(self) -> None:
+        """Stage E2 ships the structure study's verified optimum: the game's
+        WORLD_TEXTURE_DEFAULTS must equal the study page's selected controls
+        (hybrid, 128 px, owner-mask edges checked, 2,048 primitives), its
+        384-strip cap, its tessellation constant and 'stable' filter, and the
+        Graphics row must offer the study's alternatives. A study default that
+        moves without the game (or the reverse) fails here."""
+        page = (dev.REPO_ROOT / "tools/game/structure-preview.html").read_text(encoding="utf-8")
+        source = (dev.SOURCE_ROOT / "src/12-world-textures.js").read_text(encoding="utf-8")
+        study = self._study_texture_selection(page)
+        game = self._world_texture_selection(source)
+        study["tiles"] = sorted(study["tiles"], key=int)
+        # Non-vacuous: the literal optimum the plan names.
+        self.assertEqual(("hybrid", "128", "2048", True, "384", "stable"),
+                         (study["mapping"], study["tile"], study["budget"], study["ownedPixels"], study["maxStrips"], study["filter"]))
+        self.assertEqual(study, game)
+
+        def exactly_once(text: str, before: str, after: str) -> str:
+            self.assertEqual(1, text.count(before), f"mutation anchor {before!r}")
+            return text.replace(before, after)
+
+        # Mutations (in memory): each must break parity.
+        mutated_pages = {
+            "study tile 64": exactly_once(exactly_once(page, '<option value="128" selected>', '<option value="128">'),
+                                          '<option value="64">64 × 64</option>', '<option value="64" selected>64 × 64</option>'),
+            "study strip cap 256": exactly_once(page, "maxStrips:Math.min(384,remaining)", "maxStrips:Math.min(256,remaining)"),
+            "study owned unchecked": exactly_once(page, '<input type="checkbox" id="owned" checked>', '<input type="checkbox" id="owned">'),
+        }
+        for name, mutated in mutated_pages.items():
+            with self.subTest(mutation=name):
+                self.assertNotEqual(self._study_texture_selection(mutated), game)
+        mutated_source = exactly_once(source, "  mapping: 'hybrid', tile: 128,", "  mapping: 'triangles', tile: 128,")
+        with self.subTest(mutation="game mapping triangles"):
+            self.assertNotEqual(study, self._world_texture_selection(mutated_source))
+
+    def test_study_only_modules_never_ship(self) -> None:
+        studies = {
+            "texture-temporal.js": "TextureTemporal",
+            "edge-coverage.js": "EdgeCoverage",
+            "structure-motion.js": "StructureMotion",
+            "structure-temporal.js": "StructureTemporal",
+            "structure-model.js": "StructureModel",
+        }
+        assembled = dev.assemble()
+        manifest = (dev.SOURCE_ROOT / "manifest.json").read_text(encoding="utf-8")
+        structures = dev.structure_preview_html().decode("utf-8")
+        shipped = {
+            "assembled header": assembled.header.decode("utf-8"),
+            "checked-in header": dev.HEADER.read_text(encoding="utf-8"),
+            "/game.html": dev.preview_html(assembled).decode("utf-8"),
+        }
+        for filename, name in studies.items():
+            with self.subTest(module=filename):
+                module = (dev.REPO_ROOT / "tools/game" / filename).read_text(encoding="utf-8")
+                declaration = re.compile(r"(?m)^var " + name + r" = ")
+                # Non-vacuous: this is the module the study really injects.
+                self.assertEqual(1, len(declaration.findall(module)))
+                self.assertEqual(1, structures.count(module), f"{filename} must still reach /structures.html")
+                self.assertNotIn(filename, manifest)
+                self.assertFalse((dev.SOURCE_ROOT / "src" / filename).exists())
+                for page, text in shipped.items():
+                    self.assertFalse(module in text, f"{filename} leaked into {page}")
+                    self.assertIsNone(declaration.search(text), f"{name} declared in {page}")
+
+    def test_generated_header_matches_sources_and_reports_its_size(self) -> None:
+        # CanvasGame no longer runs on the ESP32, so the header's size is not a
+        # constraint and this test never fails on it. It checks that the
+        # checked-in header is the assembled one and prints the size, gzip -9
+        # size and largest fragments for information only.
+        import gzip
+        import sys
+
+        assembled = dev.assemble()
+        size = len(assembled.header)
+        self.assertEqual(size, dev.HEADER.stat().st_size, "checked-in header must be the assembled one")
+        self.assertEqual(assembled.header, dev.HEADER.read_bytes(), "checked-in header must be the assembled one")
+        largest = sorted(assembled.sources, key=lambda span: len(span.text.encode("utf-8")), reverse=True)[:5]
+        detail = ", ".join(f"{span.source} {len(span.text.encode('utf-8')):,}" for span in largest)
+        print(f"\nheader size (informational): {size:,} bytes, {len(gzip.compress(assembled.header, 9)):,} "
+              f"gzipped; largest fragments: {detail}", file=sys.stderr)
 
     def test_edge_coverage_is_spliced_once_into_structure_study_only(self) -> None:
         marker = "/* @EDGE_COVERAGE@ */"
@@ -371,6 +628,27 @@ class RepositorySourceTests(unittest.TestCase):
         self.assertEqual(1, len(scripts))
         dev.syntax_check(replace(assembled, scripts=(scripts[0], "// no second study script\n")))
 
+    def test_prop_magnified_band_button_builds_its_hooks_in_the_study_page(self) -> None:
+        # Stage L: the study page's script is closed over (render, rayDepth and
+        # next are not globals), so StructureMotion.pageHooks() cannot run on
+        # /structures.html; the page's own button builds the hooks in its
+        # scope and calls runMagnified, like the edge-coverage button.
+        page = (dev.REPO_ROOT / "tools/game/structure-preview.html").read_text(encoding="utf-8")
+        motion = (dev.REPO_ROOT / "tools/game/structure-motion.js").read_text(encoding="utf-8")
+        study = dev.structure_preview_html().decode("utf-8")
+        self.assertEqual(1, study.count('<button id="magnified">Test prop magnified band</button>'))
+        self.assertEqual(1, study.count("byId('magnified').onclick="))
+        handlers = [line for line in study.splitlines() if line.startswith("byId('magnified').onclick=")]
+        self.assertEqual(1, len(handlers))
+        handler = handlers[0]
+        self.assertEqual(1, handler.count("StructureMotion.runMagnified({"))
+        for hook in ("build:build", "next:next", "rayDepth:rayDepth", "capture:function", "lock(true)", "lock(false)"):
+            self.assertIn(hook, handler)
+        self.assertNotIn("pageHooks", handler)
+        # Classic-script order: after the motion module, in the same script.
+        self.assertLess(study.index(motion), study.index("byId('magnified').onclick="))
+        self.assertRegex(page, r"function lock\(value\)\{[^}]*querySelectorAll\('[^']*#magnified,#temporal[^']*'\)")
+
     def test_physics_fixture_is_separate_from_shipping_and_normal_preview(self) -> None:
         assembled = dev.assemble()
         normal = dev.preview_html(assembled).decode("utf-8")
@@ -400,6 +678,46 @@ class RepositorySourceTests(unittest.TestCase):
         # scripts. Parse them too so a broken benchmark cannot silently ship as
         # the only way to measure a rendering change.
         dev.syntax_check(replace(assembled, scripts=(scripts[0], scripts[-1])))
+
+    def test_render_lab_is_a_separate_page_carrying_the_shipping_game_once(self) -> None:
+        """/render-lab.html (Stage B) is developer-only: the normal preview plus
+        tools/game/render-lab.html and every render-lab/*.js in sorted order.
+        It must run the shipped game bytes exactly once, and none of its markup
+        or code may reach the firmware header or /game.html."""
+        import inspect
+        assembled = dev.assemble()
+        header = assembled.header.decode("utf-8")
+        normal = dev.preview_html(assembled).decode("utf-8")
+        lab = dev.render_lab_html(assembled).decode("utf-8")
+        for marker in ("id='renderLab'", "var RenderLab", "// render-lab/", "renderLabResult"):
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, header)
+                self.assertNotIn(marker, normal)
+        self.assertEqual(1, lab.count("id='renderLab'"))
+        self.assertEqual(1, len(re.findall(r"(?m)^var RenderLab = ", lab)))
+        for script in assembled.scripts:
+            self.assertEqual(1, lab.count(script), "the lab must carry each shipping script exactly once")
+        scripts = re.findall(r"(?is)<script\b[^>]*>(.*?)</script\s*>", lab)
+        names = sorted(path.name for path in (dev.REPO_ROOT / "tools/game/render-lab").glob("*.js"))
+        self.assertTrue(names)
+        self.assertEqual(3 + len(names), len(scripts), "lab scripts follow the hardware stub and both game scripts")
+        self.assertEqual(assembled.scripts, tuple(scripts[1:3]))
+        for name, script in zip(names, scripts[3:]):
+            self.assertTrue(script.startswith(f"\n// render-lab/{name}\n"), name)
+        self.assertIsNone(re.search(r"(?i)<script\b[^>]*\bsrc\s*=", lab))
+        self.assertIsNone(re.search(r"(?i)\b(?:https?|wss?|ftp)://", lab))
+        self.assertIn('"/render-lab.html"', inspect.getsource(dev.serve))
+        dev.syntax_check(replace(assembled, scripts=(scripts[0], "\n".join(scripts[3:]))))
+        # Fail closed: an unsafe or missing lab script is refused by name.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "render-lab").mkdir()
+            (root / "render-lab.html").write_text((dev.REPO_ROOT / "tools/game/render-lab.html").read_text(encoding="utf-8"), encoding="utf-8")
+            with self.assertRaisesRegex(dev.SourceError, "needs at least one"):
+                dev.render_lab_html(assembled, tooling_root=root)
+            (root / "render-lab" / "00-core.js").write_text("var x = '</script>';\n", encoding="utf-8")
+            with self.assertRaisesRegex(dev.SourceError, r"render lab 00-core\.js: unsafe script"):
+                dev.render_lab_html(assembled, tooling_root=root)
 
     def test_npc_benchmark_rejects_vacuous_or_lost_workloads(self) -> None:
         """Exercise report validity, not fake-clock performance or game behavior."""

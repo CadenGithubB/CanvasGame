@@ -35,6 +35,10 @@
       "src/10-combat.js",
       "src/11-enemies.js",
       "src/12-scene-depth.js",
+      "src/12-texture-mapping.js",
+      "src/12-world-textures.js",
+      "src/12-prop-models.js",
+      "src/12-structure-models.js",
       "src/12-render-core-walls.js",
       "src/13-render-floors-ceilings.js",
       "src/14-missile-art.js",
@@ -51,6 +55,7 @@
       "src/20-casting-preview.js",
       "src/21-frame-loop.js",
       "src/22-lifecycle.js",
+      "src/22-landmark-finder.js",
       "src/23-events-init.js"
     ]
   }

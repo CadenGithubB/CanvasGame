@@ -10,7 +10,7 @@
     if(source.split(before).length!==2)throw Error('MUTATION_ANCHOR '+flag);
     return source.replace(before,after);
   }
-  var source=slurp('tools/game/texture-mapping.js');
+  var source=slurp('assets/games/src/12-texture-mapping.js');
   source=mutate(source,'--omit-perspective-division',
     'var u = uq / inverse, v = vq / inverse;', 'var u = uq, v = vq;');
   source=mutate(source,'--shift-strip-phase',

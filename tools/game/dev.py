@@ -256,7 +256,7 @@ def texture_preview_html(source_root: Path = SOURCE_ROOT,
         raise SourceError("texture preview camera extraction requires unique, ordered production camera anchors")
     fragments = (config[config.index(start):config.index(end)],
                  read_source(source_root, "src/12-scene-depth.js"),
-                 read_source(tooling_root, "texture-mapping.js"),
+                 read_source(source_root, "src/12-texture-mapping.js"),
                  read_source(tooling_root, "texture-temporal.js"))
     for marker, script in zip(markers, fragments):
         if re.search(r"</script", script, re.I):
@@ -341,7 +341,7 @@ def structure_preview_html(source_root: Path = SOURCE_ROOT,
         raise SourceError("structure preview camera anchors must be unique and ordered")
     fragments = (config[config.index(start):config.index(end)],
                  read_source(source_root, "src/12-scene-depth.js"),
-                 read_source(tooling_root, "texture-mapping.js"),
+                 read_source(source_root, "src/12-texture-mapping.js"),
                  structure_production_js(source_root), read_source(tooling_root, "structure-model.js"),
                  read_source(tooling_root, "texture-temporal.js"),
                  read_source(tooling_root, "structure-temporal.js"),
@@ -362,13 +362,34 @@ def physics_preview_html(assembly: Assembly) -> bytes:
     return preview_html(assembly).replace(b"</body>", controls + b"</body>")
 
 
+def render_lab_html(assembly: Assembly, tooling_root: Path = REPO_ROOT / "tools/game") -> bytes:
+    """Separate developer render lab: the preview page plus lab controls and
+    every tools/game/render-lab/*.js in sorted order. Never shipped."""
+    controls = read_source(tooling_root, "render-lab.html")
+    names = sorted(path.name for path in (Path(tooling_root) / "render-lab").glob("*.js"))
+    if not names:
+        raise SourceError("render lab needs at least one tools/game/render-lab/*.js script")
+    scripts = []
+    for name in (["render-lab.html"] + names):
+        text = controls if name == "render-lab.html" else read_source(tooling_root, "render-lab/" + name)
+        if re.search(r"</script", text, re.I) or re.search(r"@[A-Za-z_][A-Za-z_0-9]*@", text):
+            raise SourceError(f"render lab {name}: unsafe script or unresolved injection marker")
+        if name != "render-lab.html":
+            scripts.append(f"<script>\n// render-lab/{name}\n{text}</script>\n")
+    page = preview_html(assembly)
+    if page.count(b"</body>") != 1:
+        raise SourceError("render lab needs exactly one </body> in the preview page")
+    return page.replace(b"</body>", (controls + "".join(scripts)).encode("utf-8") + b"</body>")
+
+
 def serve(port: int) -> None:
     check()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             route = urlsplit(self.path).path
-            if route not in ("/", "/game.html", "/artwork.html", "/textures.html", "/structures.html", "/physics-profile.html"):
+            if route not in ("/", "/game.html", "/artwork.html", "/textures.html", "/structures.html",
+                             "/physics-profile.html", "/render-lab.html"):
                 self.send_error(404)
                 return
             try:
@@ -381,6 +402,8 @@ def serve(port: int) -> None:
                     payload = structure_preview_html()
                 elif route == "/physics-profile.html":
                     payload = physics_preview_html(assembly)
+                elif route == "/render-lab.html":
+                    payload = render_lab_html(assembly)
                 else:
                     payload = preview_html(assembly)
                 status = 200
@@ -438,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_npc_controller",
                            "tools.game.tests.test_npc_navigation",
                            "tools.game.tests.test_texture_mapping",
+                           "tools.game.tests.test_texture_fragment_load",
                            "tools.game.tests.test_texture_filtering",
                            "tools.game.tests.test_texture_planar",
                            "tools.game.tests.test_texture_coverage",
@@ -455,10 +479,10 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_ruin_generation", "tools.game.tests.test_ruin_decor",
                            "tools.game.tests.test_wall_decor", "tools.game.tests.test_structure_floor_v1",
                            "tools.game.tests.test_entity_depth",
-                           "tools.game.tests.test_actor_visibility", "tools.game.tests.test_loot_visibility",
                            "tools.game.tests.test_market_stalls",
                            "tools.game.tests.test_stall_collision",
                            "tools.game.tests.test_stall_visibility",
+                           "tools.game.tests.test_actor_visibility", "tools.game.tests.test_loot_visibility",
                            "tools.game.tests.test_spell_visibility", "tools.game.tests.test_perf_cadence",
                            "tools.game.tests.test_browser_profile", "tools.game.tests.test_scene_depth_coalescing",
                            "tools.game.tests.test_floor_stitch_cache", "tools.game.tests.test_material_palette",
@@ -467,7 +491,23 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_artwork_cache", "tools.game.tests.test_casting_presentation",
                            "tools.game.tests.test_firstperson_art", "tools.game.tests.test_casting_studio",
                            "tools.game.tests.test_hand_rig", "tools.game.tests.test_casting_styles",
-                           "tools.game.tests.test_frame_pause"]
+                           "tools.game.tests.test_frame_pause",
+                           "tools.game.tests.test_render_features",
+                           "tools.game.tests.test_render_parity",
+                           "tools.game.tests.test_landmark_finder",
+                           "tools.game.tests.test_prop_models",
+                           "tools.game.tests.test_structure_models",
+                           "tools.game.tests.test_structure_model_draw",
+                           "tools.game.tests.test_world_textures",
+                           "tools.game.tests.test_prop_textures",
+                           "tools.game.tests.test_magnified_band",
+                           "tools.game.tests.test_wall_decor_driver",
+                           "tools.game.tests.test_chest_model", "tools.game.tests.test_pass_order",
+                           "tools.game.tests.test_spawner_model",
+                           "tools.game.tests.test_culling",
+                           "tools.game.tests.test_floor_prop_models",
+                           "tools.game.tests.test_landmark_models",
+                           "tools.game.tests.test_landmark_bounds"]
                 if args.suite:
                     module = f"tools/webui/tests/test_game_{args.suite}.py"
                     if not (REPO_ROOT / module).exists():

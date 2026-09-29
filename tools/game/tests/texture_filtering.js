@@ -11,7 +11,7 @@
     if(source.split(before).length!==2)throw Error('MUTATION_ANCHOR '+flag);
     return source.replace(before,after);
   }
-  var source=slurp('tools/game/texture-mapping.js');
+  var source=slurp('assets/games/src/12-texture-mapping.js');
   source=mutate(source,'--nearest-mip-texel',
     'output[out + color] = Math.round(sum / area);', 'output[out + color] = pixels[color];');
   source=mutate(source,'--wrong-row-pitch',

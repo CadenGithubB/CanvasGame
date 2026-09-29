@@ -1,4 +1,4 @@
-"""Dev-only texture mapping contracts; no stub-Canvas performance claims."""
+"""Shipped texture mapper (src/12-texture-mapping.js) contracts; no stub-Canvas performance claims."""
 
 from pathlib import Path
 import unittest

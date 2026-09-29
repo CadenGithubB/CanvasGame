@@ -576,7 +576,12 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     scenario("perf: fullscreen resolution", function () {
         LAB.freshPage();
         var ok = true, parts = [];
-        var res0 = settings.resolution, w0 = canvas.width, h0 = canvas.height;
+        var res0 = settings.resolution, w0 = canvas.width, h0 = canvas.height, rows0 = settings.fullscreenRows;
+        // This check is about Resolution (audit G4). Stage E defaults the
+        // fullscreen row cap to 360, which would clamp 0.75 x 720 to 360 rows
+        // and hide a Resolution regression; the cap has its own checks in
+        // tools/game/tests/render_features.js, so it is set to Native here.
+        settings.fullscreenRows = 'native';
         try {
             [0.5, 0.75].forEach(function (res) {
                 settings.resolution = res;
@@ -592,10 +597,11 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
                 onFullscreenChange();
                 LAB.flushRaf(); LAB.runTimers();
             });
-        } finally { document.fullscreenElement = null; settings.resolution = res0; canvas.width = w0; canvas.height = h0; }
+        } finally { document.fullscreenElement = null; settings.resolution = res0; settings.fullscreenRows = rows0; canvas.width = w0; canvas.height = h0; }
         check("perf: entering fullscreen sizes the canvas by the resolution setting", ok,
             "window " + innerWidth + "x" + innerHeight + "; " + parts.join("; ") +
-            "; onFullscreenChange rAF sets innerWidth x innerHeight (L690-693), only applySettings scales by settings.resolution (L17773-17777)");
+            "; want = viewport x settings.resolution (fullscreen rows pinned to native here; default " + settings.fullscreenRows +
+            "); the pre-fix rAF used innerWidth x innerHeight and only applySettings scaled (audit G4)");
     });
 
     // ════════════════════════════════════════════════════════════════════
