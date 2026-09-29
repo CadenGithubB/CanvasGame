@@ -259,25 +259,34 @@ var TexturePilot = (function () {
     return result;
   }
 
-  function makeNode(a, b, c, level) {
+  // Isosceles triangles on walls and floors often have two exactly tied edge
+  // errors. A strict comparison lets floating-point noise pick a different
+  // split edge each frame, re-meshing the face and making the texture jump
+  // (measured: 12 -> 16 of 20 structure motion cases at the same cost). Split
+  // the lowest-index edge within SPLIT_TIE of the largest error instead; edge
+  // indices are structural, not camera-driven.
+  var SPLIT_TIE = 0.02;
+  function makeNode(a, b, c, level, boundary) {
     var du1 = b.u - a.u, dv1 = b.v - a.v, du2 = c.u - a.u, dv2 = c.v - a.v;
     var determinant = du1 * dv2 - dv1 * du2;
-    var node = {a: a, b: b, c: c, level: level, edge: 0, error: 0, children: null};
+    var node = {a: a, b: b, c: c, level: level, edge: 0, error: 0, children: null,
+      boundary: boundary || [false, false, false]};
     if (Math.abs(determinant) < 1e-12) return node;
     // UV -> screen Jacobian turns mapping error into approximate screen pixels.
     var xu = ((b.x - a.x) * dv2 - (c.x - a.x) * dv1) / determinant;
     var xv = ((c.x - a.x) * du1 - (b.x - a.x) * du2) / determinant;
     var yu = ((b.y - a.y) * dv2 - (c.y - a.y) * dv1) / determinant;
     var yv = ((c.y - a.y) * du1 - (b.y - a.y) * du2) / determinant;
-    var vertices = [a, b, c];
+    var vertices = [a, b, c], errors = [0, 0, 0];
     for (var i = 0; i < 3; i++) {
       var p = vertices[i], q = vertices[(i + 1) % 3];
       var inv = 1 / p.depth + 1 / q.depth;
       var u = (p.u / p.depth + q.u / q.depth) / inv - (p.u + q.u) * 0.5;
       var v = (p.v / p.depth + q.v / q.depth) / inv - (p.v + q.v) * 0.5;
-      var error = Math.hypot(xu * u + xv * v, yu * u + yv * v);
-      if (error > node.error) { node.error = error; node.edge = i; }
+      errors[i] = Math.hypot(xu * u + xv * v, yu * u + yv * v);
+      if (errors[i] > node.error) node.error = errors[i];
     }
+    for (var k = 0; k < 3; k++) if (errors[k] >= node.error * (1 - SPLIT_TIE)) { node.edge = k; break; }
     return node;
   }
 
@@ -307,7 +316,10 @@ var TexturePilot = (function () {
   // Convex polygons only. Clip to viewport BEFORE refinement so huge projected
   // near-plane coordinates cannot consume the whole budget off-screen. Every
   // split replaces one leaf with two; budgets never discard part of a face.
-  // emit(a,b,c) receives projected vertices. Stats report quality fallback.
+  // emit(a,b,c,boundary) receives projected vertices plus [ab,bc,ca] flags for
+  // edges on the face outline, which an owner-masked caller may extend.
+  // Viewport cuts are not flagged: no pixel beyond the canvas is owned.
+  // Stats report quality fallback.
   function tessellate(polygon, options, emit) {
     options = options || {};
     var stats = {triangles: 0, splits: 0, capped: false, clippedVertices: 0, rejected: false};
@@ -327,12 +339,24 @@ var TexturePilot = (function () {
     stats.clippedVertices = clipped.length;
     if (clipped.length < 3) return stats;
     if (!clipped.every(finiteVertex)) { stats.rejected = true; return stats; }
-    var roots = [], heap = [];
+    var roots = [], heap = [], fan = [];
     for (var i = 1; i + 1 < clipped.length; i++) {
       var a = clipped[0], b = clipped[i], c = clipped[i + 1];
       var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-      if (Math.abs(area) < 1e-8) continue;
-      var node = makeNode(a, b, c, 0);
+      if (Math.abs(area) >= 1e-8) fan.push(i);
+    }
+    // clipViewport sets cut coordinates exactly to the bound, and split
+    // midpoints of such an edge keep it, so exact comparison is safe.
+    function outline(p, q) {
+      return !((p.x === 0 && q.x === 0) || (p.x === width && q.x === width) ||
+        (p.y === 0 && q.y === 0) || (p.y === height && q.y === height));
+    }
+    for (var f = 0; f < fan.length; f++) {
+      var a = clipped[0], b = clipped[fan[f]], c = clipped[fan[f] + 1];
+      // Fan roots: bc is always an outline edge; ab only for the first KEPT
+      // root and ca only for the last, so a skipped degenerate end root cannot
+      // hide its collinear outline edge. The other fan diagonals are interior.
+      var node = makeNode(a, b, c, 0, [f === 0 && outline(a, b), outline(b, c), f === fan.length - 1 && outline(c, a)]);
       roots.push(node); heapPush(heap, node);
     }
     // A too-small caller budget cannot even represent this polygon. Reject the
@@ -346,9 +370,11 @@ var TexturePilot = (function () {
       if (leafCount >= maxTriangles) { stats.capped = true; break; }
       var corners = [candidate.a, candidate.b, candidate.c], edge = candidate.edge;
       var p = corners[edge], q = corners[(edge + 1) % 3], r = corners[(edge + 2) % 3];
-      var midpoint = interpolateScreen(p, q, 0.5);
-      var left = makeNode(p, midpoint, r, candidate.level + 1);
-      var right = makeNode(midpoint, q, r, candidate.level + 1);
+      var midpoint = interpolateScreen(p, q, 0.5), flags = candidate.boundary;
+      // Both halves of a split outline edge stay outline edges; the new
+      // midpoint-to-r edge is interior. r->p is the parent's edge (edge + 2).
+      var left = makeNode(p, midpoint, r, candidate.level + 1, [flags[edge], false, flags[(edge + 2) % 3]]);
+      var right = makeNode(midpoint, q, r, candidate.level + 1, [flags[edge], flags[(edge + 1) % 3], false]);
       candidate.children = [left, right];
       heapPush(heap, left); heapPush(heap, right);
       leafCount++; stats.splits++;
@@ -357,7 +383,7 @@ var TexturePilot = (function () {
     while (stack.length) {
       var leaf = stack.pop();
       if (leaf.children) { stack.push(leaf.children[1], leaf.children[0]); continue; }
-      emit(leaf.a, leaf.b, leaf.c); stats.triangles++;
+      emit(leaf.a, leaf.b, leaf.c, leaf.boundary.slice()); stats.triangles++;
     }
     return stats;
   }
@@ -384,9 +410,45 @@ var TexturePilot = (function () {
     return result;
   }
 
+  // Owner-masked clip. The caller has already clipped to the face's exact
+  // integer depth mask, so a pixel whose center lies in the face is painted
+  // with its whole area; the texture must cover that whole pixel too. An
+  // antialiased clip on the true outline leaves part of such a pixel bare and
+  // exposes the base color as a pulsing seam. expandTriangle's 0.7 px overlap
+  // is also unreliable there: its miter cap pulls an outline edge of a long
+  // thin triangle to ~0.2 px. So the clip keeps expandTriangle unchanged for
+  // the interior (identical overlap between sibling triangles) and adds an
+  // outward skirt on each outline edge: a quad from the edge to
+  // OWNED_SKIRT_OUT px outside it, lengthened by OWNED_SKIRT_ALONG px at both
+  // ends. Skirts lie entirely outside the face, so they only reach owned
+  // outline pixels (the mask trims everything else) and never change interior
+  // pixels. They share the triangle's winding, so the nonzero clip is a union.
+  // Returns {points, polygons}, or null for a degenerate triangle.
+  var OWNED_SKIRT_OUT = 2, OWNED_SKIRT_ALONG = 2;
+  function ownedClip(a, b, c, boundary) {
+    var triangle = expandTriangle(a, b, c);
+    if (!triangle) return null;
+    var polygons = [triangle], points = triangle.slice(), corners = [a, b, c];
+    var sign = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0 ? 1 : -1;
+    for (var i = 0; i < 3; i++) {
+      if (!boundary || !boundary[i]) continue;
+      var p = corners[i], q = corners[(i + 1) % 3], dx = q.x - p.x, dy = q.y - p.y, length = Math.hypot(dx, dy);
+      if (!(length > 1e-9)) continue;
+      var ex = dx / length, ey = dy / length, nx = sign * dy / length, ny = -sign * dx / length;
+      var head = {x: q.x + ex * OWNED_SKIRT_ALONG, y: q.y + ey * OWNED_SKIRT_ALONG};
+      var tail = {x: p.x - ex * OWNED_SKIRT_ALONG, y: p.y - ey * OWNED_SKIRT_ALONG};
+      // Traverse q->p along the shared edge: the same rotation as the triangle.
+      var skirt = [head, tail, {x: tail.x + nx * OWNED_SKIRT_OUT, y: tail.y + ny * OWNED_SKIRT_OUT},
+        {x: head.x + nx * OWNED_SKIRT_OUT, y: head.y + ny * OWNED_SKIRT_OUT}];
+      polygons.push(skirt); points = points.concat(skirt);
+    }
+    return {points: points, polygons: polygons};
+  }
+
   // Kept intact for the native broken-filter negative control. Also supplies
   // each single-level affine pass for the stable material sampler below.
-  function drawTriangleLegacy(ctx, a, b, c, material) {
+  // clip.ownedPixels selects ownedClip for callers that supply the face mask.
+  function drawTriangleLegacy(ctx, a, b, c, material, clip) {
     if (!ctx || !finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c) || !material ||
         !material.source || !Number.isFinite(material.size) || material.size <= 0) return false;
     var size = material.size;
@@ -402,14 +464,15 @@ var TexturePilot = (function () {
     var dx = a.x - m11 * sx - m21 * sy, dy = a.y - m12 * sx - m22 * sy;
     var screenDet = m11 * m22 - m12 * m21;
     if (![m11, m21, m12, m22, dx, dy, screenDet].every(Number.isFinite) || Math.abs(screenDet) < 1e-12) return false;
-    var expanded = expandTriangle(a, b, c);
+    var owned = clip && clip.ownedPixels ? (clip.shapes || ownedClip(a, b, c, clip.boundary)) : null;
+    var expanded = owned ? owned.points : clip && clip.ownedPixels ? null : expandTriangle(a, b, c);
     if (!expanded) return false;
     var cache = patternCaches.get(ctx);
     if (!cache) { cache = new WeakMap(); patternCaches.set(ctx, cache); }
     var pattern = cache.get(material);
     if (!pattern) { pattern = ctx.createPattern(material.source, 'repeat'); if (!pattern) return false; cache.set(material, pattern); }
     var minU = Infinity, minV = Infinity, maxU = -Infinity, maxV = -Infinity;
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < expanded.length; i++) {
       var px = expanded[i].x - dx, py = expanded[i].y - dy;
       var u = (m22 * px - m21 * py) / screenDet;
       var v = (m11 * py - m12 * px) / screenDet;
@@ -417,9 +480,15 @@ var TexturePilot = (function () {
       minV = Math.min(minV, v); maxV = Math.max(maxV, v);
     }
     ctx.save();
-    ctx.beginPath(); ctx.moveTo(expanded[0].x, expanded[0].y);
-    ctx.lineTo(expanded[1].x, expanded[1].y); ctx.lineTo(expanded[2].x, expanded[2].y);
-    ctx.closePath(); ctx.clip();
+    ctx.beginPath();
+    var shapes = owned ? owned.polygons : [expanded];
+    for (var shape = 0; shape < shapes.length; shape++) {
+      var outline = shapes[shape];
+      ctx.moveTo(outline[0].x, outline[0].y);
+      for (var corner = 1; corner < outline.length; corner++) ctx.lineTo(outline[corner].x, outline[corner].y);
+      ctx.closePath();
+    }
+    ctx.clip();
     ctx.transform(m11, m12, m21, m22, dx, dy);
     ctx.fillStyle = pattern;
     ctx.fillRect(minU - 1, minV - 1, maxU - minU + 2, maxV - minV + 2);
@@ -435,8 +504,15 @@ var TexturePilot = (function () {
     var filter = options && options.filter !== undefined ? options.filter : 'stable';
     var stats = options && options.stats;
     function count(name) { if (stats) stats[name] = (Number.isFinite(stats[name]) ? stats[name] : 0) + 1; }
+    // Build the owner-masked clip once per triangle; both filter passes share it.
+    var clip = null;
+    if (options && options.ownedPixels) {
+      if (!finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c)) return false;
+      clip = {ownedPixels: true, boundary: options.boundary, shapes: ownedClip(a, b, c, options.boundary)};
+      if (!clip.shapes) return false;
+    }
     if (filter === 'legacy') {
-      var legacySuccess = drawTriangleLegacy(ctx, a, b, c, material);
+      var legacySuccess = drawTriangleLegacy(ctx, a, b, c, material, clip);
       if (legacySuccess) count('patternFills');
       return legacySuccess;
     }
@@ -453,7 +529,7 @@ var TexturePilot = (function () {
     var sampling = footprintLOD(m11, m12, m21, m22, prepared.levels.length - 1);
     if (!sampling) return false;
     if (!sampling.minifying) {
-      var magnifiedSuccess = drawTriangleLegacy(ctx, a, b, c, prepared.levels[0]);
+      var magnifiedSuccess = drawTriangleLegacy(ctx, a, b, c, prepared.levels[0], clip);
       if (magnifiedSuccess) count('patternFills');
       return magnifiedSuccess;
     }
@@ -467,11 +543,11 @@ var TexturePilot = (function () {
       // ordinary opaque case is first-level alpha1, second-level alpha=blend.
       var secondAlpha = alpha * blend;
       ctx.globalAlpha = secondAlpha < 1 ? alpha * (1 - blend) / (1 - secondAlpha) : 0;
-      success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.lower]);
+      success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.lower], clip);
       if (success) { count('patternFills'); count('minifiedTriangles'); }
       if (success && blend > 0) {
         ctx.globalAlpha = secondAlpha;
-        success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.upper]);
+        success = drawTriangleLegacy(ctx, a, b, c, prepared.levels[sampling.upper], clip);
         if (success) { count('patternFills'); count('blendedTriangles'); }
       }
     } finally { ctx.restore(); }
@@ -484,7 +560,10 @@ var TexturePilot = (function () {
   // center, UQ/Q and VQ/Q are EXACTLY affine along that whole scan band. A fixed
   // integer band grid removes camera-selected triangle seams and T-junctions.
   // Caller retains responsibility for opaque depth/base-color coverage. This
-  // helper additionally clips to the actual convex face and never expands it.
+  // helper additionally clips to the actual convex face and never expands it,
+  // unless options.ownedPixels says the caller already clipped to the face's
+  // exact integer mask: then that antialiased face clip would leave owned edge
+  // pixels partly bare, and the one-pixel band rectangles are exact already.
   // Declines/preflight failures paint nothing. strips counts completed bands;
   // stats counts actual patternFills/minifiedStrips/blendedStrips and
   // anisotropicStrips, not strips. Stable filtering uses at most FOUR pattern
@@ -499,7 +578,9 @@ var TexturePilot = (function () {
     if (!ctx || !Array.isArray(points) || points.length < 3 || points.length > 128 || !points.every(finiteVertex) ||
         !Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0 || width > 8192 || height > 8192 ||
         !Number.isInteger(maximum) || maximum < 1 || maximum > 2048 || (filter !== 'stable' && filter !== 'legacy') ||
-        (options.directional !== undefined && typeof options.directional !== 'boolean')) return decline('invalid-input');
+        (options.directional !== undefined && typeof options.directional !== 'boolean') ||
+        (options.ownedPixels !== undefined && typeof options.ownedPixels !== 'boolean') ||
+        (options.rowsOnly !== undefined && typeof options.rowsOnly !== 'boolean')) return decline('invalid-input');
     var visibleBounds = options.visibleBounds;
     if (visibleBounds !== undefined && (!visibleBounds ||
         ![visibleBounds.minX, visibleBounds.maxX, visibleBounds.minY, visibleBounds.maxY].every(Number.isInteger) ||
@@ -556,6 +637,9 @@ var TexturePilot = (function () {
     if (xChanges && yChanges) return decline('general-perspective');
     if (!xChanges && !yChanges) return decline('constant-depth');
     var rows = yChanges, axis = rows ? 'y' : 'x', other = rows ? 'x' : 'y';
+    // Hybrid mapping: strips only for row faces (floors, flat and camera-facing
+    // roofs); walls return to tie-broken triangles, which pass there at lower cost.
+    if (options.rowsOnly === true && !rows) return decline('rows-only');
     if (rows) Q.x = 0; else Q.y = 0; // numerical noise, bounded by validation above
     var clipped = clipViewport(points, width, height);
     if (clipped.length < 3) return decline('offscreen');
@@ -677,9 +761,11 @@ var TexturePilot = (function () {
     }
     ctx.save();
     try {
-      ctx.beginPath(); ctx.moveTo(clipped[0].x, clipped[0].y);
-      for (var path = 1; path < clipped.length; path++) ctx.lineTo(clipped[path].x, clipped[path].y);
-      ctx.closePath(); ctx.clip();
+      if (options.ownedPixels !== true) {
+        ctx.beginPath(); ctx.moveTo(clipped[0].x, clipped[0].y);
+        for (var path = 1; path < clipped.length; path++) ctx.lineTo(clipped[path].x, clipped[path].y);
+        ctx.closePath(); ctx.clip();
+      }
       for (var draw = 0; draw < bands.length; draw++) {
         var item = bands[draw], rect = item.rectangle, selection = item.sampling;
         ctx.save();
@@ -817,7 +903,14 @@ var TexturePilot = (function () {
     return {materials: materials, bytes: bytes, baseBytes: baseBytes, mipBytes: bytes - baseBytes, buildMs: performance.now() - start};
   }
 
+  // Structure defaults from the 2026-09-27 cost/benefit sweep (TEXTURES.md,
+  // "Long faces"): with hybrid mapping (planar rows, tie-broken triangles
+  // elsewhere) all 20 structure motion cases passed for about +9% median
+  // submission time. Triangle-only faces reach their own sweet spot here.
+  var STRUCTURE_TESSELLATION = Object.freeze({maxTriangles: 256, maxDepth: 10, errorPixels: 0.4});
+
   return {createCatalog: createCatalog, clipNear: clipNear, perspectiveUV: perspectiveUV,
     tessellate: tessellate, drawTriangle: drawTriangle, drawPlanarFace: drawPlanarFace, prepareMaterial: prepareMaterial,
-    prefilterMipPixels: prefilterMipPixels, footprintLOD: footprintLOD, planarFootprint: planarFootprint};
+    prefilterMipPixels: prefilterMipPixels, footprintLOD: footprintLOD, planarFootprint: planarFootprint,
+    expandTriangle: expandTriangle, ownedClip: ownedClip, STRUCTURE_TESSELLATION: STRUCTURE_TESSELLATION};
 }());

@@ -341,6 +341,36 @@ class RepositorySourceTests(unittest.TestCase):
                 pair.append("// no second preview script\n")
             dev.syntax_check(replace(assembled, scripts=tuple(pair)))
 
+    def test_edge_coverage_is_spliced_once_into_structure_study_only(self) -> None:
+        marker = "/* @EDGE_COVERAGE@ */"
+        page = (dev.REPO_ROOT / "tools/game/structure-preview.html").read_text(encoding="utf-8")
+        module = (dev.REPO_ROOT / "tools/game/edge-coverage.js").read_text(encoding="utf-8")
+        motion = (dev.REPO_ROOT / "tools/game/structure-motion.js").read_text(encoding="utf-8")
+        self.assertEqual(1, page.count(marker))
+        self.assertEqual(1, len(re.findall(r"@EDGE_COVERAGE@", page)))
+        study = dev.structure_preview_html().decode("utf-8")
+        self.assertEqual(1, study.count(module), "edge-coverage module must replace its marker exactly once")
+        self.assertNotIn("@EDGE_COVERAGE@", study)
+        self.assertRegex(study, r"\bvar\s+EdgeCoverage\s*=")
+        # Classic-script order: after the motion module it sits beside, before
+        # the page code that calls it, and in the same single script scope.
+        script_start = study.index("<script>")
+        self.assertLess(script_start, study.index(motion))
+        self.assertLess(study.index(motion), study.index(module))
+        self.assertLess(study.index(module), study.index("byId('edges').onclick="))
+        self.assertEqual(1, study.count('<button id="edges">Test edge coverage</button>'))
+        self.assertEqual(1, study.count("byId('edges').onclick="))
+        self.assertRegex(page, r"function lock\(value\)\{[^}]*querySelectorAll\('[^']*#temporal,#edges'\)")
+        assembled = dev.assemble()
+        normal = dev.preview_html(assembled).decode("utf-8")
+        for shipped in (assembled.header.decode("utf-8"), dev.HEADER.read_text(encoding="utf-8"), normal):
+            self.assertNotIn("@EDGE_COVERAGE@", shipped)
+            self.assertNotIn("EdgeCoverage", shipped)
+            self.assertNotIn(module, shipped)
+        scripts = re.findall(r"(?is)<script\b[^>]*>(.*?)</script\s*>", study)
+        self.assertEqual(1, len(scripts))
+        dev.syntax_check(replace(assembled, scripts=(scripts[0], "// no second study script\n")))
+
     def test_physics_fixture_is_separate_from_shipping_and_normal_preview(self) -> None:
         assembled = dev.assemble()
         normal = dev.preview_html(assembled).decode("utf-8")

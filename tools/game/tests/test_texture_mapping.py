@@ -13,8 +13,8 @@ class TextureMappingTests(unittest.TestCase):
     def test_perspective_clipping_budgets_and_material_preparation(self):
         result = run_js(self.script, timeout=30)
         output = result.stdout + result.stderr
-        self.assertIn("TEXTURE_MAPPING_RESULT PASS 31", output.splitlines())
-        self.assertEqual(31, sum(line.startswith("PASS ") for line in output.splitlines()))
+        self.assertIn("TEXTURE_MAPPING_RESULT PASS 35", output.splitlines())
+        self.assertEqual(35, sum(line.startswith("PASS ") for line in output.splitlines()))
         self.assertNotIn("FAIL ", output)
         self.assertNotIn("Error:", output)
         self.assertNotIn("Exception:", output)
@@ -29,6 +29,10 @@ class TextureMappingTests(unittest.TestCase):
             "--global-random": "material baking never consumes gameplay random state",
             "--transpose-material-transform": "actual Canvas material transform maps authored tile coordinates to all screen corners",
             "--leak-canvas-state": "material drawing restores caller Canvas color alpha and state stack",
+            "--strict-split-edge": "exactly tied split edges choose the same edge under sub-nanopixel camera noise",
+            "--flag-viewport-cuts": "viewport cut edges are not flagged as face outline while real outline edges are",
+            "--flag-by-fan-index": "a skipped degenerate end root does not hide its collinear outline edge",
+            "--owned-before-validation": "owner-masked drawing rejects a missing vertex instead of throwing",
         }
         for flag, assertion in mutations.items():
             with self.subTest(mutation=flag):
@@ -36,7 +40,7 @@ class TextureMappingTests(unittest.TestCase):
                 output = result.stdout + result.stderr
                 self.assertIn("PASS equal depth control agrees with affine texture coordinates", output)
                 self.assertIn("FAIL " + assertion, output)
-                self.assertRegex(output, r"TEXTURE_MAPPING_RESULT FAIL \d+/31")
+                self.assertRegex(output, r"TEXTURE_MAPPING_RESULT FAIL \d+/35")
                 self.assertNotIn("MUTATION_ANCHOR", output)
                 self.assertNotIn("Error:", output)
                 self.assertNotIn("Exception:", output)

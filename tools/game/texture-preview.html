@@ -24,6 +24,7 @@ main{max-width:1280px;margin:auto;padding:28px}header{display:flex;justify-conte
 <label>Filtering<select id="filter"><option value="smooth">Smooth</option><option value="crisp">Crisp pixels</option></select></label>
 <label class="check"><input type="checkbox" id="stability" checked>Anti-shimmer</label>
 <label class="check"><input type="checkbox" id="planar">Directional long lines · experimental</label>
+<label class="check"><input type="checkbox" id="owned" checked>Owner-mask edge coverage</label>
 <label>Chest size<select id="size"><option value="0.65">Small</option><option value="1" selected>Standard</option><option value="1.4">Large</option></select></label>
 <label>Orbit<input id="orbit" type="range" min="-150" max="150" value="0" aria-label="Camera orbit"></label>
 <label>Approach<input id="approach" type="range" min="-65" max="65" value="0" aria-label="Camera approach"></label>
@@ -120,12 +121,12 @@ var canvas, ctx, cam={x:0,y:0,z:60,ang:0,pitch:0,fov:Math.PI/2.5}, projScale=240
         ctx.clip(); ctx.fillStyle=material.color; ctx.fillRect(0,0,canvas.width,canvas.height);
         if (textures) {
           var remaining=sceneCap-stats.triangles-stats.strips, t=performance.now(), handled=false, failed=0;
-          var sampling={filter:byId('stability').checked ? 'stable' : 'legacy',stats:stats};
+          var sampling={filter:byId('stability').checked ? 'stable' : 'legacy',stats:stats}, owned=byId('owned').checked;
           // Eligibility follows the plane, not a projected-size threshold that
           // would switch mapping methods abruptly during camera movement.
           if (byId('planar').checked && remaining>0) {
             stats.planarAttempts++;
-            var planar=TexturePilot.drawPlanarFace(ctx,points,material,{width:canvas.width,height:canvas.height,maxStrips:Math.min(384,remaining),filter:sampling.filter,stats:stats,
+            var planar=TexturePilot.drawPlanarFace(ctx,points,material,{width:canvas.width,height:canvas.height,maxStrips:Math.min(384,remaining),filter:sampling.filter,stats:stats,ownedPixels:owned,
               visibleBounds:{minX:_sceneDepthClipMinX,maxX:_sceneDepthClipMaxX,minY:_sceneDepthClipMinY,maxY:_sceneDepthClipMaxY}});
             if (planar.failed) stats.failedDraws++;
             handled=planar.handled;
@@ -137,8 +138,8 @@ var canvas, ctx, cam={x:0,y:0,z:60,ang:0,pitch:0,fov:Math.PI/2.5}, projScale=240
           }
           if (!handled && remaining>=8) {
             var drawn=0;
-            var work=TexturePilot.tessellate(points,{width:canvas.width,height:canvas.height,maxTriangles:Math.min(256,remaining),maxDepth:7,errorPixels:.65},function (a,b,c) {
-              if (TexturePilot.drawTriangle(ctx,a,b,c,material,sampling)) drawn++; else failed++;
+            var work=TexturePilot.tessellate(points,{width:canvas.width,height:canvas.height,maxTriangles:Math.min(TexturePilot.STRUCTURE_TESSELLATION.maxTriangles,remaining),maxDepth:TexturePilot.STRUCTURE_TESSELLATION.maxDepth,errorPixels:TexturePilot.STRUCTURE_TESSELLATION.errorPixels},function (a,b,c,edges) {
+              if (TexturePilot.drawTriangle(ctx,a,b,c,material,owned ? {filter:sampling.filter,stats:stats,ownedPixels:true,boundary:edges} : sampling)) drawn++; else failed++;
             });
             stats.triangles+=work.triangles; stats.splits+=work.splits; if (work.capped) stats.cappedFaces++;
             stats.failedDraws+=failed; if (work.rejected) stats.rejectedFaces++;

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 540" width="760" height="540" role="img" aria-labelledby="t d">
+<title id="t">Tessellation settings: motion quality against frame cost</title>
+<desc id="d">Connected scatter. X: extra median frame-submission time against today, -3 to 45 percent. Y: triangle-path motion cases passing, of 20. Current tessellator at depth 7 goes from 12 today to 16 at errorPixels 0.3 (+19%). At depth 10 it reaches 17 at 0.3 (+18%). With the split-edge tie-break fix it passes 16 at today's settings for no extra cost, and 17 with depth 10 and errorPixels 0.4 (+8%). Tighter targets add cost without more passes. The planar path passes 20 of 20 at +30%.</desc>
+<style>
+svg{--surface:#fcfcfb;--t1:#0b0b0b;--t2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;
+font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+@media (prefers-color-scheme:dark){svg{--surface:#1a1a19;--t1:#ffffff;--t2:#c3c2b7;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70}}
+.bg{fill:var(--surface)} .t1{fill:var(--t1)} .t2{fill:var(--t2)} .mu{fill:var(--muted)}
+.grid{stroke:var(--grid);stroke-width:1} .axis{stroke:var(--axis);stroke-width:1}
+.ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.s1 .ln{stroke:var(--s1)} .s2 .ln{stroke:var(--s2)} .s3 .ln{stroke:var(--s3)}
+.mk{stroke:var(--surface);stroke-width:2} .s1 .mk{fill:var(--s1)} .s2 .mk{fill:var(--s2)} .s3 .mk{fill:var(--s3)}
+.hit{fill:transparent} .pl{fill:var(--t1);stroke:var(--surface);stroke-width:2} .hy{fill:var(--surface);stroke:var(--t1);stroke-width:2} .hyl{stroke:var(--t1);stroke-width:1.5;stroke-dasharray:2 3}
+.spot{fill:none;stroke:var(--t1);stroke-width:1.5;stroke-dasharray:3 3} .lead{stroke:var(--t2);stroke-width:1}
+.h1{font-size:16px;font-weight:600} .h2{font-size:12.5px} .h3{font-size:13px;font-weight:600} .sm{font-size:11.5px} .xs{font-size:11px} .b{font-weight:600}
+</style>
+<rect class="bg" width="760" height="540" rx="8"/>
+<text class="t1 h1" x="24" y="32">Planar floors plus tie-break triangles pass all 20 for about +9%</text>
+<text class="t2 h2" x="24" y="52">Structure motion cases passing (of 20) against extra median frame time. Hover a point for its setting.</text>
+<g class="s1"><line class="ln" x1="24" y1="76" x2="46" y2="76"/><circle class="mk" cx="35" cy="76" r="5"/></g>
+<text class="t1 sm" x="54" y="80">Current, depth 7 (today)</text>
+<g class="s2"><line class="ln" x1="229" y1="76" x2="251" y2="76"/><circle class="mk" cx="240" cy="76" r="5"/></g>
+<text class="t1 sm" x="259" y="80">Current, depth 10</text>
+<g class="s3"><line class="ln" x1="390" y1="76" x2="412" y2="76"/><circle class="mk" cx="401" cy="76" r="5"/></g>
+<text class="t1 sm" x="420" y="80">Tie-break fix, depth 10</text>
+<rect class="hy" x="30" y="91" width="10" height="10"/><text class="t1 sm" x="54" y="100">Hybrid: planar floors + tie-break triangles (default)</text>
+<path class="pl" d="M416 90 l6 6 l-6 6 l-6 -6 z"/><text class="t1 sm" x="435" y="100">Planar everywhere</text>
+<text class="t2 sm" x="24" y="128">Cases passing (of 20)</text>
+<text class="mu xs" x="64" y="428.0" text-anchor="end">10</text>
+<line class="grid" x1="72" y1="370.8" x2="600" y2="370.8"/>
+<text class="mu xs" x="64" y="374.8" text-anchor="end">12</text>
+<line class="grid" x1="72" y1="317.6" x2="600" y2="317.6"/>
+<text class="mu xs" x="64" y="321.6" text-anchor="end">14</text>
+<line class="grid" x1="72" y1="264.4" x2="600" y2="264.4"/>
+<text class="mu xs" x="64" y="268.4" text-anchor="end">16</text>
+<line class="grid" x1="72" y1="211.2" x2="600" y2="211.2"/>
+<text class="mu xs" x="64" y="215.2" text-anchor="end">18</text>
+<line class="grid" x1="72" y1="158.0" x2="600" y2="158.0"/>
+<text class="mu xs" x="64" y="162.0" text-anchor="end">20</text>
+<text class="mu xs" x="105.0" y="442" text-anchor="middle">0%</text>
+<line class="grid" x1="215.0" y1="142" x2="215.0" y2="424"/>
+<text class="mu xs" x="215.0" y="442" text-anchor="middle">+10%</text>
+<line class="grid" x1="325.0" y1="142" x2="325.0" y2="424"/>
+<text class="mu xs" x="325.0" y="442" text-anchor="middle">+20%</text>
+<line class="grid" x1="435.0" y1="142" x2="435.0" y2="424"/>
+<text class="mu xs" x="435.0" y="442" text-anchor="middle">+30%</text>
+<line class="grid" x1="545.0" y1="142" x2="545.0" y2="424"/>
+<text class="mu xs" x="545.0" y="442" text-anchor="middle">+40%</text>
+<line class="axis" x1="72" y1="424" x2="600" y2="424"/><line class="axis" x1="72" y1="142" x2="72" y2="424"/>
+<text class="t2 sm" x="336.0" y="466" text-anchor="middle">Extra median frame-submission time vs today (errorPixels 0.65, depth 7, no tie-break)</text>
+<g class="s1"><polyline class="ln" points="105.0,370.8 145.7,344.2 190.8,344.2 315.1,264.4 431.7,264.4"/>
+<g><title>Current, depth 7 (today), errorPixels 0.65: 12 of 20 pass, baseline median time, 556 triangles per view</title><circle class="hit" cx="105.0" cy="370.8" r="10"/><circle class="mk" cx="105.0" cy="370.8" r="5"/></g>
+<g><title>Current, depth 7 (today), errorPixels 0.5: 13 of 20 pass, +3.7% median time, 612 triangles per view</title><circle class="hit" cx="145.7" cy="344.2" r="10"/><circle class="mk" cx="145.7" cy="344.2" r="5"/></g>
+<g><title>Current, depth 7 (today), errorPixels 0.4: 13 of 20 pass, +7.8% median time, 676 triangles per view</title><circle class="hit" cx="190.8" cy="344.2" r="10"/><circle class="mk" cx="190.8" cy="344.2" r="5"/></g>
+<g><title>Current, depth 7 (today), errorPixels 0.3: 16 of 20 pass, +19.1% median time, 778 triangles per view</title><circle class="hit" cx="315.1" cy="264.4" r="10"/><circle class="mk" cx="315.1" cy="264.4" r="5"/></g>
+<g><title>Current, depth 7 (today), errorPixels 0.2: 16 of 20 pass, +29.7% median time, 903 triangles per view</title><circle class="hit" cx="431.7" cy="264.4" r="10"/><circle class="mk" cx="431.7" cy="264.4" r="5"/></g>
+</g>
+<g class="s2"><polyline class="ln" points="151.2,344.2 209.5,317.6 300.8,237.8 440.5,237.8 561.5,237.8"/>
+<g><title>Current, depth 10, errorPixels 0.5: 13 of 20 pass, +4.2% median time, 617 triangles per view</title><circle class="hit" cx="151.2" cy="344.2" r="10"/><circle class="mk" cx="151.2" cy="344.2" r="5"/></g>
+<g><title>Current, depth 10, errorPixels 0.4: 14 of 20 pass, +9.5% median time, 684 triangles per view</title><circle class="hit" cx="209.5" cy="317.6" r="10"/><circle class="mk" cx="209.5" cy="317.6" r="5"/></g>
+<g><title>Current, depth 10, errorPixels 0.3: 17 of 20 pass, +17.8% median time, 783 triangles per view</title><circle class="hit" cx="300.8" cy="237.8" r="10"/><circle class="mk" cx="300.8" cy="237.8" r="5"/></g>
+<g><title>Current, depth 10, errorPixels 0.2: 17 of 20 pass, +30.5% median time, 905 triangles per view</title><circle class="hit" cx="440.5" cy="237.8" r="10"/><circle class="mk" cx="440.5" cy="237.8" r="5"/></g>
+<g><title>Current, depth 10, errorPixels 0.15: 17 of 20 pass, +41.5% median time, 1031 triangles per view</title><circle class="hit" cx="561.5" cy="237.8" r="10"/><circle class="mk" cx="561.5" cy="237.8" r="5"/></g>
+</g>
+<g class="s3"><polyline class="ln" points="95.1,264.4 193.0,237.8 279.9,237.8 404.2,237.8"/>
+<g><title>Tie-break fix, depth 10, errorPixels 0.65: 16 of 20 pass, -0.9% median time, 558 triangles per view</title><circle class="hit" cx="95.1" cy="264.4" r="10"/><circle class="mk" cx="95.1" cy="264.4" r="5"/></g>
+<g><title>Tie-break fix, depth 10, errorPixels 0.4: 17 of 20 pass, +8.0% median time, 685 triangles per view</title><circle class="hit" cx="193.0" cy="237.8" r="10"/><circle class="mk" cx="193.0" cy="237.8" r="5"/></g>
+<g><title>Tie-break fix, depth 10, errorPixels 0.3: 17 of 20 pass, +15.9% median time, 783 triangles per view</title><circle class="hit" cx="279.9" cy="237.8" r="10"/><circle class="mk" cx="279.9" cy="237.8" r="5"/></g>
+<g><title>Tie-break fix, depth 10, errorPixels 0.2: 17 of 20 pass, +27.2% median time, 905 triangles per view</title><circle class="hit" cx="404.2" cy="237.8" r="10"/><circle class="mk" cx="404.2" cy="237.8" r="5"/></g>
+</g>
+<g><title>Planar path: 20 of 20 pass, +29.8% median time (+20% to +83% by view)</title><circle class="hit" cx="432.8" cy="158.0" r="11"/><path class="pl" d="M432.8 151.0 l7 7 l-7 7 l-7 -7 z"/></g>
+<text class="t2 sm" x="446.8" y="162.0">Planar everywhere: 20 of 20, +27 to +30%</text>
+<text class="t1 sm b" x="87.1" y="286.4">Tie-break alone:</text><text class="t2 xs" x="87.1" y="301.4">16 of 20, no extra cost</text>
+<text class="t1 sm b" x="187.0" y="204.8">Best triangles-only: depth 10, errorPixels 0.4</text><text class="t2 xs" x="187.0" y="219.8">17 of 20 for +8% time</text>
+<line class="hyl" x1="154.5" y1="158.0" x2="207.3" y2="158.0"/>
+<g><title>Hybrid, errorPixels 0.65, depth 7: 20 of 20 pass, +4.5% median time (-18% to +17% by view), 273 triangles + 253 strips per view</title><circle class="hit" cx="154.5" cy="158.0" r="11"/><rect class="hy" x="149.5" y="153.0" width="10" height="10"/></g>
+<g><title>Hybrid, errorPixels 0.4, depth 10: 20 of 20 pass, +9.3% median time (-7% to +26% by view), 334 triangles + 253 strips per view</title><circle class="hit" cx="207.3" cy="158.0" r="11"/><rect class="hy" x="202.3" y="153.0" width="10" height="10"/></g>
+<rect class="spot" x="193.3" y="144.0" width="28" height="28" rx="8"/>
+<text class="t1 sm b" x="227.3" y="162.0">Hybrid default: 20 of 20 for +9%</text>
+<text class="t2 xs" x="227.3" y="177.0">(+5% at today's tessellation)</text>
+<text class="t2 xs" x="319.5" y="284.4">Without the fix, errorPixels 0.3 costs</text>
+<text class="t2 xs" x="319.5" y="298.4">about +18% for 16 to 17 of 20</text>
+<text class="t2 xs" x="113.0" y="388.8">0.65 today</text>
+<text class="t2 xs" x="391.0" y="338.9">Triangles alone still fail the floor walk</text>
+<text class="t2 xs" x="391.0" y="353.9">(both sizes) and the 64px roof walk;</text>
+<text class="t2 xs" x="391.0" y="368.9">hybrid strips on floors fix all three.</text>
+<text class="mu xs" x="24" y="494">Chromium, owner-mask edge fix on. Cost: 6 views x 60 frames x 2 runs, median of per-view p50 ratios. Timer step is ~4% of baseline.</text>
+<text class="mu xs" x="24" y="510">Current-tessellator times are from the first run; tie-break times from a second run whose errorPixels 0.3 anchor read +16% (vs +18%).</text>
+<text class="mu xs" x="24" y="526">Hybrid and its planar reference are from a third run. Tie-break at depth 7 stays at 16 for every target. Frame-time tails not shown.</text>
+</svg>

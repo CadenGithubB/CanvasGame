@@ -25,6 +25,8 @@
     "if (!Number.isFinite(value)) return decline('nonplanar-depth-or-uv');");
   source=mutate(source,'--accept-general-depth-gradient',
     "if (xChanges && yChanges) return decline('general-perspective');", "if (false) return decline('general-perspective');");
+  source=mutate(source,'--ignore-rows-only',
+    "if (options.rowsOnly === true && !rows) return decline('rows-only');", "");
   source=mutate(source,'--ignore-convex-halfplanes',
     "if (!Number.isFinite(cross) || cross * winding < -Math.abs(signedArea) * 1e-9) return decline('nonconvex-face');",
     "if (!Number.isFinite(cross)) return decline('nonconvex-face');");
@@ -404,6 +406,11 @@
     invalidBounds.every(function(bounds){return declined(floor,{visibleBounds:bounds}).okay;}));
   check('malformed directional option declines before any pattern cache or draw work',
     [null,0,1,'false',{}].every(function(value){return declined(floor,{directional:value}).okay;}));
+  var rowsWall=declined(wall,{rowsOnly:true}),rowsFloorHost=drawHost(),rowsFloor=draw(rowsFloorHost,floor,{rowsOnly:true}),plainFloorHost=drawHost(),plainFloor=draw(plainFloorHost,floor);
+  check('hybrid rows-only mapping returns walls to triangles before painting and keeps floor strips unchanged',
+    rowsWall.okay&&rowsWall.result.reason==='rows-only'&&rowsFloor.handled&&!rowsFloor.failed&&rowsFloor.strips===plainFloor.strips&&sameBandCommands(rowsFloorHost,plainFloorHost),{wall:rowsWall,floor:rowsFloor,plain:plainFloor});
+  check('malformed rowsOnly option declines before any pattern cache or draw work',
+    [null,0,1,'true',{}].every(function(value){return declined(floor,{rowsOnly:value}).okay;}));
   var visibleBudget=declined(floor,{maxStrips:4,visibleBounds:floorBounds});
   check('one strip too little still declines after hidden bands have been removed',visibleBudget.okay,visibleBudget);
   var offscreen=[[-20,8],[84,8],[84,60],[-20,60]].map(function(p){return floorAt(p[0],p[1]);});

@@ -76,7 +76,7 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
             shutil.copyfile(dev.SOURCE_ROOT / "src" / name, self.source / "src" / name)
         shutil.copyfile(dev.SOURCE_ROOT / "page.html", self.source / "page.html")
         for name in ("structure-preview.html", "structure-model.js", "texture-mapping.js",
-                     "texture-temporal.js", "structure-temporal.js", "structure-motion.js"):
+                     "texture-temporal.js", "structure-temporal.js", "structure-motion.js", "edge-coverage.js"):
             shutil.copyfile(dev.REPO_ROOT / "tools/game" / name, self.tooling / name)
 
     def preview(self):
@@ -99,7 +99,7 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         for expected in ("var StructureProduction =", "var StructureModel =", "var TexturePilot =",
                          "function getCam3D()", "function beginSceneDepthFrame("):
             self.assertIn(expected, page)
-        for name in ("TextureTemporal", "StructureTemporal", "StructureMotion"):
+        for name in ("TextureTemporal", "StructureTemporal", "StructureMotion", "EdgeCoverage"):
             self.assertRegex(page, rf"\bvar\s+{name}\s*=")
         self.assertNotRegex(page, r"@[A-Za-z_][A-Za-z_0-9]*@")
         self.assertNotIn("function resetEndlessMode(", page)
@@ -109,7 +109,7 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
         path = self.tooling / "structure-preview.html"
         original = path.read_text(encoding="utf-8")
         markers = re.findall(r"/\*\s*@[A-Za-z_][A-Za-z_0-9]*@\s*\*/", original)
-        self.assertEqual(8, len(markers))
+        self.assertEqual(9, len(markers))
         for marker in markers:
             for replacement in ("", marker + marker):
                 with self.subTest(marker=marker, replacement=replacement):
@@ -164,7 +164,7 @@ class StructurePreviewAssemblyTests(unittest.TestCase):
 
     def test_script_terminators_and_leftover_injection_tokens_fail_closed(self):
         for name in ("structure-model.js", "texture-mapping.js", "texture-temporal.js",
-                     "structure-temporal.js", "structure-motion.js"):
+                     "structure-temporal.js", "structure-motion.js", "edge-coverage.js"):
             path = self.tooling / name
             original = path.read_text(encoding="utf-8")
             for suffix in ("\n</ScRiPt>", "\n/* @UNRESOLVED_FRAGMENT@ */"):

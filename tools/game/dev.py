@@ -330,10 +330,11 @@ def structure_preview_html(source_root: Path = SOURCE_ROOT,
     page = read_source(tooling_root, "structure-preview.html")
     markers = ("/* @PRODUCTION_CAMERA@ */", "/* @PRODUCTION_DEPTH@ */",
                "/* @TEXTURE_MAPPING@ */", "/* @STRUCTURE_PRODUCTION@ */", "/* @STRUCTURE_MODEL@ */",
-               "/* @TEXTURE_TEMPORAL@ */", "/* @STRUCTURE_TEMPORAL@ */", "/* @STRUCTURE_MOTION@ */")
+               "/* @TEXTURE_TEMPORAL@ */", "/* @STRUCTURE_TEMPORAL@ */", "/* @STRUCTURE_MOTION@ */",
+               "/* @EDGE_COVERAGE@ */")
     found = re.findall(r"/\*\s*@[A-Za-z_][A-Za-z_0-9]*@\s*\*/", page)
     if sorted(found) != sorted(markers):
-        raise SourceError("structure preview must contain each production, mapping, model, and temporal marker exactly once")
+        raise SourceError("structure preview must contain each production, mapping, model, temporal, and edge-coverage marker exactly once")
     config = read_source(source_root, "src/01-config-state.js")
     start, end = "function getCam3D() {", "// Projects a world point to screen coordinates."
     if config.count(start) != 1 or config.count(end) != 1 or config.index(start) >= config.index(end):
@@ -344,7 +345,8 @@ def structure_preview_html(source_root: Path = SOURCE_ROOT,
                  structure_production_js(source_root), read_source(tooling_root, "structure-model.js"),
                  read_source(tooling_root, "texture-temporal.js"),
                  read_source(tooling_root, "structure-temporal.js"),
-                 read_source(tooling_root, "structure-motion.js"))
+                 read_source(tooling_root, "structure-motion.js"),
+                 read_source(tooling_root, "edge-coverage.js"))
     for marker, script in zip(markers, fragments):
         if re.search(r"</script", script, re.I) or re.search(r"@[A-Za-z_][A-Za-z_0-9]*@", script):
             raise SourceError(f"structure preview {marker}: unsafe script or unresolved injection marker")
@@ -438,9 +440,11 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_texture_mapping",
                            "tools.game.tests.test_texture_filtering",
                            "tools.game.tests.test_texture_planar",
+                           "tools.game.tests.test_texture_coverage",
                            "tools.game.tests.test_texture_temporal",
                            "tools.game.tests.test_structure_model",
                            "tools.game.tests.test_structure_temporal",
+                           "tools.game.tests.test_edge_coverage",
                            "tools.game.tests.test_platforms_2d",
                            "tools.game.tests.test_cave_geometry", "tools.game.tests.test_cave_lighting",
                            "tools.game.tests.test_cave_render", "tools.game.tests.test_cave_material",

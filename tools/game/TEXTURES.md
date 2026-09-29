@@ -47,15 +47,22 @@ refreshes the live game.
   There are no runtime image
   requests or third-party art. Separate file-image decoding/failure handling is
   not implemented or tested by this procedural-source pilot.
-- Convex faces ordinarily use adaptive affine Canvas triangles. Per-face
-  maximum: 256; refinement depth: 7; target mapping error: 0.65 screen pixels.
-  The optional planar path instead allows up to 384 one-pixel strips per face.
+- Convex faces ordinarily use adaptive affine Canvas triangles with
+  `TexturePilot.STRUCTURE_TESSELLATION`: per-face maximum 256, refinement
+  depth 10, target mapping error 0.4 screen pixels, and a split-edge tie-break
+  (before 2026-09-27: depth 7, 0.65 px, strict comparison). The structure
+  study defaults to **hybrid** mapping: planar strips for row faces (floors,
+  flat and camera-facing roofs) and those triangles for walls and everything
+  else. The planar path allows up to 384 one-pixel strips per face.
   Both paths share a 2,048 triangle-plus-strip budget per view. Reaching a cap
   is reported, not a guarantee that the target was met. Scene-budget exhaustion
   leaves the complete solid material fallback visible.
 - The outer face is clipped once to the actual production integer-pixel depth
   mask and receives an opaque base. Expanded triangle clips reduce internal
   antialias seams without leaking through occluders. No nested depth-mask call.
+  With `ownedPixels` (the preview default), outline edges also get outward
+  skirts so the integer mask alone decides outline coverage; see
+  [Edge coverage and long-face motion](#edge-coverage-and-long-face-motion-2026-09-27).
 - Texture density uses authored physical dimensions. Lid UVs stay in its local
   coordinates through the hinge transformation; world surfaces use authored
   world coordinates. This scene does not stream chunks and therefore does not
@@ -154,7 +161,10 @@ The complete visible band list,
 convex ordering, depth/UV planarity, filter availability and strip budget are
 validated before painting. Unsupported/general perspective, constant depth and
 over-budget faces remain on the ordinary triangle path. Both paths stay within
-the same outer opaque depth mask; strips also clip to the actual convex face.
+the same outer opaque depth mask. Without `ownedPixels`, strips also clip to
+the actual convex face; with it, that antialiased outline clip is skipped and
+the caller's integer mask is the only outline guard, so never pass
+`ownedPixels` without such a mask.
 Decline reasons, successful strip faces, strip counts and actual pattern fills
 are reported rather than inferred from triangle totals.
 
@@ -851,6 +861,258 @@ preferences, midtone compatibility failures, 64/128px visibility checks and
 paired performance reports, with source hashes and the standard-gate result.
 Its decision is explicitly `EXPERIMENTAL_OPT_IN_NOT_SHIPPING`. It is measured
 evidence, not a passing CI golden; the original failure baseline remains intact.
+
+## Edge coverage and long-face motion (2026-09-27)
+
+This follow-up investigated remaining pulsing, line popping and flicker on long
+textured faces and at pillar/object corners. Evidence is native Chromium 152
+(the Claude desktop in-app browser, real Canvas rasterizer) on isolated study
+pages, plus a jsc replay that reproduces the native motion workload and all 40
+verdicts. Raw data, the chart generator and per-case results are in
+`docs/game_audit_handoff/evidence/texture_edge_coverage/`. Nothing here changes
+the production game; `texture-mapping.js` remains the isolated pilot.
+
+### Outline coverage under the owner mask
+
+**Confirmed cause.** `12-scene-depth.js` assigns pixels by integer pixel-centre
+ownership (`_sceneDepthTriangle`, `_traceSceneDepthPixelMask`,
+`withSceneDepthClip`). The texture passes were then clipped a second time by
+antialiased polygons: planar strips by the face outline, triangles by
+`expandTriangle` (0.7 px offset, miter capped at 3 px). Chromium quantizes
+antialiased clip coverage to quarters, so an owned pixel that the second clip
+only partly covers keeps ¼–¾ of the opaque base. Which pixels are partial
+changes with sub-pixel camera motion, so the seam pulses along long faces and
+pops at corners. Long thin outline triangles make it worse: at an acute corner
+the capped miter reaches only 3·sin(θ/2) px, and where two partial coverages
+meet, source-over leaves (1−a)(1−b) of the base showing. An ablation that
+removes only the texture clip gives 255 at every phase on every join and
+occluder case, so the clip, not sampling, is responsible.
+
+**Fix.** Pass `ownedPixels: true` to `drawPlanarFace`/`drawTriangle` only when
+the caller has already clipped to the integer mask (both preview pages do, via
+the default-on **Owner-mask edge coverage** checkbox):
+
+- Planar faces skip the face-outline clip.
+- `tessellate` passes per-edge outline flags to `emit`. `drawTriangle` clips
+  to `ownedClip`: the unchanged `expandTriangle` plus a 2 px outward skirt,
+  extended 2 px along the edge, on each outline edge. Skirts share the
+  triangle's winding, so the nonzero clip is a union and interior edges keep
+  exactly the old clip. The clip is built once per triangle and reused by
+  both mip passes.
+
+| Check (Codex join fixture unless noted, 17 sub-pixel phases) | Before | Owner mask |
+| --- | ---: | ---: |
+| Triangles 64/128px, legacy filter, reversed face order | min 191 | 255 |
+| Planar 64/128px, isotropic, reversed order | min 128 | 255 |
+| Transposed (horizontal) join, both paths | min 128 | 255 |
+| Nearer occluder drawn first or last | 0 leaked | 0 leaked, 255 |
+| 9 structure views: pixels below 250 within 1.5 px of a face edge | 4,733, min 64 | 26, min 231 |
+| 9 structure views: owned pixels straddling their own face outline, below 250 | — | 0 (5 at exactly 250) |
+| Native structure motion suite | triangles 12/20, planar 20/20 | identical residuals |
+
+Median triangle submission rose about 5–10% (clip subpaths 8,987 → 19,088
+in the jsc replay of the nine views); planar was neutral. Rejected designs: a
+single re-mitred clip (changed interior coverage and regressed interior
+motion), a pixel-centre rectangle partition (far too slow at structure scale),
+skirts only at capped joins (left 1,760 gaps) and integer pixel runs along
+outlines (68% more subpaths, no additional pixels fixed).
+
+**Review defects, fixed.** An adversarial review found three defects, now
+fixed with a regression check and mutant each in `tests/texture_mapping.js`:
+
+1. Skirts on viewport-cut edges (x = 0, x = width, y = height) changed 30
+   pixels wholly inside canvas-cropped floor faces by ±1 LSB in grazing views.
+   Viewport cuts own no off-canvas pixels, so `tessellate` no longer flags them.
+2. When the first or last fan root was degenerate and skipped, the
+   neighbour's outline edge was flagged interior and lost its skirt. It never
+   occurred in 16,869 projected structure faces, but synthetic repros existed.
+   `ab` is now flagged on the first *kept* root and `ca` on the last.
+3. `drawTriangle(..., {ownedPixels: true})` threw on a missing vertex instead
+   of returning `false`; vertices are now validated before `ownedClip`.
+
+The remaining 125 pixels below 250 (the lab's 26 "edge" plus 99 "interior") all
+lie wholly inside their face. They are pre-existing interior seams from the
+3 px miter cap at corners under about 27°, unchanged by this fix and not
+reachable by any outline-only change.
+
+**Tests.** `tests/texture_coverage.js` checks, on a recording canvas, that
+every owned pixel sample is inside an opaque pass, that skirts stay outside
+the face with matching winding, that boundary flags match the face outline and
+never viewport cuts (15,729 edges) and that planar issues only band clips. It
+has 28 checks and four mutants (`--old-clip`, `--keep-face-clip`,
+`--drop-outline-flags`, `--reverse-skirt`), each caught by its intended check.
+`tests/edge_coverage.js` exercises the native module's scenes and classifier on
+a fake canvas. The native module (`edge-coverage.js`, **Test edge coverage** in
+the structure study) passed in Chromium 152: 16/16 owner-mask cases exact at
+every phase, all 10 controls passing, including the owner-mask-off
+sensitivity gate and injected-defect detection.
+
+### Long faces: re-meshing, tessellation cost and tile size
+
+**Confirmed cause of the small-motion triangle failures.** `makeNode` picks the
+split edge with a strict `>` over its three edge errors. On walls and roofs
+whose depth varies along one axis, the two largest errors are equal to five
+decimals, so floating-point noise decides which edge is split, differently
+each frame. The face re-meshes: on the tall wall, 54 split-edge flips in 15
+frame pairs, about 1,595 of 2,048 ROI pixels changing owning triangle per
+frame, and texture jumps of RMS 0.175 px (up to 0.78 px) where they do. A
+**split-edge tie-break** (lowest edge index within 2% of the maximum) keeps the
+mesh stable. It was first measured natively by swapping `tessellate` for a
+verbatim copy (a copy with a zero tie band reproduced production exactly on
+all 20 cases) and is now `SPLIT_TIE` in `makeNode`. A portable check nudges a
+mirror-symmetric triangle by ±1e-9 px and requires the same split edge; the
+`--strict-split-edge` mutant flips between the two edges and fails it.
+
+The walks have separate causes. The floor walk needs anisotropic filtering:
+exact perspective UVs plus exact isotropic LOD still give local 0.163, and only
+the directional planar path passes. The 128px roof walk is affine error sliding
+under large camera steps and passes with depth 10 and errorPixels ≤ 0.4. The
+64px roof walk is limited by bilinear magnification of the 64px base (see tile
+size below).
+
+![Motion cases passing against extra frame time for the current tessellator at depth 7 and 10, the tie-break fix at depth 10, the hybrid default and planar everywhere](../../docs/game_audit_handoff/evidence/texture_edge_coverage/tessellation_tradeoff.svg)
+
+**Reading the chart.** With the current tessellator, tightening errorPixels
+helps up to 0.3 (12 → 16 of 20 at depth 7, 17 at depth 10, about +18% median
+time and +43% triangles); tighter targets and a 512 per-face cap add cost with
+no further passes. The tie-break alone reaches 16 of 20 with no extra
+triangles or time, which beats every error-target setting without it. Adding
+depth 10 and errorPixels 0.4 gives 17 of 20 for +8%, the best triangle-only
+setting. The three remaining failures (floor walk at both sizes, roof walk at
+64px) are not tessellation problems, and planar strips fix exactly those.
+Planar everywhere passes all 20 but costs +27% to +30% median (+20% to +83%
+by view, three times the pattern fills).
+
+**Default: hybrid mapping.** Planar strips for row faces only
+(`drawPlanarFace(..., {rowsOnly: true})` declines walls as `rows-only`, which
+then take tie-broken triangles) pass **all 20** for +9.3% median (−7% to
++26% by view; 334 triangles plus 253 strips per view, 1.49× fills). At
+today's tessellation the hybrid also passes 20 of 20 for +4.5%, but sloped
+faces that the planar path declines as general perspective then fall back to
+triangles that fail the walking roof, so the default keeps depth 10 and
+errorPixels 0.4. On the real study page after implementation, the native
+motion suite reports hybrid 20/20, planar 20/20 and triangles 17/20, with every
+residual matching the sweep and all controls passing. Planar's rAF-paced tail
+cost (above) applies to the strip share, so check p95 in the game before
+promoting the hybrid beyond the study pages.
+
+| Setting (errorPixels, depth) | Passing (of 20) | 64 / 128px | Worst local RMS | Triangles per view | Median time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0.65, 7 (today) | 12 | 7 / 5 | 0.256 | 556 | baseline |
+| 0.5, 7 | 13 | 7 / 6 | 0.232 | 612 | +3.7% |
+| 0.4, 7 | 13 | 7 / 6 | 0.232 | 676 | +7.8% |
+| 0.3, 7 | 16 | 8 / 8 | 0.232 | 778 | +19.1% |
+| 0.2, 7 | 16 | 8 / 8 | 0.232 | 903 | +29.7% |
+| 0.5, 10 | 13 | 7 / 6 | 0.294 | 617 | +4.2% |
+| 0.4, 10 | 14 | 7 / 7 | 0.294 | 684 | +9.5% |
+| 0.3, 10 | 17 | 8 / 9 | 0.294 | 783 | +17.8% |
+| 0.2, 10 | 17 | 8 / 9 | 0.294 | 905 | +30.5% |
+| 0.15, 10 | 17 | 8 / 9 | 0.294 | 1,031 | +41.5% |
+| 0.4, 10, cap 512 | 14 | 7 / 7 | 0.165 | 799 | +25.6% |
+| 0.3, 10, cap 512 | 17 | 8 / 9 | 0.165 | 912 | +35.4% |
+| 0.3, 10, cap 1,024 | 15 of 18 valid | 7 / 8 | 0.163 | — | — |
+| Tie-break 0.65, 7 | **16** | 8 / 8 | 0.256 | 557 | +0.0% |
+| Tie-break 0.5–0.3, 7 | 16 | 8 / 8 | 0.232 | — | — |
+| Tie-break 0.65, 10 | 16 | 8 / 8 | 0.294 | 558 | −0.9% |
+| Tie-break 0.4, 10 | **17** | 8 / 9 | 0.294 | 685 | +8.0% |
+| Tie-break 0.3, 10 | 17 | 8 / 9 | 0.294 | 783 | +15.9% |
+| Tie-break 0.2, 10 | 17 | 8 / 9 | 0.294 | 905 | +27.2% |
+| **Hybrid (default): tie-break 0.4, 10 + planar rows** | **20** | 10 / 10 | 0.119 | 334 + 253 strips | +9.3% |
+| Hybrid, tie-break 0.65, 7 + planar rows | 20 | 10 / 10 | 0.119 | 273 + 253 strips | +4.5% |
+| Planar everywhere (directional) | 20 | 10 / 10 | 0.119 | 6 + 827 strips | +27.3% to +29.8% |
+
+Quality is the native structure motion suite (20 triangle cases, limits as
+above). The floor walk sets the worst local RMS in every row except today's
+setting, where the 128px roof walk does. Depth 10 makes the capped floor walk
+worse (0.232 → 0.294); presumably the worst-first queue spends the
+256-triangle cap deeper in fewer regions, but that has not been isolated. Cost
+is median submission time on six views (fortress, arena,
+watchtower × exterior, gate), 360×240, 6 warm-up plus 60 interleaved frames
+per setting and two runs: the median of 12 per-view p50 ratios against today's
+setting in the same run. The timer step (0.1 ms) is about 4% of the 2.7 ms
+baseline. The tie-break rows come from a second run whose errorPixels 0.3,
+depth 10 anchor read +15.9% against +17.8% in the first; the hybrid rows come
+from a third run in which triangle-only tie-break 0.4, depth 10 read +8.8%.
+Tight-loop p95s are
+dominated by 40–95 ms stalls in both modes when frames are not rAF-paced, so
+tails are not reported; use the A/B/B/A tables above for tails.
+
+**Tile size.** 64px and 128px cost the same: at every setting the median
+64/128 submission ratio was 0.99–1.01 (A/B/B/A, six views), with identical
+triangle and strip counts. On gate views 64px issues 2–10% fewer pattern fills
+because some near faces are magnified at 64px (one pass) but mip-blended at
+128px. As noted above, 64px is not a memory saving either.
+
+![Motion cases passing at 64px and 128px tiles, same settings as the previous chart](../../docs/game_audit_handoff/evidence/texture_edge_coverage/tile_size_tradeoff.svg)
+
+The two tiles are not a conventional mip pair. For k ≥ 1, 64px level k has
+the same footprint, grid and blend weight as 128px level k+1 (byte-identical
+for the motion stripe), but 128px level 1 (a two-texel box on a 128 grid)
+differs from the raw 64px base. Tessellation, clips and budgets never read the
+tile size. What differs is therefore only the lowest level drawn, which
+depends on the footprint F128 (128px texels per screen pixel; head-on at
+360×240 and 72°, F128 ≈ distance / 62 world units):
+
+| Band | F128 | 128px draws | 64px draws | Motion fixtures | Result |
+| --- | ---: | --- | --- | --- | --- |
+| Beyond ~248 units | > 4 | same levels as 64px | same levels as 128px | floors, grazing wall, floor walk | identical for the stripe; ≤ 1.3 luma RMS for real art |
+| ~124–248 units | 2–4 | fp2 level + next | raw 64px base + next | front wall, arena inner wall | small differences (front wall 0.0156 at 64px against 0.0107) |
+| ~62–124 units | 1–2 | 128px base + fp2 blend (sharper) | one bilinear pass of the 64px base (edge ramp ~1.5 px) | tall wall, both sloped roofs, roof walk | 64px damps affine error; fails fast motion |
+| Under ~62 units | ≤ 1 | magnified 128px base | magnified 64px base | none | not covered by the suite |
+
+- **Today, 64px passes more (7 against 5)** because its softer magnified edge
+  damps the same affine UV error. In the replay, giving the 64px run the
+  virtual 128px chain reproduces 128px's results (tall wall 0.208, fortress
+  roof 0.130), and a sharper unblended 128px base is worse still (0.303,
+  0.175). With exact UVs both sizes pass the roofs easily (fortress roof 0.015
+  against 0.022, crack-normalized replay). The
+  fortress sloped roof is a real difference (0.082 against 0.129); the tower
+  sloped roof (0.1195 against 0.1208) straddles the 0.12 limit by chance.
+- **With the tie-break fix both sizes pass 8 of 10 at no cost.** Once the
+  mesh stops re-meshing there is little UV error left for the blur to hide.
+  At fine tessellation the order flips slightly (tall wall 0.081 at 64px
+  against 0.070): residual UV error seems to cost the wider 64px ramp more,
+  though that mechanism is a hypothesis.
+- **Only 128px reaches 9.** The 64px roof walk fails at every triangle
+  setting. Exact UVs give 0.137–0.141 in the replay, and tighter tessellation
+  converges natively to 0.1376, both above 0.12. The cause is the shape of the
+  magnified edge: a ~1.5 px bilinear ramp against the suite's pixel-box
+  reference, which only becomes temporal error when the edge moves fast. It
+  is the only fast fixture in the magnified band (~1.2 px per frame; the other
+  near fixtures move 0.05–0.14, and the fast floor walk is in the identical
+  band). At a quarter of
+  the camera speed it passes (0.076). Nearest, 4× nearest and pre-blurred
+  bases all score worse, so this is not texel-grid stepping. Giving the
+  triangle path the planar path's virtual 128px chain passes it in the replay
+  (0.1035 at errorPixels 0.3, depth 10). For the stripe that chain is
+  byte-identical to 128px's, so it would simply reproduce the 128px results,
+  including 128px's roof failures when there is no tie-break. How it looks on
+  real 64px art up close is untested.
+- **Planar is nearly size-neutral for the suite.** The 64px planar chain is
+  byte-identical to the 128px chain for the stripe, so planar and hybrid pass
+  10/10 at both sizes. Head-on constant-depth faces are declined by the planar
+  path and keep the triangle path's split (front wall 0.0156 against 0.0107 in
+  every mode). Real 64px art is a downscaled drawing and differs.
+
+Up close, 64px art looks softer rather than blocky, because magnification is
+bilinear. In a head-on software model before the 32% face wash, stone differs
+from 128px by about 4.5 luma RMS and wood by about 7 under ~62 units, shrinking
+to ≤ 1.3 beyond ~248. At the benchmark views, every exterior pixel is beyond
+F128 = 4; 70% of the fortress gate view is in the 1–2 band; the watchtower
+courtyard is 63% magnified at both sizes. On close views 64px can skip one
+blended pass on up to about a quarter of fills (for example about 188 of 755
+in the watchtower courtyard at errorPixels 0.3, depth 10), predicted to save
+at most about 0.3 ms. Otherwise per-frame costs are the same. Memory is not
+lower (234,756 against 218,372 bytes per prepared material), though one-time
+preparation is cheaper at 64px (30 ms against 39 ms for the catalog).
+
+So choose tile size for the art. Neither size is cheaper. Before the tie-break
+fix, 64px hides pulsing by low-passing the error rather than fixing it. After
+it, neither pulses more, except that magnified 64px faces on the triangle path
+cannot reach the roof-walk limit at walking speed; with the hybrid default that
+roof is drawn by strips and passes at both sizes. The suite has no fixture
+under ~62 world units, where the sizes differ most; add a near-wall fixture
+before judging 64px on detail against stability.
 
 ## Before shipping integration
 

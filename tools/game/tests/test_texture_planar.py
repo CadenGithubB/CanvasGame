@@ -14,8 +14,8 @@ class TexturePlanarTests(unittest.TestCase):
         result = run_js(self.script, timeout=30)
         output = result.stdout + result.stderr
         self.assertEqual(0, result.returncode, output)
-        self.assertIn("TEXTURE_PLANAR_RESULT PASS 51", output.splitlines())
-        self.assertEqual(51, sum(line.startswith("PASS ") for line in output.splitlines()))
+        self.assertIn("TEXTURE_PLANAR_RESULT PASS 53", output.splitlines())
+        self.assertEqual(53, sum(line.startswith("PASS ") for line in output.splitlines()))
         self.assertNotIn("FAIL ", output)
         self.assertNotIn("Error:", output)
         self.assertNotIn("Exception:", output)
@@ -44,6 +44,7 @@ class TexturePlanarTests(unittest.TestCase):
             "--exclude-last-visible-band": "inclusive depth visibility bounds budget only the five retained floor rows",
             "--occluder-changes-footprint": "occluder bounds cannot change UV phase footprint mip levels or tap commands on retained rows",
             "--accept-invalid-visible-bounds": "malformed empty inverted or out of viewport depth bounds decline before paint",
+            "--ignore-rows-only": "hybrid rows-only mapping returns walls to triangles before painting and keeps floor strips unchanged",
         }
         for flag, assertion in mutations.items():
             with self.subTest(mutation=flag):
@@ -53,7 +54,7 @@ class TexturePlanarTests(unittest.TestCase):
                 self.assertIn("PASS authored floor and wall fixtures reach genuine varying forward depth", output)
                 self.assertIn("PASS already affine constant depth faces remain with the ordinary mapper", output)
                 self.assertIn("FAIL " + assertion, output)
-                self.assertRegex(output, r"TEXTURE_PLANAR_RESULT FAIL \d+/51")
+                self.assertRegex(output, r"TEXTURE_PLANAR_RESULT FAIL \d+/53")
                 self.assertNotIn("MUTATION_ANCHOR", output)
                 self.assertNotIn("Error:", output)
                 self.assertNotIn("Exception:", output)

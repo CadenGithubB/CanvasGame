@@ -33,6 +33,13 @@
     'ctx.transform(m11, m12, m21, m22, dx, dy);', 'ctx.transform(m11, m21, m12, m22, dx, dy);');
   source = mutate(source, '--leak-canvas-state',
     'ctx.restore();\n    return true;', '/* mutation: leak material transform and fill state */\n    return true;');
+  source = mutate(source, '--strict-split-edge', 'var SPLIT_TIE = 0.02;', 'var SPLIT_TIE = 0;');
+  source = mutate(source, '--flag-viewport-cuts',
+    'return !((p.x === 0 && q.x === 0) ||', 'return true || !((p.x === 0 && q.x === 0) ||');
+  source = mutate(source, '--flag-by-fan-index', 'f === 0 && outline(a, b)', 'fan[f] === 1 && outline(a, b)');
+  source = mutate(source, '--owned-before-validation',
+    'if (!finiteVertex(a) || !finiteVertex(b) || !finiteVertex(c)) return false;\n      clip = {ownedPixels: true',
+    'clip = {ownedPixels: true');
   (0, eval)(source);
   (0, eval)(slurp('assets/games/src/12-scene-depth.js'));
   var T = G.TexturePilot;
@@ -139,6 +146,47 @@
   var inverted = tessellate(plane.slice().reverse(), {maxTriangles:8});
   check('reversed winding preserves full material surface rather than culling it accidentally',
     inverted.triangles.length > 0 && near(area(inverted.triangles),1024), inverted.stats);
+
+  function flagged(polygon, options) {
+    var leaves = [];
+    T.tessellate(polygon, Object.assign({width:120,height:120,maxTriangles:256,maxDepth:0,errorPixels:0.01}, options),
+      function (x, y, z, flags) { leaves.push({points:[x,y,z], flags:flags}); });
+    return leaves;
+  }
+  function onLine(p, q, axis, value) { return near(p[axis], value) && near(q[axis], value); }
+  // Mirror-symmetric triangle whose depth varies only with y: edges bc and ca
+  // have equal mapping error, so which one splits is decided by the tie rule.
+  // A 1e-9 px nudge either way must not move the split (re-meshing).
+  function firstSplit(nudge) {
+    var leaves = [];
+    T.tessellate([vertex(0,0,2,0,0), vertex(40,0,2,1,0), vertex(20 + nudge,30,6,0.5,1)],
+      {width:120,height:120,maxTriangles:256,maxDepth:1,errorPixels:0.001}, function (x, y, z) { leaves.push([x,y,z]); });
+    var mid = [].concat.apply([], leaves).filter(function (p) { return p.y > 1e-6 && p.y < 30 - 1e-6; })[0];
+    return {leaves:leaves.length, side:mid ? (mid.x > 20 ? 'bc' : 'ca') : null};
+  }
+  var left = firstSplit(-1e-9), right = firstSplit(1e-9);
+  check('exactly tied split edges choose the same edge under sub-nanopixel camera noise',
+    left.leaves === 2 && right.leaves === 2 && left.side !== null && left.side === right.side, {left:left, right:right});
+  // Quad cut by the right viewport edge x=30: the cut is not face outline.
+  var cut = flagged([vertex(10,10,2,0,0), vertex(50,10,2,1,0), vertex(50,20,2,1,1), vertex(10,20,2,0,1)], {width:30});
+  var cutEdges = [], faceEdges = [];
+  cut.forEach(function (leaf) { for (var i = 0; i < 3; i++) {
+    var p = leaf.points[i], q = leaf.points[(i + 1) % 3];
+    if (onLine(p, q, 'x', 30)) cutEdges.push(leaf.flags[i]);
+    else if (onLine(p, q, 'y', 10) || onLine(p, q, 'y', 20) || onLine(p, q, 'x', 10)) faceEdges.push(leaf.flags[i]);
+  } });
+  check('viewport cut edges are not flagged as face outline while real outline edges are',
+    cutEdges.length > 0 && cutEdges.every(function (f) { return f === false; }) &&
+    faceEdges.length >= 3 && faceEdges.every(function (f) { return f === true; }), {cut:cutEdges, face:faceEdges});
+  // Collinear first three vertices: the degenerate first fan root is skipped,
+  // so the first KEPT root owns the top outline edge (20,20)->(100,20).
+  var collinear = flagged([vertex(20,20,2,0,0), vertex(60,20,2,0.5,0), vertex(100,20,2,1,0), vertex(100,90,2,1,1), vertex(20,90,2,0,1)]);
+  var top = [];
+  collinear.forEach(function (leaf) { for (var i = 0; i < 3; i++) {
+    if (onLine(leaf.points[i], leaf.points[(i + 1) % 3], 'y', 20)) top.push(leaf.flags[i]);
+  } });
+  check('a skipped degenerate end root does not hide its collinear outline edge',
+    collinear.length === 2 && top.length === 1 && top[0] === true, {leaves:collinear.length, top:top});
 
   var recordings = [], created = [], patternCount = 0, sourceRecords = new WeakMap();
   function recordingContext(owner) {
@@ -275,6 +323,11 @@
   var callsBefore = paintRecord.calls.length;
   check('degenerate UV triangle cannot issue an invalid Canvas transform',
     !T.drawTriangle(paintContext,mapped[0],mapped[0],mapped[2],first.materials.wood,{filter:'legacy'}) && paintRecord.calls.length === callsBefore);
+  var missingVertex;
+  try { missingVertex = T.drawTriangle(paintContext,null,mapped[1],mapped[2],first.materials.wood,{ownedPixels:true,boundary:[true,true,true]}); }
+  catch (error) { missingVertex = 'threw ' + error.message; }
+  check('owner-masked drawing rejects a missing vertex instead of throwing',
+    missingVertex === false && paintRecord.calls.length === callsBefore, missingVertex);
   out('TEXTURE_MAPPING_RESULT ' + (failed ? 'FAIL '+failed+'/' : 'PASS ') + checked);
 }());
 undefined;

@@ -1,0 +1,2260 @@
+{
+ "e0.65 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1955
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.2078
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0818
+   },
+   "fortress-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1292
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.2218
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.2559
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.2218",
+     "tower-tall-wall 0.1955"
+    ]
+   },
+   "128": {
+    "pass": 5,
+    "worst": 0.2559,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "fortress-sloped-roof 0.1292",
+     "tower-roof-walk 0.2559",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.2078"
+    ]
+   }
+  }
+ },
+ "e0.5 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1647
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0198
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1723
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1338
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1723",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 6,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1338",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1647"
+    ]
+   }
+  }
+ },
+ "e0.4 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1648
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0198
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1335
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1604",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 6,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1335",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1648"
+    ]
+   }
+  }
+ },
+ "e0.3 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0897
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0912
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0198
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0817
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.079
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1335
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1604"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1335"
+    ]
+   }
+  }
+ },
+ "e0.2 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0897
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0912
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0198
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0817
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.079
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1335
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1604"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1335"
+    ]
+   }
+  }
+ },
+ "e0.5 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1647
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1723
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1338
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1723",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 6,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1338",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1647"
+    ]
+   }
+  }
+ },
+ "e0.4 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1648
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.1033
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1604",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 7,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1648"
+    ]
+   }
+  }
+ },
+ "e0.3 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0809
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0696
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0817
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.079
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.097
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1604"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ },
+ "e0.2 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0809
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.069
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.059
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.046
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1437
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.086
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1437"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ },
+ "e0.15 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0809
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.069
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0631
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.046
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1437
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.086
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1437"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ },
+ "e0.4 d10 c512": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0202
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0202
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.014
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.014
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.0313
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.0313
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0264
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1648
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.1654
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.1654
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.1033
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.1654,
+    "fails": [
+     "fortress-floor-walk 0.1654",
+     "tower-roof-walk 0.1604",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 7,
+    "worst": 0.1654,
+    "fails": [
+     "fortress-floor-walk 0.1654",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1648"
+    ]
+   }
+  }
+ },
+ "e0.3 d10 c512": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0202
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0202
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.014
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.014
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.0313
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.0313
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0479
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0495
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0809
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0696
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0401
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0368
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0817
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.079
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.1654
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.1654
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.097
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.1654,
+    "fails": [
+     "fortress-floor-walk 0.1654",
+     "tower-roof-walk 0.1604"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.1654,
+    "fails": [
+     "fortress-floor-walk 0.1654"
+    ]
+   }
+  }
+ },
+ "e0.3 d10 c1024": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0193
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0193
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0133
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0133
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.0319
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.0749
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0479
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0495
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0809
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0696
+   },
+   "fortress-sloped-roof-64": {
+    "status": "S",
+    "local": null
+   },
+   "fortress-sloped-roof-128": {
+    "status": "S",
+    "local": null
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0817
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.079
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.163
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.163
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1604
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.097
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.163,
+    "fails": [
+     "fortress-floor-walk 0.163",
+     "fortress-sloped-roof None",
+     "tower-roof-walk 0.1604"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.163,
+    "fails": [
+     "fortress-floor-walk 0.163",
+     "fortress-sloped-roof None"
+    ]
+   }
+  }
+ },
+ "e0.5 d10 c1024": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0193
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0193
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0133
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0133
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.0314
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.0314
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0932
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0929
+   },
+   "tower-tall-wall-64": {
+    "status": "F",
+    "local": 0.1541
+   },
+   "tower-tall-wall-128": {
+    "status": "F",
+    "local": 0.1647
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.1195
+   },
+   "tower-sloped-roof-128": {
+    "status": "F",
+    "local": 0.1208
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.163
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.163
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1723
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1338
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 7,
+    "worst": 0.1723,
+    "fails": [
+     "fortress-floor-walk 0.163",
+     "tower-roof-walk 0.1723",
+     "tower-tall-wall 0.1541"
+    ]
+   },
+   "128": {
+    "pass": 6,
+    "worst": 0.1647,
+    "fails": [
+     "fortress-floor-walk 0.163",
+     "tower-roof-walk 0.1338",
+     "tower-sloped-roof 0.1208",
+     "tower-tall-wall 0.1647"
+    ]
+   }
+  }
+ },
+ "G2 e0.65 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0462
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0621
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0196
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0258
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0499
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0517
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.2218
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.2559
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.2218"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2559,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.2559"
+    ]
+   }
+  }
+ },
+ "G2 e0.5 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0658
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0705
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0493
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0559
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0499
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0517
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1754
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1338
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1754"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1338"
+    ]
+   }
+  }
+ },
+ "G2 e0.4 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0449
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0464
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0493
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0559
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0827
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0596
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1657
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1335
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1657"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1335"
+    ]
+   }
+  }
+ },
+ "G2 e0.3 d7": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0255
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0158
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0585
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0449
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0388
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0493
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0559
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.052
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.045
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2322
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1657
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.1335
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1657"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2322,
+    "fails": [
+     "fortress-floor-walk 0.2322",
+     "tower-roof-walk 0.1335"
+    ]
+   }
+  }
+ },
+ "G2 e0.65 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0462
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0621
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0196
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0258
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0499
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0517
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.2218
+   },
+   "tower-roof-walk-128": {
+    "status": "F",
+    "local": 0.2559
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.2218"
+    ]
+   },
+   "128": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.2559"
+    ]
+   }
+  }
+ },
+ "G2 e0.4 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0449
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0464
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.017
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0827
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0596
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1655
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.1004
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1655"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ },
+ "G2 e0.3 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0449
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0393
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.017
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.052
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.045
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1655
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.0988
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1655"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ },
+ "G2 e0.2 d10": {
+  "cases": {
+   "fortress-floor-64": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "fortress-floor-128": {
+    "status": "P",
+    "local": 0.0325
+   },
+   "arena-floor-64": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "arena-floor-128": {
+    "status": "P",
+    "local": 0.0146
+   },
+   "fortress-grazing-wall-64": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-grazing-wall-128": {
+    "status": "P",
+    "local": 0.032
+   },
+   "fortress-front-wall-64": {
+    "status": "P",
+    "local": 0.0156
+   },
+   "fortress-front-wall-128": {
+    "status": "P",
+    "local": 0.0107
+   },
+   "arena-inner-wall-64": {
+    "status": "P",
+    "local": 0.0358
+   },
+   "arena-inner-wall-128": {
+    "status": "P",
+    "local": 0.0337
+   },
+   "tower-tall-wall-64": {
+    "status": "P",
+    "local": 0.0449
+   },
+   "tower-tall-wall-128": {
+    "status": "P",
+    "local": 0.0393
+   },
+   "fortress-sloped-roof-64": {
+    "status": "P",
+    "local": 0.017
+   },
+   "fortress-sloped-roof-128": {
+    "status": "P",
+    "local": 0.02
+   },
+   "tower-sloped-roof-64": {
+    "status": "P",
+    "local": 0.0442
+   },
+   "tower-sloped-roof-128": {
+    "status": "P",
+    "local": 0.0467
+   },
+   "fortress-floor-walk-64": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "fortress-floor-walk-128": {
+    "status": "F",
+    "local": 0.2942
+   },
+   "tower-roof-walk-64": {
+    "status": "F",
+    "local": 0.1376
+   },
+   "tower-roof-walk-128": {
+    "status": "P",
+    "local": 0.0855
+   }
+  },
+  "split": {
+   "64": {
+    "pass": 8,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942",
+     "tower-roof-walk 0.1376"
+    ]
+   },
+   "128": {
+    "pass": 9,
+    "worst": 0.2942,
+    "fails": [
+     "fortress-floor-walk 0.2942"
+    ]
+   }
+  }
+ }
+}

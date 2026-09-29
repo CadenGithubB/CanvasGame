@@ -1,0 +1,251 @@
+{
+ "method": "Triangle path, owner-mask fix on. Quality: native structure-motion suite, 20 triangle cases (10 camera paths x 64/128 textures), limits rms 0.05, frame 0.08, local 0.12, MAE 0.08. Cost: 6 views (fortress/arena/watchtower x exterior/gate), 360x240, budget 2048, 6 warm-up + 60 measured frames per setting per view, settings interleaved round-robin, 2 repetitions; per-view ratio of p50 total submission ms against today's setting in the same view and run; median of the 12 ratios. performance.now() resolution 0.1 ms (about 4% of the 2.7 ms baseline).",
+ "rows": [
+  {
+   "series": "d7",
+   "e": 0.65,
+   "d": 7,
+   "cap": 256,
+   "pass": 12,
+   "worst": 0.2559,
+   "tri": 556,
+   "time": 1.0,
+   "ms": 2.7
+  },
+  {
+   "series": "d7",
+   "e": 0.5,
+   "d": 7,
+   "cap": 256,
+   "pass": 13,
+   "worst": 0.2322,
+   "tri": 612,
+   "time": 1.037,
+   "ms": 2.8
+  },
+  {
+   "series": "d7",
+   "e": 0.4,
+   "d": 7,
+   "cap": 256,
+   "pass": 13,
+   "worst": 0.2322,
+   "tri": 676,
+   "time": 1.078,
+   "ms": 3.0
+  },
+  {
+   "series": "d7",
+   "e": 0.3,
+   "d": 7,
+   "cap": 256,
+   "pass": 16,
+   "worst": 0.2322,
+   "tri": 778,
+   "time": 1.191,
+   "ms": 3.45
+  },
+  {
+   "series": "d7",
+   "e": 0.2,
+   "d": 7,
+   "cap": 256,
+   "pass": 16,
+   "worst": 0.2322,
+   "tri": 903,
+   "time": 1.297,
+   "ms": 3.65
+  },
+  {
+   "series": "d10",
+   "e": 0.5,
+   "d": 10,
+   "cap": 256,
+   "pass": 13,
+   "worst": 0.2942,
+   "tri": 617,
+   "time": 1.042,
+   "ms": 2.85
+  },
+  {
+   "series": "d10",
+   "e": 0.4,
+   "d": 10,
+   "cap": 256,
+   "pass": 14,
+   "worst": 0.2942,
+   "tri": 684,
+   "time": 1.095,
+   "ms": 3.1
+  },
+  {
+   "series": "d10",
+   "e": 0.3,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "worst": 0.2942,
+   "tri": 783,
+   "time": 1.178,
+   "ms": 3.45
+  },
+  {
+   "series": "d10",
+   "e": 0.2,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "worst": 0.2942,
+   "tri": 905,
+   "time": 1.305,
+   "ms": 3.75
+  },
+  {
+   "series": "d10",
+   "e": 0.15,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "worst": 0.2942,
+   "tri": 1031,
+   "time": 1.415,
+   "ms": 4.15
+  },
+  {
+   "series": "c512",
+   "e": 0.4,
+   "d": 10,
+   "cap": 512,
+   "pass": 14,
+   "worst": 0.1654,
+   "tri": 799,
+   "time": 1.256,
+   "ms": 3.5
+  },
+  {
+   "series": "c512",
+   "e": 0.3,
+   "d": 10,
+   "cap": 512,
+   "pass": 17,
+   "worst": 0.1654,
+   "tri": 912,
+   "time": 1.354,
+   "ms": 3.8
+  }
+ ],
+ "planar": {
+  "pass": 20,
+  "time": 1.298,
+  "timeMin": 1.2,
+  "timeMax": 1.826,
+  "ms": 3.9,
+  "triangles": 6,
+  "strips": 827,
+  "fills": 3271,
+  "note": "Separate interleaved run on the same 6 views x 60 frames x 2 runs, ratio to today's triangle setting in the same view and run. The same run re-measured errorPixels 0.3 at +16.2% (depth 7) and +16.3% (depth 10)."
+ },
+ "replicate": {
+  "e0.3 d7": 1.162,
+  "e0.3 d10": 1.163
+ },
+ "tails": "Tight-loop p95/max are dominated by 40-95 ms stalls in both modes (planar 6-10 of 90 frames over 16.67 ms solo, triangles 3-4), consistent with GPU command backpressure when frames are not rAF-paced. Tails are not plotted; see the rAF-paced A/B/B/A tables in TEXTURES.md.",
+ "g2": [
+  {
+   "series": "g2d7",
+   "e": 0.65,
+   "d": 7,
+   "cap": 256,
+   "pass": 16,
+   "time": 1,
+   "tri": 557,
+   "triRatio": 1.001,
+   "worst": 0.2559
+  },
+  {
+   "series": "g2d10",
+   "e": 0.65,
+   "d": 10,
+   "cap": 256,
+   "pass": 16,
+   "time": 0.991,
+   "tri": 558,
+   "triRatio": 1.001,
+   "worst": 0.2942
+  },
+  {
+   "series": "g2d10",
+   "e": 0.4,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "time": 1.08,
+   "tri": 685,
+   "triRatio": 1.222,
+   "worst": 0.2942
+  },
+  {
+   "series": "g2d10",
+   "e": 0.3,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "time": 1.159,
+   "tri": 783,
+   "triRatio": 1.436,
+   "worst": 0.2942
+  },
+  {
+   "series": "g2d10",
+   "e": 0.2,
+   "d": 10,
+   "cap": 256,
+   "pass": 17,
+   "time": 1.272,
+   "tri": 905,
+   "triRatio": 1.759,
+   "worst": 0.2942
+  }
+ ],
+ "g2_method": "Native Chromium (in-app), same page as the first sweep, owner-mask fix on. Motion: native structure-motion suite, triangle cases only, tessellate replaced by longface/snippets g2_tiebreak_2pct.js (TIE 0.02) or g0_control_tie0.js (TIE 0) with errorPixels/maxDepth overridden. Control: g0 reproduces production on all 20 cases to 4 decimals; production reproduces the first sweep exactly. Cost: 7 settings interleaved round-robin, 6 views x (6 warm + 60 measured) x 2 runs (view order reversed), ratio of p50 to production e0.65 d7 in the same view and run, median of 12.",
+ "anchor": {
+  "prod e0.3 d10 first run": 1.178,
+  "prod e0.3 d10 G2 run": 1.159,
+  "prod e0.3 d10 planar run": 1.163
+ },
+ "hybrid": [
+  {
+   "e": 0.65,
+   "d": 7,
+   "time": 1.045,
+   "tmin": 0.82,
+   "tmax": 1.17,
+   "pass": 20,
+   "pass64": 10,
+   "pass128": 10,
+   "tri": 273,
+   "strips": 253,
+   "fillRatio": 1.36
+  },
+  {
+   "e": 0.4,
+   "d": 10,
+   "time": 1.093,
+   "tmin": 0.93,
+   "tmax": 1.26,
+   "pass": 20,
+   "pass64": 10,
+   "pass128": 10,
+   "tri": 334,
+   "strips": 253,
+   "fillRatio": 1.49,
+   "default": true
+  }
+ ],
+ "hybrid_run": {
+  "tri G2 e0.4 d10": 1.088,
+  "tri G2 e0.65 d7": 1.0,
+  "planar": 1.273,
+  "method": "Third run, same six views x (6 warm + 60 frames) x 2 runs, settings interleaved; hybrid = drawPlanarFace declines column (wall) faces, which fall back to tie-broken triangles. Motion: native suite via the planar cases with the decline wrapper, then confirmed on the real structures.html page after implementing rowsOnly: hybrid 20/20, planar 20/20, triangles 17/20, all controls pass."
+ }
+}
