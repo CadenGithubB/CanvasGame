@@ -8,7 +8,8 @@ surface tops above the horizon are not automatically exposed undersides.
 Fixtures cover cave floors/ceilings and portals, ceiling-dependent wall
 closure, real wall-mounted ore, surface actors/chests/goals, whole-loop walks,
 and fixed-level rendering. Current known defects remain explicit below:
-shop-tower height, enemy walk-cycle selection and fixed-level floor colors.
+enemy walk-cycle selection and fixed-level floor colors. The shop tower's
+literal-zero height defect is repaired; a BREAK probe reintroduces it.
 
 Run the baseline, then its causal mutations:
     python3 -m unittest tools.webui.tests.test_game_render -v
@@ -52,13 +53,6 @@ _LOAD = "render: game script evaluates without throwing"
 
 # check id -> (why it fails today, regex its FAIL detail must match).
 KNOWN_BUGS: dict[str, tuple[str, str]] = {
-    _SHOP_ZERO: (
-        "audit D7 + N7: drawGuardTower3D passes literal wz=0 to entityVisible3D (16290), so the real market "
-        "tower pass is hidden at low and high open-surface terrain while its ordinary-height control draws. "
-        "Market lifetime remains persistence-owned; this check judges only tower visibility.",
-        r"measuredWorlds=[1-9]\d* .*s\d+ low\(h=-[\d.]+\): calls=1 wz=0 result=null cameraH=-?[\d.]+ fills=0->0.*"
-        r"s\d+ mid\(h=[\d.]+\): calls=1 wz=0 result=visible cameraH=-?[\d.]+ fills=0->[1-9]\d*.*"
-        r"s\d+ high\(h=[\d.]+\): calls=1 wz=0 result=null cameraH=-?[\d.]+ fills=0->0"),
     _CYCLE: (
         "audit F5 (U4 'enemies look stuck'): drawEnemies3D sets isMoving from the CAMERA distance, "
         "dist in (10, chaseRange) (14070), not from the enemy's own motion, so an idle enemy 60 u away walks in "
@@ -95,6 +89,12 @@ PROBES = [
      "function drawGoalMarker3D() { return;", {_GOAL_ZERO: "FAIL"}),
     ("BREAK: missing portal geometry", "function drawCaveEntrance3D() {",
      "function drawCaveEntrance3D() { return;", {_ARCHSEEN: "FAIL"}),
+    # Audit D7 + N7, repaired: restores the tower's literal world-Z 0 call and
+    # its legacy column/hill gates. The exit goal is an unaffected control.
+    ("BREAK: shop tower asks about world height 0 again",
+     "  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});",
+     "  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});",
+     {_SHOP_ZERO: "FAIL", _GOAL_ZERO: "PASS"}),
 ]
 
 RenderSuite = suite_testcase("render", KNOWN_BUGS, min_checks=24)

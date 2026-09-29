@@ -1804,12 +1804,14 @@ function generateChunk(cx, cy) {
     var mCenterX = cx * CHUNK_SIZE + mCenterCell * cell + cell / 2;
     var mCenterY = cy * CHUNK_SIZE + mCenterCell * cell + cell / 2;
     var stallTypes = ['weapons', 'potions', 'scrolls', 'trinkets'];
-    // 4 stalls arranged around the center in a square
+    // 4 stalls arranged around the center in a square. Facing is a world
+    // angle (front = cos, sin; +y is south), as the stall renderer and its
+    // collision use, so each stall opens toward the center.
     var stallOffsets = [
-      {dx: -4, dy: -3, facing: Math.PI * 0.5},   // left-top, facing right
-      {dx:  4, dy: -3, facing: -Math.PI * 0.5},   // right-top, facing left
-      {dx: -4, dy:  3, facing: Math.PI * 0.5},    // left-bottom, facing right
-      {dx:  4, dy:  3, facing: -Math.PI * 0.5}    // right-bottom, facing left
+      {dx: -4, dy: -3, facing: 0},         // left-top, facing right
+      {dx:  4, dy: -3, facing: Math.PI},   // right-top, facing left
+      {dx: -4, dy:  3, facing: 0},         // left-bottom, facing right
+      {dx:  4, dy:  3, facing: Math.PI}    // right-bottom, facing left
     ];
     var mStalls = [];
     for (var si = 0; si < 4; si++) {
@@ -2162,6 +2164,21 @@ function canonicalWallDecorationType(type) {
   return WALL_DECOR_TYPE_ALIASES[type] || type;
 }
 
+// Stall facing is a world angle (front = cos, sin; +y is south). Earlier
+// injected markets stored compass strings, which turned both the stall
+// renderer's corners and its collision box into NaN, so the stall silently
+// vanished. Normalize at the window boundary, the one path into marketStalls.
+var MARKET_STALL_COMPASS = Object.freeze({
+  e:0, se:Math.PI*0.25, s:Math.PI*0.5, sw:Math.PI*0.75,
+  w:Math.PI, nw:-Math.PI*0.75, n:-Math.PI*0.5, ne:-Math.PI*0.25
+});
+function normalizeMarketStallFacing(facing) {
+  if (typeof facing === 'number' && isFinite(facing)) return facing;
+  if (typeof facing === 'string' && Object.prototype.hasOwnProperty.call(MARKET_STALL_COMPASS, facing))
+    return MARKET_STALL_COMPASS[facing];
+  return 0;
+}
+
 function chunkWallDecorationInWindow(d, chunkWindowX, chunkWindowY) {
   return {worldX: d.worldX - windowOriginX, worldY: d.worldY - windowOriginY,
     side: d.side, type: canonicalWallDecorationType(d.type),
@@ -2240,9 +2257,11 @@ function assembleWindow(centerCX, centerCY) {
             }
           }
         }
-        // Create simple market with 4 stalls
-        var _stallOffsets = [{dx:-2,dy:-2,facing:'se'},{dx:2,dy:-2,facing:'sw'},{dx:-2,dy:2,facing:'ne'},{dx:2,dy:2,facing:'nw'}];
-        var _stallTypes = ['weapons','potions','armor','scrolls'];
+        // Create simple market with 4 stalls, each opening toward the centre.
+        // Facing is a world angle (front = cos, sin; +y is south), as the stall
+        // renderer and collision expect; types match the ordinary market's.
+        var _stallOffsets = [{dx:-2,dy:-2,facing:Math.PI*0.25},{dx:2,dy:-2,facing:Math.PI*0.75},{dx:-2,dy:2,facing:-Math.PI*0.25},{dx:2,dy:2,facing:-Math.PI*0.75}];
+        var _stallTypes = ['weapons','potions','scrolls','trinkets'];
         var _mStalls = [];
         for (var _msi = 0; _msi < 4; _msi++) {
           _mStalls.push({x: _mcx + _stallOffsets[_msi].dx * _cell, y: _mcy + _stallOffsets[_msi].dy * _cell,
@@ -2855,7 +2874,7 @@ function assembleWindow(centerCX, centerCY) {
           marketStalls.push({
             x: mst.x - windowOriginX,
             y: mst.y - windowOriginY,
-            facing: mst.facing,
+            facing: normalizeMarketStallFacing(mst.facing),
             stallType: mst.stallType
           });
         }

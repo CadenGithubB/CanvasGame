@@ -6603,12 +6603,14 @@ function generateChunk(cx, cy) {
     var mCenterX = cx * CHUNK_SIZE + mCenterCell * cell + cell / 2;
     var mCenterY = cy * CHUNK_SIZE + mCenterCell * cell + cell / 2;
     var stallTypes = ['weapons', 'potions', 'scrolls', 'trinkets'];
-    // 4 stalls arranged around the center in a square
+    // 4 stalls arranged around the center in a square. Facing is a world
+    // angle (front = cos, sin; +y is south), as the stall renderer and its
+    // collision use, so each stall opens toward the center.
     var stallOffsets = [
-      {dx: -4, dy: -3, facing: Math.PI * 0.5},   // left-top, facing right
-      {dx:  4, dy: -3, facing: -Math.PI * 0.5},   // right-top, facing left
-      {dx: -4, dy:  3, facing: Math.PI * 0.5},    // left-bottom, facing right
-      {dx:  4, dy:  3, facing: -Math.PI * 0.5}    // right-bottom, facing left
+      {dx: -4, dy: -3, facing: 0},         // left-top, facing right
+      {dx:  4, dy: -3, facing: Math.PI},   // right-top, facing left
+      {dx: -4, dy:  3, facing: 0},         // left-bottom, facing right
+      {dx:  4, dy:  3, facing: Math.PI}    // right-bottom, facing left
     ];
     var mStalls = [];
     for (var si = 0; si < 4; si++) {
@@ -6961,6 +6963,21 @@ function canonicalWallDecorationType(type) {
   return WALL_DECOR_TYPE_ALIASES[type] || type;
 }
 
+// Stall facing is a world angle (front = cos, sin; +y is south). Earlier
+// injected markets stored compass strings, which turned both the stall
+// renderer's corners and its collision box into NaN, so the stall silently
+// vanished. Normalize at the window boundary, the one path into marketStalls.
+var MARKET_STALL_COMPASS = Object.freeze({
+  e:0, se:Math.PI*0.25, s:Math.PI*0.5, sw:Math.PI*0.75,
+  w:Math.PI, nw:-Math.PI*0.75, n:-Math.PI*0.5, ne:-Math.PI*0.25
+});
+function normalizeMarketStallFacing(facing) {
+  if (typeof facing === 'number' && isFinite(facing)) return facing;
+  if (typeof facing === 'string' && Object.prototype.hasOwnProperty.call(MARKET_STALL_COMPASS, facing))
+    return MARKET_STALL_COMPASS[facing];
+  return 0;
+}
+
 function chunkWallDecorationInWindow(d, chunkWindowX, chunkWindowY) {
   return {worldX: d.worldX - windowOriginX, worldY: d.worldY - windowOriginY,
     side: d.side, type: canonicalWallDecorationType(d.type),
@@ -7039,9 +7056,11 @@ function assembleWindow(centerCX, centerCY) {
             }
           }
         }
-        // Create simple market with 4 stalls
-        var _stallOffsets = [{dx:-2,dy:-2,facing:'se'},{dx:2,dy:-2,facing:'sw'},{dx:-2,dy:2,facing:'ne'},{dx:2,dy:2,facing:'nw'}];
-        var _stallTypes = ['weapons','potions','armor','scrolls'];
+        // Create simple market with 4 stalls, each opening toward the centre.
+        // Facing is a world angle (front = cos, sin; +y is south), as the stall
+        // renderer and collision expect; types match the ordinary market's.
+        var _stallOffsets = [{dx:-2,dy:-2,facing:Math.PI*0.25},{dx:2,dy:-2,facing:Math.PI*0.75},{dx:-2,dy:2,facing:-Math.PI*0.25},{dx:2,dy:2,facing:-Math.PI*0.75}];
+        var _stallTypes = ['weapons','potions','scrolls','trinkets'];
         var _mStalls = [];
         for (var _msi = 0; _msi < 4; _msi++) {
           _mStalls.push({x: _mcx + _stallOffsets[_msi].dx * _cell, y: _mcy + _stallOffsets[_msi].dy * _cell,
@@ -7654,7 +7673,7 @@ function assembleWindow(centerCX, centerCY) {
           marketStalls.push({
             x: mst.x - windowOriginX,
             y: mst.y - windowOriginY,
-            facing: mst.facing,
+            facing: normalizeMarketStallFacing(mst.facing),
             stallType: mst.stallType
           });
         }
@@ -10738,7 +10757,7 @@ function drawTreasureChests3D() {
   for (var ci = 0; ci < visibleChests.length; ci++) {
     var ch = visibleChests[ci].ch, vis = visibleChests[ci].vis;
     var centerSX = vis.sx, fwd = vis.fwd, floorZ = getEntityRenderFloorZ(ch);
-    var dx = ch.x - cam.x, dy = ch.y - cam.y;
+    var dx = cam.x - ch.x, dy = cam.y - ch.y;
     var lid = ch.lidAngle || 0;
 
     var fogAlpha = Math.max(0.5, 1.0 - fwd / viewDist * 0.4) * vis.fade;
@@ -10786,7 +10805,7 @@ function drawTreasureChests3D() {
     if (!p0b || !p1b || !p0t || !p1t) { ctx.restore(); continue; }
 
     // Determine which faces the camera can see using dot products
-    // Camera-to-chest vector projected onto chest's forward and right axes
+    // Chest-to-camera vector projected onto chest's forward and right axes
     var camDotFw = dx * fwX + dy * fwY;   // positive = camera is in front
     var camDotRt = dx * rtX + dy * rtY;   // positive = camera is to the right
 
@@ -11844,9 +11863,11 @@ function repelFromStalls() {
     // Transform player position into stall-local space
     var lx = (pos.x - st.x) * cf + (pos.y - st.y) * sf;
     var ly = -(pos.x - st.x) * sf + (pos.y - st.y) * cf;
-    // Check overlap with padded AABB
-    var ox = hw + pr - Math.abs(lx);
-    var oy = hd + pr - Math.abs(ly);
+    // Check overlap with padded AABB. Local x runs along the facing (the
+    // stall's depth) and local y across it (its width), matching the table
+    // drawMarketStalls3D paints.
+    var ox = hd + pr - Math.abs(lx);
+    var oy = hw + pr - Math.abs(ly);
     if (ox > 0 && oy > 0) {
       // Push out along the axis with smallest overlap
       if (ox < oy) {
@@ -20162,6 +20183,23 @@ function drawStructures3D() {
     });
 }
 
+// Screen bounds and nearest camera depth of a directly painted prop's
+// projected points, for clipping it to the opaque scene-depth mask. The
+// nearest point keeps the prop's own ground from clipping its near side.
+function marketPropDepthClip(points, pad) {
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, near = Infinity;
+  for (var i = 0; i < points.length; i++) {
+    var p = points[i];
+    if (!p || !Number.isFinite(p.sx) || !Number.isFinite(p.sy) || !Number.isFinite(p.fwd)) continue;
+    minX = Math.min(minX, p.sx); maxX = Math.max(maxX, p.sx);
+    minY = Math.min(minY, p.sy); maxY = Math.max(maxY, p.sy);
+    near = Math.min(near, p.fwd);
+  }
+  if (!(near < Infinity)) return null;
+  return {bounds: {x: minX - pad, y: minY - pad, width: maxX - minX + pad * 2, height: maxY - minY + pad * 2},
+    depth: near};
+}
+
 function drawMarketStalls3D() {
   if (!marketStalls || !marketStalls.length || !MODE3D) return;
   var C = getCam3D();
@@ -20217,8 +20255,10 @@ function drawMarketStalls3D() {
   var sortedStalls = [];
   for (var si = 0; si < marketStalls.length; si++) {
     var _ss = marketStalls[si];
-    // Use entityVisible3D for consistent depth-buffer occlusion (same as other entities)
-    var _sv = entityVisible3D(_ss.x, _ss.y, 0, C, {maxDist: viewDist * 0.8, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});
+    // Anchor visibility on the terrain the stall is drawn on. The opaque
+    // scene-depth clip below, not legacy column/hill gates, hides the stall.
+    var _ssZ = floorMesh ? getFloorHeightAt(_ss.x, _ss.y) * 25 : 0;
+    var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});
     if (!_sv) continue;
     sortedStalls.push({idx: si, dist: _sv.dist, vis: _sv});
   }
@@ -20262,6 +20302,13 @@ function drawMarketStalls3D() {
 
     if (!flG || !frG || !blG || !brG) continue; // behind camera
 
+    // Faces are painted directly, so clip the whole stall to the opaque scene
+    // depth at its nearest projected point: terrain, walls and roofs in front
+    // hide it per pixel. The drawing below is unchanged inside the clip.
+    var stallClip = marketPropDepthClip([flG, frG, blG, brG, flT, frT, blT, brT,
+      flA, frA, blA, brA, aflA, afrA], Math.max(2, 6 / (dist * 0.02)));
+    if (!stallClip) continue;
+    withSceneDepthBillboard(stallClip.bounds, stallClip.depth, function() {
     ctx.save();
 
     // ── TABLE LEGS (4 posts from ground to table) ──
@@ -20331,6 +20378,7 @@ function drawMarketStalls3D() {
     }
 
     ctx.restore();
+    });
   }
 
 }
@@ -20339,13 +20387,15 @@ function drawMarketStalls3D() {
 // Extracted from drawMarketStalls3D for clarity; uses early returns instead of deep nesting.
 function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   if (!shopMarker) return;
-  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});
+  // Anchor visibility on the tower's own terrain. The opaque scene-depth clips
+  // below, not legacy column/hill gates, hide it behind nearer geometry.
+  var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
+  var bgz = bfh * 25;
+  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});
   if (!towerVis) return;
 
   var bDist = towerVis.dist;
   var bFwd = towerVis.fwd;
-  var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
-  var bgz = bfh * 25;
   var TW = 8;
   var halfFov = cam.fov / 2;
   var w = C.w;
@@ -20365,8 +20415,9 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
     tC.push(proj(tCorners[ti].x, tCorners[ti].y, bgz + TOWER_HEIGHT + 12));
   }
 
-  // Draw tower body
-  if (tG[0] && tG[1] && tG[2] && tG[3]) {
+  // Draw tower body, clipped to opaque scene depth at its nearest point
+  var towerClip = (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
+  if (towerClip) withSceneDepthBillboard(towerClip.bounds, towerClip.depth, function() {
     ctx.save();
     var stoneLit = '#9b8b7b', stoneDark = '#6b5d4b', stoneTop = '#8b7d6b';
 
@@ -20424,7 +20475,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
       fillQuad(tT[0], tT[1], tT[2], tT[3], stoneTop);
     }
     ctx.restore();
-  }
+  });
 
   // Golden glow beacon
   var glowBot = proj(shopMarker.x, shopMarker.y, bgz + TOWER_HEIGHT);
@@ -20437,6 +20488,9 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   var gSX = (glowBot.sx + glowTop.sx) * 0.5;
   var bPulse = 0.6 + 0.4 * Math.sin(now * 0.002);
   var bAlpha = Math.min(0.7, 0.6 * bPulse * (1.0 - bDist / 1000));
+  // The beacon shows above nearer hills and roofs, not through them.
+  withSceneDepthBillboard({x: gSX - gHW * 3, y: gTopY - 4, width: gHW * 6, height: gBeamH + 8},
+    Math.min(glowBot.fwd, glowTop.fwd), function() {
   ctx.save();
   ctx.globalAlpha = bAlpha;
   var gGrad = ctx.createLinearGradient(gSX - gHW * 3, 0, gSX + gHW * 3, 0);
@@ -20456,6 +20510,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   ctx.fillStyle = cGrad;
   ctx.fillRect(gSX - gHW, gTopY, gHW * 2, gBeamH);
   ctx.restore();
+  });
 }
 
 // Cave entrance beacon — eerie teal glow pillar visible from far in 3D.

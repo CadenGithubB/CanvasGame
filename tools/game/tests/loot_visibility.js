@@ -1,14 +1,15 @@
 // Exercise production loot draw functions and their actual depth clips. The
 // browser host is inert; geometry/anchors/bounds/rendering are game source.
 (function () {
-  var G=(0,eval)('this'), checked=0, paints=0, saves=0, errors=[];
+  var G=(0,eval)('this'), checked=0, paints=0, saves=0, errors=[], fillLog=null;
   var output=(__engine==='node'||__engine==='deno')?console.log.bind(console):__out;
   function noop() {}
   function stub(values) {return new Proxy(values||{}, {get:function(o,k){return k==='then'?undefined:k in o?o[k]:noop;}});}
   function paint(){paints++;}
+  function paintFill(){paints++;if(fillLog)fillLog.push(context.fillStyle);}
   function gradient(){return {addColorStop:noop};}
   var context=stub({save:function(){saves++;},restore:function(){saves--;},
-    fill:paint,stroke:paint,fillRect:paint,strokeRect:paint,fillText:paint,drawImage:paint,
+    fill:paintFill,stroke:paint,fillRect:paint,strokeRect:paint,fillText:paint,drawImage:paint,
     measureText:function(s){return {width:String(s).length*8};},
     createLinearGradient:gradient,createRadialGradient:gradient,createPattern:function(){return {};},
     createImageData:function(w,h){return {data:new Uint8ClampedArray(w*h*4)};},
@@ -24,7 +25,13 @@
   G.clearTimeout=G.clearInterval=G.cancelAnimationFrame=G.addEventListener=G.removeEventListener=noop;
   G.innerWidth=1280;G.innerHeight=720;G.devicePixelRatio=1;
   G.hw={fetchJSON:function(){return new Promise(noop);},postFormText:function(){return new Promise(noop);},_auth401:noop};
-  JSON.parse(slurp('assets/games/manifest.json')).parts.MAIN.forEach(function(path){(0,eval)(slurp('assets/games/'+path));});
+  function mutate(path,source){
+    if(__argv.indexOf('--invert-chest-side')<0||path!=='src/07-decorations-lighting.js')return source;
+    var before='var dx = cam.x - ch.x, dy = cam.y - ch.y;';
+    if(source.split(before).length!==2)throw Error('MUTATION_ANCHOR --invert-chest-side');
+    return source.replace(before,'var dx = ch.x - cam.x, dy = ch.y - cam.y;');
+  }
+  JSON.parse(slurp('assets/games/manifest.json')).parts.MAIN.forEach(function(path){(0,eval)(mutate(path,slurp('assets/games/'+path)));});
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
   function quad(x0,y0,x1,y1,depth){return [{x:x0,y:y0,depth:depth},{x:x1,y:y0,depth:depth},{x:x1,y:y1,depth:depth},{x:x0,y:y1,depth:depth}];}
   function frame(){G.beginSceneDepthFrame(360,240);paints=0;saves=0;}
@@ -127,6 +134,47 @@
   G.treasureChests=[entity({x:4,renderFloorZ:55,tier:'common',facing:0,lidAngle:0})];
   frame();clips=[];G.drawTreasureChests3D();
   check('near-plane chest keeps clipped faces when back corners are behind camera',paints>0&&clips.some(function(c){return c.points.some(function(p){return p.depth===1;});})&&clips.every(function(c){return c.points.every(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>=1;});})&&saves===0);
+  // Chest faces neither write nor test depth against each other, so paint
+  // order alone hides the far side. Oracle: authored face centres (half-extents
+  // 5 along facing, 7 across) and plain Euclidean distance from the camera; the
+  // renderer's own dot products are never reused. Each check first requires the
+  // faces it compares to have painted pixels, so an empty draw cannot pass.
+  // Side views are oblique: a camera heading straight along a face's plane sees
+  // it as a sub-pixel sliver that the depth mask correctly skips.
+  var chestTier=G.CHEST_TIER_DEFS.common;
+  function chestView(camX,camY,facing){
+    G.treasureChests=[entity({tier:'common',facing:facing,lidAngle:0})];
+    G.cam.x=camX;G.cam.y=camY;G.cam.ang=Math.atan2(0-camY,120-camX);
+    frame();clips=[];fillLog=[];G.drawTreasureChests3D();
+    var log=fillLog;fillLog=null;
+    var fx=Math.cos(facing),fy=Math.sin(facing),rx=-fy,ry=fx;
+    function dist(ax,ay){return Math.hypot(120+ax-camX,0+ay-camY);}
+    function drawn(c){return paints>0&&log.indexOf(c)>=0;}
+    return {drawn:drawn,
+      frontNear:dist(fx*5,fy*5)<dist(-fx*5,-fy*5),rightNear:dist(rx*7,ry*7)<dist(-rx*7,-ry*7),
+      after:function(near,far){return drawn(near)&&drawn(far)&&log.indexOf(near)>log.indexOf(far);},
+      details:drawn(chestTier.trim)&&drawn(chestTier.lock),
+      anyDetail:log.indexOf(chestTier.trim)>=0||log.indexOf(chestTier.lock)>=0};
+  }
+  var lockSide=chestView(240,0,0);
+  check('chest viewed from its lock side paints the far back face before the near front face',
+    lockSide.frontNear&&lockSide.after(chestTier.body,chestTier.bodyDk));
+  check('chest viewed from its lock side shows its trim strap and lock',lockSide.drawn(chestTier.body)&&lockSide.details);
+  var backSide=chestView(0,0,0);
+  check('chest viewed from behind paints the far front face before the near back face',
+    !backSide.frontNear&&backSide.after(chestTier.bodyDk,chestTier.body));
+  check('chest viewed from behind cannot show trim or lock through its back',
+    backSide.drawn(chestTier.body)&&backSide.drawn(chestTier.bodyDk)&&!backSide.anyDetail);
+  var rightSide=chestView(170,200,0);
+  check('chest viewed from its right paints the far left face before the near right face',
+    rightSide.rightNear&&rightSide.after(chestTier.bodyR,chestTier.bodyL));
+  var leftSide=chestView(170,-200,0);
+  check('chest viewed from its left paints the far right face before the near left face',
+    !leftSide.rightNear&&leftSide.after(chestTier.bodyL,chestTier.bodyR));
+  var turned=chestView(70,200,Math.PI*0.5);
+  check('turned chest keeps its lock and near front face toward a camera on its facing side',
+    turned.frontNear&&turned.details&&turned.after(chestTier.body,chestTier.bodyDk));
+  G.cam.x=0;G.cam.y=0;G.cam.ang=0;
   var high=G.lootPickupRenderLayout('tome',{bob:0},{sx:180,sy:800,fwd:120},G.getCam3D(),0);
   check('offscreen loot stays anchored instead of being clamped back onto screen',high.centerY>600);
   check('tome depth bounds include its wide label',high.bounds.width>=context.measureText('Arcane Tome').width);

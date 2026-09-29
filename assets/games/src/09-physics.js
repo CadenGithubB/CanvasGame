@@ -105,9 +105,11 @@ function repelFromStalls() {
     // Transform player position into stall-local space
     var lx = (pos.x - st.x) * cf + (pos.y - st.y) * sf;
     var ly = -(pos.x - st.x) * sf + (pos.y - st.y) * cf;
-    // Check overlap with padded AABB
-    var ox = hw + pr - Math.abs(lx);
-    var oy = hd + pr - Math.abs(ly);
+    // Check overlap with padded AABB. Local x runs along the facing (the
+    // stall's depth) and local y across it (its width), matching the table
+    // drawMarketStalls3D paints.
+    var ox = hd + pr - Math.abs(lx);
+    var oy = hw + pr - Math.abs(ly);
     if (ox > 0 && oy > 0) {
       // Push out along the axis with smallest overlap
       if (ox < oy) {

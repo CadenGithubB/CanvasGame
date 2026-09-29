@@ -1587,7 +1587,7 @@ function drawTreasureChests3D() {
   for (var ci = 0; ci < visibleChests.length; ci++) {
     var ch = visibleChests[ci].ch, vis = visibleChests[ci].vis;
     var centerSX = vis.sx, fwd = vis.fwd, floorZ = getEntityRenderFloorZ(ch);
-    var dx = ch.x - cam.x, dy = ch.y - cam.y;
+    var dx = cam.x - ch.x, dy = cam.y - ch.y;
     var lid = ch.lidAngle || 0;
 
     var fogAlpha = Math.max(0.5, 1.0 - fwd / viewDist * 0.4) * vis.fade;
@@ -1635,7 +1635,7 @@ function drawTreasureChests3D() {
     if (!p0b || !p1b || !p0t || !p1t) { ctx.restore(); continue; }
 
     // Determine which faces the camera can see using dot products
-    // Camera-to-chest vector projected onto chest's forward and right axes
+    // Chest-to-camera vector projected onto chest's forward and right axes
     var camDotFw = dx * fwX + dy * fwY;   // positive = camera is in front
     var camDotRt = dx * rtX + dy * rtY;   // positive = camera is to the right
 

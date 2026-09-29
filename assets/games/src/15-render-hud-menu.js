@@ -1221,6 +1221,23 @@ function drawStructures3D() {
     });
 }
 
+// Screen bounds and nearest camera depth of a directly painted prop's
+// projected points, for clipping it to the opaque scene-depth mask. The
+// nearest point keeps the prop's own ground from clipping its near side.
+function marketPropDepthClip(points, pad) {
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, near = Infinity;
+  for (var i = 0; i < points.length; i++) {
+    var p = points[i];
+    if (!p || !Number.isFinite(p.sx) || !Number.isFinite(p.sy) || !Number.isFinite(p.fwd)) continue;
+    minX = Math.min(minX, p.sx); maxX = Math.max(maxX, p.sx);
+    minY = Math.min(minY, p.sy); maxY = Math.max(maxY, p.sy);
+    near = Math.min(near, p.fwd);
+  }
+  if (!(near < Infinity)) return null;
+  return {bounds: {x: minX - pad, y: minY - pad, width: maxX - minX + pad * 2, height: maxY - minY + pad * 2},
+    depth: near};
+}
+
 function drawMarketStalls3D() {
   if (!marketStalls || !marketStalls.length || !MODE3D) return;
   var C = getCam3D();
@@ -1276,8 +1293,10 @@ function drawMarketStalls3D() {
   var sortedStalls = [];
   for (var si = 0; si < marketStalls.length; si++) {
     var _ss = marketStalls[si];
-    // Use entityVisible3D for consistent depth-buffer occlusion (same as other entities)
-    var _sv = entityVisible3D(_ss.x, _ss.y, 0, C, {maxDist: viewDist * 0.8, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});
+    // Anchor visibility on the terrain the stall is drawn on. The opaque
+    // scene-depth clip below, not legacy column/hill gates, hides the stall.
+    var _ssZ = floorMesh ? getFloorHeightAt(_ss.x, _ss.y) * 25 : 0;
+    var _sv = entityVisible3D(_ss.x, _ss.y, _ssZ, C, {maxDist: viewDist * 0.8, sceneDepth: true, fadeFraction: 0.8});
     if (!_sv) continue;
     sortedStalls.push({idx: si, dist: _sv.dist, vis: _sv});
   }
@@ -1321,6 +1340,13 @@ function drawMarketStalls3D() {
 
     if (!flG || !frG || !blG || !brG) continue; // behind camera
 
+    // Faces are painted directly, so clip the whole stall to the opaque scene
+    // depth at its nearest projected point: terrain, walls and roofs in front
+    // hide it per pixel. The drawing below is unchanged inside the clip.
+    var stallClip = marketPropDepthClip([flG, frG, blG, brG, flT, frT, blT, brT,
+      flA, frA, blA, brA, aflA, afrA], Math.max(2, 6 / (dist * 0.02)));
+    if (!stallClip) continue;
+    withSceneDepthBillboard(stallClip.bounds, stallClip.depth, function() {
     ctx.save();
 
     // ── TABLE LEGS (4 posts from ground to table) ──
@@ -1390,6 +1416,7 @@ function drawMarketStalls3D() {
     }
 
     ctx.restore();
+    });
   }
 
 }
@@ -1398,13 +1425,15 @@ function drawMarketStalls3D() {
 // Extracted from drawMarketStalls3D for clarity; uses early returns instead of deep nesting.
 function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   if (!shopMarker) return;
-  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});
+  // Anchor visibility on the tower's own terrain. The opaque scene-depth clips
+  // below, not legacy column/hill gates, hide it behind nearer geometry.
+  var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
+  var bgz = bfh * 25;
+  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});
   if (!towerVis) return;
 
   var bDist = towerVis.dist;
   var bFwd = towerVis.fwd;
-  var bfh = floorMesh ? getFloorHeightAt(shopMarker.x, shopMarker.y) : 0;
-  var bgz = bfh * 25;
   var TW = 8;
   var halfFov = cam.fov / 2;
   var w = C.w;
@@ -1424,8 +1453,9 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
     tC.push(proj(tCorners[ti].x, tCorners[ti].y, bgz + TOWER_HEIGHT + 12));
   }
 
-  // Draw tower body
-  if (tG[0] && tG[1] && tG[2] && tG[3]) {
+  // Draw tower body, clipped to opaque scene depth at its nearest point
+  var towerClip = (tG[0] && tG[1] && tG[2] && tG[3]) ? marketPropDepthClip(tG.concat(tT, tC), 2) : null;
+  if (towerClip) withSceneDepthBillboard(towerClip.bounds, towerClip.depth, function() {
     ctx.save();
     var stoneLit = '#9b8b7b', stoneDark = '#6b5d4b', stoneTop = '#8b7d6b';
 
@@ -1483,7 +1513,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
       fillQuad(tT[0], tT[1], tT[2], tT[3], stoneTop);
     }
     ctx.restore();
-  }
+  });
 
   // Golden glow beacon
   var glowBot = proj(shopMarker.x, shopMarker.y, bgz + TOWER_HEIGHT);
@@ -1496,6 +1526,9 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   var gSX = (glowBot.sx + glowTop.sx) * 0.5;
   var bPulse = 0.6 + 0.4 * Math.sin(now * 0.002);
   var bAlpha = Math.min(0.7, 0.6 * bPulse * (1.0 - bDist / 1000));
+  // The beacon shows above nearer hills and roofs, not through them.
+  withSceneDepthBillboard({x: gSX - gHW * 3, y: gTopY - 4, width: gHW * 6, height: gBeamH + 8},
+    Math.min(glowBot.fwd, glowTop.fwd), function() {
   ctx.save();
   ctx.globalAlpha = bAlpha;
   var gGrad = ctx.createLinearGradient(gSX - gHW * 3, 0, gSX + gHW * 3, 0);
@@ -1515,6 +1548,7 @@ function drawGuardTower3D(C, proj, fillQuad, strokeQuad) {
   ctx.fillStyle = cGrad;
   ctx.fillRect(gSX - gHW, gTopY, gHW * 2, gBeamH);
   ctx.restore();
+  });
 }
 
 // Cave entrance beacon — eerie teal glow pillar visible from far in 3D.
