@@ -38,6 +38,7 @@
       "src/12-render-core-walls.js",
       "src/13-render-floors-ceilings.js",
       "src/14-missile-art.js",
+      "src/14-spell-visuals.js",
       "src/14-render-entities.js",
       "src/15-firstperson-art.js",
       "src/15-hand-rig.js",

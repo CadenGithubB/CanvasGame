@@ -12,13 +12,17 @@ var _castingStudioSettingStyle = false;
 var _castingStudioStyleUnsubscribe = null;
 var CASTING_STUDIO_CYCLE_MS = 2400;
 var HAND_STUDIO_CYCLE_MS = 2800;
+// Spell gallery: synthetic effect records on a fixed timeline, no combat.
+var SPELL_GALLERY_CYCLE_MS = 2400;
+var _castingStudioScene = 'bolt:missile';
 var CASTING_STUDIO_REQUEST_MS = 600;
 var CASTING_STUDIO_STEP_MS = 1000 / 120;
 var _castingStudioKeys = (
   'pos cam vel settings equipment spells stats health mana currentSpellIdx lastShotMs castAnimUntil ' +
   '_castingPoseState walkBobPhase running gameOverState menuOpen shopOpen settingsOpen inventoryOpen forgeOpen ' +
   'overviewActive calibrating MODE3D CAM_FOLLOW CONTROL_MODE USE_MOUSE USE_GAMEPAD gpLast ' +
-  '_mouseHeld _attackHeld flameStreamActive dmgBoostUntil manaBlinkUntil ' +
+  '_mouseHeld _attackHeld flameStreamActive flameStreamLastTick flameStreamStartMs flameStreamAng flameStreamRange ' +
+  'dmgBoostUntil speedBoostUntil regenBoostUntil armorBoostUntil wardActive manaBlinkUntil SPELL_VISUALS_ENABLED ' +
   'enemies projectiles pendingMissileCasts spellCastReservationSerial spatialSimulationTick projectileConsumedMotionTick impacts coneEffects groundEffects chainEffects novaEffects deathEffects soulOrbs coinDrops ' +
   'enemySpawners oreVeins companions fortressAllies arcaneTomes statPickups ambientParticles ' +
   'dayTime daySpeed ambientLight sunIntensity sunDirX sunDirZ fogFloor playerUnderground ' +
@@ -77,7 +81,7 @@ function castingStudioScoped(job, fn) {
 // A stationary, labelled practice skeleton uses the real enemy hit cylinder.
 // Check the existing grid/support along the firing lane; do not remove walls
 // or manufacture an impact if the current viewpoint cannot supply a target.
-function castingStudioFindTarget(pose, camera) {
+function castingStudioFindTarget(pose, camera, nearest) {
   var angle = camera.ang, floorZ = (pose.floorZ - 60) * 0.625, selected = null;
   for (var distance = 16; distance <= 220; distance += 8) {
     var x = pose.x + Math.cos(angle) * distance, y = pose.y + Math.sin(angle) * distance;
@@ -85,10 +89,79 @@ function castingStudioFindTarget(pose, camera) {
     if (gx < 0 || gy < 0 || gx >= gridW || gy >= gridH || grid[gy * gridW + gx]) break;
     var support = sampleEntitySupportRenderZ(x, y, floorZ, playerUnderground, true);
     if (!Number.isFinite(support) || Math.abs(support - floorZ) > 30) break;
-    if (distance >= 96) selected = {x:x, y:y, z:support, feetZ:support, renderFloorZ:support, distance:distance};
+    if (distance >= 96) {
+      selected = {x:x, y:y, z:support, feetZ:support, renderFloorZ:support, distance:distance};
+      // The gallery inspects artwork, so it keeps the nearest valid lane;
+      // the casting study keeps the farthest for a longer real flight.
+      if (nearest) break;
+    }
   }
   if (!selected) throw Error('This viewpoint has no clear practice lane. Choose Mouth (or Inside), then reopen Casting studio.');
   return selected;
+}
+
+function castingStudioGalleryScene(id) {
+  var scenes = typeof spellVisualGalleryScenes === 'function' ? spellVisualGalleryScenes() : [];
+  if (!scenes.length) throw Error('Spell gallery needs the spell visual layer; rebuild and reload the preview.');
+  for (var i = 0; i < scenes.length; i++) if (scenes[i].id === id) return scenes[i];
+  return scenes[0];
+}
+
+function castingStudioGallerySpell(id) {
+  if (spells[id]) return Object.assign({}, spells[id], {tier:1, unlocked:true});
+  if (id === 'tower') return typeof towerSpell !== 'undefined' ? Object.assign({}, towerSpell) : {id:'tower', name:'Tower Bolt', color:'#ffd54f', speed:260, attackType:'projectile', isTower:true};
+  var def = typeof COMPANION_DEFS !== 'undefined' && COMPANION_DEFS[id] ? COMPANION_DEFS[id] : null;
+  return {id:id, name:(def && def.name) || id, color:(def && def.color) || '#44dd55', speed:(def && def.projSpeed) || 150,
+    attackType:'projectile', isNpc:true, isCompanion:true};
+}
+
+// Every record is a pure function of the studio time: scrubbing backwards
+// regenerates the same flight, arrival and burst. Player bolts leave the real
+// launch offset toward the practice skeleton; NPC bolts fly from the skeleton
+// past the player's right shoulder so their heads stay in view.
+function castingStudioGallerySeed(job) {
+  var scene = castingStudioGalleryScene(job.scene), live = job.live, pose = live.pos, camera = live.cam;
+  var spell = castingStudioGallerySpell(scene.spell), floorZ = (pose.floorZ - 60) * 0.625;
+  var base = job.clockBase, t = job.time, projectiles = [], impacts = [], phase = 'burst';
+  if (live.spells[scene.spell]) {
+    // The HUD names the scene's spell; this is scoped studio state, not an unlock.
+    live.spells = Object.assign({}, live.spells); live.spells[scene.spell] = spell;
+    var unlocked = spellOrder.filter(function (id) { return live.spells[id] && live.spells[id].unlocked; });
+    live.currentSpellIdx = Math.max(0, unlocked.indexOf(scene.spell));
+  }
+  if (scene.archetype === 'bolt') {
+    var npc = !!spell.isNpc || spell.id === 'tower';
+    var ang = camera.ang, cosA = Math.cos(ang), sinA = Math.sin(ang), rightAng = ang + Math.PI * 0.5;
+    var speed = Math.max(60, spell.speed || 300), start, end, z0, z1;
+    if (npc) {
+      start = {x:job.target.x, y:job.target.y}; z0 = job.target.z + 32;
+      end = {x:pose.x + cosA * 14 + Math.cos(rightAng) * 26, y:pose.y + sinA * 14 + Math.sin(rightAng) * 26}; z1 = floorZ + 40;
+    } else {
+      start = {x:pose.x + cosA * 3 + Math.cos(rightAng) * 2, y:pose.y + sinA * 3 + Math.sin(rightAng) * 2}; z0 = floorZ + 55;
+      end = {x:job.target.x, y:job.target.y}; z1 = job.target.z + 28;
+    }
+    var distance = Math.hypot(end.x - start.x, end.y - start.y), flightMs = distance / speed * 1000;
+    var burstMs = 300, periodMs = flightMs + burstMs + 320, lob = spell.attackType === 'lob';
+    var cycleStart = Math.floor(t / periodMs) * periodMs, local = t - cycleStart;
+    var heading = Math.atan2(end.y - start.y, end.x - start.x);
+    if (local < flightMs) {
+      var f = local / flightMs, arc = lob ? Math.sin(Math.PI * f) * 40 : 0;
+      var vz = ((z1 - z0) / flightMs + (lob ? Math.cos(Math.PI * f) * Math.PI * 40 / flightMs : 0)) * 1000;
+      var projectile = {x:start.x + (end.x - start.x) * f, y:start.y + (end.y - start.y) * f, z:z0 + (z1 - z0) * f + arc,
+        ang:heading, speed:speed, hz:speed, vz:vz, spawnMs:base + cycleStart, lifeMs:Math.ceil(flightMs) + 50, r:3,
+        spell:spell, renderFloorZ:floorZ, underground:job.underground};
+      if (lob) { projectile.isLob = true; projectile.targetX = end.x; projectile.targetY = end.y; projectile.targetZ = job.target.z; }
+      projectiles.push(projectile); phase = 'flight';
+    } else if (local < flightMs + burstMs) {
+      impacts.push({x:end.x, y:end.y, z:z1, spawnMs:base + cycleStart + flightMs, lifeMs:burstMs, spellId:spell.id});
+    } else phase = 'pause';
+  } else {
+    var period = 900, cycle = Math.floor(t / period) * period, since = t - cycle;
+    if (since < 400) impacts.push({x:job.target.x, y:job.target.y, z:job.target.z + 24, spawnMs:base + cycle, lifeMs:400, spellId:spell.id});
+    else phase = 'pause';
+  }
+  live.projectiles = projectiles; live.impacts = impacts;
+  job.galleryPhase = phase; job.gallerySceneLabel = scene.label;
 }
 
 function castingStudioResetCycle(job) {
@@ -112,6 +185,11 @@ function castingStudioResetCycle(job) {
   job.live.HAND_RIG_STYLE = job.style;
   job.live.dayTime = job.light === 'dusk' ? 0.78 : 0.5;
   job.live._lightGridLastScale = -Infinity; job.live._lightGridFrameCount = 4;
+  if (job.mode === 'gallery') {
+    // Original shows the legacy per-spell drawing; Redesigned the archetypes.
+    job.live.SPELL_VISUALS_ENABLED = !!job.art;
+    castingStudioGallerySeed(job);
+  }
   castingStudioSyncTimeline(job);
 }
 
@@ -126,7 +204,7 @@ function startCastingStudio() {
   var pose = Object.assign({}, pos), camera = Object.assign({}, cam);
   // A level, stationary shot keeps the same actual launch height and speed.
   camera.x = pose.x; camera.y = pose.y; camera.z = pose.floorZ; camera.pitch = 0;
-  var target = _castingStudioMode==='hand'?null:castingStudioFindTarget(pose, camera);
+  var target = _castingStudioMode==='hand'?null:castingStudioFindTarget(pose, camera, _castingStudioMode==='gallery');
   var live = castingStudioCopy(_castingStudioKeys);
   live.pos = pose; live.cam = camera; live.vel = {x:0,y:0};
   live.settings = Object.assign({}, settings, {dayNight:true,showFPS:false});
@@ -145,7 +223,7 @@ function startCastingStudio() {
   live.daySpeed = 0;
   var job = {live:live, mesh:floorMesh, seed:WORLD_SEED, view:cavePreviewLastView,
     target:target, underground:!!playerUnderground, art:_castingStudioArt, light:_castingStudioLight,
-    mode:_castingStudioMode,yaw:_castingStudioYaw,grip:_castingStudioGrip,style:castingStudioSelectedStyle(),inspectionFullscreen:false,fullscreenPending:false,
+    mode:_castingStudioMode,yaw:_castingStudioYaw,grip:_castingStudioGrip,style:castingStudioSelectedStyle(),scene:_castingStudioScene,inspectionFullscreen:false,fullscreenPending:false,
     wasRunning:running, width:canvas.width, height:canvas.height,
     styleWidth:canvas.style.width, styleHeight:canvas.style.height,
     raf:0, playing:false, profile:false, stopped:false, resume:null, clockBase:2000000000000,
@@ -165,6 +243,12 @@ function castingStudioAdvance(job, toMs) {
     // Anatomy proof only: no input acceptance, mana, queued cast, projectile,
     // effect lifetime or hit simulation runs along this separate timeline.
     job.time=toMs;job.simTime=toMs;job.live.HAND_RIG_TIME_MS=toMs;
+    return;
+  }
+  if(job.mode==='gallery'){
+    // Synthetic records only: no cast acceptance, mana, projectile motion,
+    // collision or effect ticking runs on the gallery timeline.
+    job.time=toMs;job.simTime=toMs;castingStudioGallerySeed(job);
     return;
   }
   while (job.simTime + CASTING_STUDIO_STEP_MS <= toMs + 0.00001) {
@@ -214,6 +298,14 @@ function castingStudioDescribe(job) {
   if(job.mode==='hand')return castingStudioArtLabel(job)+' · neutral hand motion study · '+job.light+
     ' · '+handStudioPhase(job.time)+' · '+Math.round(job.time)+' / '+HAND_STUDIO_CYCLE_MS+' ms'+
     ' · '+job.style+' style · '+job.grip+' resting template · ¼-speed casting flourish · no equipped item, spell or damage';
+  if(job.mode==='gallery'){
+    var stats=typeof getSpellVisualStats==='function'?getSpellVisualStats():null;
+    return castingStudioArtLabel(job)+' · '+job.gallerySceneLabel+' · '+job.light+' · '+job.galleryPhase+
+      ' · '+Math.round(job.time)+' / '+SPELL_GALLERY_CYCLE_MS+' ms · skeleton '+Math.round(job.target.distance)+
+      ' units away · synthetic records, no combat'+
+      (stats?' · glow sprites '+stats.glowEntries+' ('+Math.round(stats.glowBytes/1024)+' KiB), hits '+stats.glowHits+
+        ', builds '+stats.glowBuilds+', fallbacks '+stats.glowFallbacks:'');
+  }
   var phase = !job.requested ? 'Ready' : !job.released ? 'Gather / wind-up' : job.hitAt !== null ?
     (job.time-job.hitAt < 250 ? 'Actual target hit' : 'Follow-through / recovery') :
     job.live.projectiles.length ? 'Missile in flight' : 'Missile stopped by existing geometry';
@@ -223,10 +315,13 @@ function castingStudioDescribe(job) {
 }
 
 function castingStudioArtLabel(job) {
-  return !job.art?'Original baseline':job.mode==='hand'?'Articulated hand':'Rejected flat study';
+  return !job.art?(job.mode==='gallery'?'Original spell drawing':'Original baseline'):
+    job.mode==='hand'?'Articulated hand':job.mode==='gallery'?'Redesigned spell archetypes':'Rejected flat study';
 }
 
-function castingStudioCycleMs(job) {return job.mode==='hand'?HAND_STUDIO_CYCLE_MS:CASTING_STUDIO_CYCLE_MS;}
+function castingStudioCycleMs(job) {
+  return job.mode==='hand'?HAND_STUDIO_CYCLE_MS:job.mode==='gallery'?SPELL_GALLERY_CYCLE_MS:CASTING_STUDIO_CYCLE_MS;
+}
 
 function handStudioPhase(time) {
   return time<500?'Ready':time<1050?'Gather':time<1420?'Release':time<1730?'Follow-through':time<2450?'Recovery':'Ready';
@@ -265,7 +360,7 @@ function playCastingStudio() {
       if (job.time + dt >= cycleMs) {
         if(job.recording){
           castingStudioAdvance(job,cycleMs);castingStudioDraw(job);
-          if(job.mode!=='hand'&&job.hitAt===null)throw Error('Practice target was not hit; incomplete recording discarded.');
+          if(job.mode==='casting'&&job.hitAt===null)throw Error('Practice target was not hit; incomplete recording discarded.');
           job.playing=false;job.raf=0;finishCastingStudioRecording(job,false);return;
         }
         castingStudioResetCycle(job);
@@ -310,9 +405,15 @@ function castingStudioUpdateChoices() {
     var button=document.getElementById(pair[0]);if(button)button.setAttribute('aria-pressed',String(pair[1]));
   });
   var redesigned=document.getElementById('castingStudioRedesigned');
-  if(redesigned)redesigned.textContent=_castingStudioMode==='hand'?'Articulated hand':'Rejected flat study';
-  var play=document.getElementById('castingStudioPlay');if(play)play.textContent=_castingStudioMode==='hand'?'Play casting flourish (¼ speed)':'Play casting sequence';
-  var scrub=document.getElementById('castingStudioTime');if(scrub)scrub.max=String(_castingStudioMode==='hand'?HAND_STUDIO_CYCLE_MS:CASTING_STUDIO_CYCLE_MS);
+  if(redesigned)redesigned.textContent=_castingStudioMode==='hand'?'Articulated hand':_castingStudioMode==='gallery'?'Redesigned spell archetypes':'Rejected flat study';
+  var original=document.getElementById('castingStudioOriginal');
+  if(original)original.textContent=_castingStudioMode==='gallery'?'Original spell drawing':'Original baseline';
+  var play=document.getElementById('castingStudioPlay');
+  if(play)play.textContent=_castingStudioMode==='hand'?'Play casting flourish (¼ speed)':_castingStudioMode==='gallery'?'Play spell loop':'Play casting sequence';
+  var scrub=document.getElementById('castingStudioTime');
+  if(scrub)scrub.max=String(_castingStudioMode==='hand'?HAND_STUDIO_CYCLE_MS:_castingStudioMode==='gallery'?SPELL_GALLERY_CYCLE_MS:CASTING_STUDIO_CYCLE_MS);
+  var scene=document.getElementById('castingStudioScene');
+  if(scene){scene.disabled=_castingStudioMode!=='gallery';scene.value=_castingStudioScene;}
   var view=document.getElementById('castingStudioHandView');if(view)view.disabled=_castingStudioMode!=='hand';
   var phase=document.getElementById('castingStudioPhase');if(phase)phase.disabled=_castingStudioMode!=='hand';
   var grip=document.getElementById('castingStudioGrip');
@@ -324,9 +425,24 @@ function castingStudioUpdateChoices() {
 function setCastingStudioMode(mode) {
   if(_castingStudio&&(_castingStudio.profile||_castingStudio.fullscreenPending||_castingStudio.inspectionFullscreen))return;
   if(_castingStudio)stopCastingStudio('Study mode changed; previous session restored.');
-  _castingStudioMode=mode==='casting'?'casting':'hand';
+  _castingStudioMode=mode==='casting'?'casting':mode==='gallery'?'gallery':'hand';
   _castingStudioArt=true;castingStudioUpdateChoices();
-  castingStudioWrite(_castingStudioMode==='hand'?'Hand motion study: neutral articulated anatomy only; no actual casting.':'Rejected flat casting study (archived comparison), with real missile simulation.');
+  castingStudioWrite(_castingStudioMode==='hand'?'Hand motion study: neutral articulated anatomy only; no actual casting.':
+    _castingStudioMode==='gallery'?'Spell gallery: synthetic bolts and bursts on a fixed loop; compare Original spell drawing with the redesigned archetypes. No combat runs.':
+    'Rejected flat casting study (archived comparison), with real missile simulation.');
+}
+
+function setCastingStudioScene(id) {
+  if(_castingStudio&&(_castingStudio.profile||_castingStudio.fullscreenPending))return;
+  try{_castingStudioScene=castingStudioGalleryScene(id).id;}catch(error){castingStudioWrite(error.message);return;}
+  castingStudioUpdateChoices();
+  if(_castingStudioMode!=='gallery')return;
+  var job;
+  try{
+    job=startCastingStudio();pauseCastingStudio();job.scene=_castingStudioScene;
+    castingStudioResetCycle(job);castingStudioDraw(job);
+    castingStudioWrite(castingStudioDescribe(job)+' · paused');
+  }catch(error){if(job)stopCastingStudio(error.message);else castingStudioWrite(error.message);}
 }
 
 function scrubCastingStudio(timeMs) {
@@ -531,7 +647,7 @@ function castingStudioNextFrame(job) {
 function castingStudioArtworkStats() {
   return {
     hands:typeof getCastingArtworkStats==='function'?getCastingArtworkStats():{builds:0,buildMs:0,bytes:0},
-    missile:typeof getMagicMissileArtworkStats==='function'?getMagicMissileArtworkStats():{builds:0,buildMs:0,bytes:0},
+    missile:typeof getSpellVisualStats==='function'?(function(stats){return {builds:stats.glowBuilds,buildMs:stats.glowBuildMs,bytes:stats.glowBytes,spellVisuals:stats};}(getSpellVisualStats())):{builds:0,buildMs:0,bytes:0},
     handRig:typeof getHandRigStats==='function'?getHandRigStats():{vertices:0,triangles:0,visibleFaces:0,buildMs:0,builds:0,lastRenderMs:0,topologyBytes:0}
   };
 }
@@ -564,8 +680,11 @@ function recordCastingStudioCycle() {
     stream=canvas.captureStream(30);
     var recorder=new MediaRecorder(stream,{mimeType:mime});
     var recording={recorder:recorder,stream:stream,chunks:[],discard:false,
-      filename:(job.mode==='hand'?'hand-motion-'+(job.art?'articulated':'original')+'-'+job.style+'-'+job.grip:'casting-'+(job.art?'rejected-flat':'original'))+
-        '-'+job.light+'-'+canvas.width+'x'+canvas.height+'.webm',visualStudy:job.mode==='hand'};
+      filename:(job.mode==='hand'?'hand-motion-'+(job.art?'articulated':'original')+'-'+job.style+'-'+job.grip:
+        job.mode==='gallery'?'spell-gallery-'+job.scene.replace(':','-')+'-'+(job.art?'redesigned':'original'):
+        'casting-'+(job.art?'rejected-flat':'original'))+
+        '-'+job.light+'-'+canvas.width+'x'+canvas.height+'.webm',visualStudy:job.mode!=='casting',
+      studyLabel:job.mode==='hand'?'¼-speed anatomy study (no casting or hit)':job.mode==='gallery'?'spell gallery loop (synthetic records, no combat)':'actual casting cycle'};
     job.recording=recording;
     recorder.ondataavailable=function(event){if(event.data&&event.data.size)recording.chunks.push(event.data);};
     recorder.onerror=function(){
@@ -582,11 +701,11 @@ function recordCastingStudioCycle() {
         var link=document.createElement('a');link.href=_castingStudioVideoURL;link.download=recording.filename;
         link.textContent='Download '+recording.filename;links.appendChild(link);
       }
-      castingStudioWrite('Recorded one '+(recording.visualStudy?'¼-speed anatomy study (no casting or hit)':'actual casting cycle')+': '+recording.filename+
+      castingStudioWrite('Recorded one '+recording.studyLabel+': '+recording.filename+
         '. Capture requests 30 fps at the current canvas resolution; no audio. This is not a benchmark FPS measurement.');
     };
     recorder.start();playCastingStudio();
-    castingStudioWrite('Recording one '+(job.mode==='hand'?'¼-speed anatomy study':'actual casting cycle')+' at requested 30 fps, native canvas resolution, no audio…');
+    castingStudioWrite('Recording one '+recording.studyLabel+' at requested 30 fps, native canvas resolution, no audio…');
   }catch(error){
     if(job&&job.recording)finishCastingStudioRecording(job,true);
     else if(stream)stream.getTracks().forEach(function(track){track.stop();});
@@ -601,7 +720,9 @@ async function profileCastingStudio(mode) {
   if(job.inspectionFullscreen){castingStudioWrite('Exit fullscreen inspection before starting a profile.');return;}
   pauseCastingStudio(); job.profile=true;
   var result={status:'running',mode:mode,study:job.mode,castingStyle:job.mode==='hand'?job.style:null,restingGrip:job.mode==='hand'?job.grip:null,light:job.light,seed:job.seed,view:job.view,
-    target:job.mode==='hand'?'One neutral articulated right hand; anatomy proof only, no actual cast or projectile':'Stationary, temporary skeleton; actual cast, projectile, hit and effect logic',
+    target:job.mode==='hand'?'One neutral articulated right hand; anatomy proof only, no actual cast or projectile':
+      job.mode==='gallery'?'Spell gallery '+job.scene+': synthetic bolt/burst records on a fixed loop toward a stationary skeleton; no combat':
+      'Stationary, temporary skeleton; actual cast, projectile, hit and effect logic',
     targetDistance:job.target?job.target.distance:null,versions:[],propCachePilot:typeof getFloorArtworkCacheStats==='function'?
       getFloorArtworkCacheStats().enabled:false};
   try {
@@ -621,7 +742,7 @@ async function profileCastingStudio(mode) {
       job.live._armRightIdle=job.live._armRightCast=job.live._armLeftIdle=job.live._armLeftCast=null;
       job.live._armLastRobeId=null;
       if (typeof clearCastingArtworkCache==='function') clearCastingArtworkCache();
-      if (typeof clearMagicMissileArtworkCache==='function') clearMagicMissileArtworkCache();
+      if (typeof clearSpellVisualCache==='function') clearSpellVisualCache();
       if(job.mode==='hand'&&typeof clearHandRigCache==='function')clearHandRigCache();
       var before=castingStudioArtworkStats(), coldLegacy=0, firstFrame=null, renders=[], intervals=[], stages={},rigTimes=[];
       var coldBuildFrames=[], hits=[];
@@ -649,7 +770,7 @@ async function profileCastingStudio(mode) {
           if (frame%48===0) castingStudioWrite(castingStudioArtLabel(job)+' · '+job.light+' · '+
             (cycle===0?'cold use / warmup':'steady motion sampling')+' · '+frame+'/144 frames');
         }
-        if(job.mode!=='hand'){
+        if(job.mode==='casting'){
           if (job.hitAt===null) throw Error('Practice missile did not hit the target in the actual simulation. Choose Mouth and retry.');
           hits.push({requestMs:job.requestAt,releaseMs:job.releaseAt,hitMs:job.hitAt,damage:job.live.stats.totalDamageDone});
         }
@@ -664,8 +785,12 @@ async function profileCastingStudio(mode) {
           .sort(function(a,b){return b.medianMs-a.medianMs;}),actualHits:hits});
     }
     result.status='complete';
-    result.notes=[job.mode==='hand'?'Same game scene, pose and light: existing original hands baseline versus one articulated right-hand anatomy study. No combat is simulated.':'Both versions use the same current terrain, pose, lighting, tier-1 spell and scripted 120 Hz simulation steps.',
-      job.mode==='hand'?'Time zero is the outward-facing resting grip. Play previews the selected personal Casting Style at quarter speed; grip templates remain independent and equip no item.':'600 ms ready, accepted cast and production 120 ms wind-up, then real release/flight/hit/recovery; no impact is fabricated.',
+    result.notes=[job.mode==='hand'?'Same game scene, pose and light: existing original hands baseline versus one articulated right-hand anatomy study. No combat is simulated.':
+      job.mode==='gallery'?'Same scene, pose and light: legacy per-spell drawing versus the redesigned spell archetypes on identical synthetic bolt/burst records. No combat is simulated.':
+      'Both versions use the same current terrain, pose, lighting, tier-1 spell and scripted 120 Hz simulation steps.',
+      job.mode==='hand'?'Time zero is the outward-facing resting grip. Play previews the selected personal Casting Style at quarter speed; grip templates remain independent and equip no item.':
+      job.mode==='gallery'?'Records are pure functions of the loop time: flight toward the skeleton, a burst on arrival, then a short pause; NPC bolts fly from the skeleton past the player.':
+      '600 ms ready, accepted cast and production 120 ms wind-up, then real release/flight/hit/recovery; no impact is fabricated.',
       'Each version uses one 144-frame cold/warmup cycle followed by one 144-frame steady cycle.',
       'Artwork generation and the first full draw are separate from steady render-command timing.',
       'Command timing may exclude deferred GPU work. Animation-frame intervals are real browser cadence.',
@@ -696,7 +821,9 @@ async function profileCastingStudio(mode) {
     options.forEach(function(option){var node=document.createElement('option');node.value=option[0];node.textContent=option[1];select.appendChild(node);});
     select.addEventListener('change',function(){fn(select.value);});wrap.appendChild(select);panel.appendChild(wrap);return select;
   }
-  select('castingStudioMode','Study mode',[['hand','Hand motion study'],['casting','Rejected flat casting study']],setCastingStudioMode);
+  select('castingStudioMode','Study mode',[['hand','Hand motion study'],['gallery','Spell gallery'],['casting','Rejected flat casting study']],setCastingStudioMode);
+  var galleryScenes=typeof spellVisualGalleryScenes==='function'?spellVisualGalleryScenes():[];
+  select('castingStudioScene','Gallery scene',galleryScenes.map(function(scene){return[scene.id,scene.label];}),setCastingStudioScene);
   var styleOptions=typeof getCastingStyleOptions==='function'?getCastingStyleOptions():[{id:'arcane',label:'Arcane (default)'}];
   select('castingStudioStyle','Casting Style',styleOptions.map(function(style){return[style.id,style.label];}),setCastingStudioStyle);
   select('castingStudioGrip','Resting pose',[['reach','Reach'],['handle','Handle grip'],['cradle','Cradle']],setCastingStudioHandGrip);

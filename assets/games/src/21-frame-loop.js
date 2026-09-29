@@ -7,13 +7,17 @@ function renderFrame() {
   }
   _pt('draw()', function(){ draw(); });
   if (MODE3D) {
+    if (typeof beginSpellVisualFrame === 'function') beginSpellVisualFrame();
     _pt('groundFX3D', function(){ drawGroundEffects3D(); });
     _pt('coneFX3D', function(){ drawConeEffects3D(); drawFlameStream3D(); });
-    _pt('proj3D', function(){ drawProjectiles3D(); });
     _pt('chainFX3D', function(){ drawChainEffects3D(); });
     _pt('novaFX3D', function(){ drawNovaEffects3D(); });
-    _pt('impacts3D', function(){ drawImpacts3D(); });
     _pt('enemies3D', function(){ drawEnemies3D(); });
+    // Bolts in flight sit between the camera and their target, and bursts land
+    // on it, so both paint after the enemy sprites. Terrain occlusion is still
+    // decided per pixel by the scene-depth clips inside each renderer.
+    _pt('proj3D', function(){ drawProjectiles3D(); });
+    _pt('impacts3D', function(){ drawImpacts3D(); });
     _pt('soulOrbs3D', function(){ drawSoulOrbs3D(); });
     _pt('arcaneTomes3D', function(){ drawArcaneTomes3D(); });
     _pt('statPickups3D', function(){ drawStatPickups3D(); });

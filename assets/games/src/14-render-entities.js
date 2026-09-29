@@ -1439,6 +1439,10 @@ function drawProjectiles3D() {
     // The ground indicator remains independently visible when its airborne
     // projectile is behind the camera or hidden by terrain.
     drawSpellLandingReticle(p,C);
+    // Spell visual archetypes own every projectile with a bolt recipe. The
+    // legacy per-id bodies below remain only for the studio's Original A/B.
+    if (typeof SPELL_VISUALS_ENABLED !== 'undefined' && SPELL_VISUALS_ENABLED &&
+        typeof renderSpellBolt === 'function' && renderSpellBolt(p,C,artNow)) continue;
     if (typeof CASTING_ART_ENABLED !== 'undefined' && CASTING_ART_ENABLED &&
         typeof renderMissileProjectileArt === 'function' && renderMissileProjectileArt(p,C,artNow)) continue;
     var vis = entityVisible3D(p.x, p.y, Number.isFinite(p.z) ? p.z : 0, C,
@@ -1544,6 +1548,8 @@ function drawImpacts3D() {
   var C=getCam3D(),now=gameTimeNow();
   for(var i=0;i<impacts.length;i++) {
       var im=impacts[i],z=Number.isFinite(im.z)?im.z:getEntityRenderFloorZ(im);
+      if (typeof SPELL_VISUALS_ENABLED !== 'undefined' && SPELL_VISUALS_ENABLED &&
+          typeof renderSpellBurst === 'function' && renderSpellBurst(im,C,now)) continue;
       if (typeof CASTING_ART_ENABLED !== 'undefined' && CASTING_ART_ENABLED &&
           typeof renderMissileImpactArt === 'function' && renderMissileImpactArt(im,C,now)) continue;
       // Every producer stores absolute render-world Z, including companions

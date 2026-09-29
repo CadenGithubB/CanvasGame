@@ -102,6 +102,33 @@
   G.MediaRecorder=undefined;var previousStudio=G._castingStudio;G.recordCastingStudioCycle();
   check('unsupported recorder does not start or change simulation',G._castingStudio===previousStudio&&captures===1);
   G.MediaRecorder=oldRecorder;G.canvas.captureStream=oldCapture;
+  // Spell gallery: synthetic records on a fixed loop must never enter combat,
+  // must regenerate identically when scrubbed, and must leave the shipping
+  // kill switch and live arrays untouched.
+  G.setCastingStudioMode('gallery');
+  var galleryBaseline={visuals:G.SPELL_VISUALS_ENABLED,projectiles:G.projectiles,impacts:G.impacts};
+  var savedGalleryCast=G.castCurrentSpell,savedGalleryProjectiles=G.updateProjectiles,savedGalleryEffects=G.tickEffects,galleryCombat=0;
+  G.castCurrentSpell=G.updateProjectiles=G.tickEffects=function(){galleryCombat++;throw Error('gallery entered combat');};
+  var gallery=G.startCastingStudio();
+  check('spell gallery uses the practice lane and the redesigned archetypes by default',gallery.mode==='gallery'&&gallery.scene==='bolt:missile'&&gallery.target.distance>=96&&gallery.live.SPELL_VISUALS_ENABLED===true&&gallery.live.CASTING_ART_ENABLED===false&&gallery.live.HAND_RIG_PREVIEW===false&&G.castingStudioCycleMs(gallery)===2400);
+  G.castingStudioAdvance(gallery,120);
+  check('gallery bolt records are pure functions of loop time without combat',gallery.live.projectiles.length===1&&gallery.live.projectiles[0].spell.id==='missile'&&gallery.galleryPhase==='flight'&&galleryCombat===0);
+  var flightX=gallery.live.projectiles[0].x,flightY=gallery.live.projectiles[0].y;
+  G.castingStudioAdvance(gallery,900);G.castingStudioAdvance(gallery,120);
+  check('scrubbing backwards regenerates the identical bolt pose',gallery.live.projectiles[0].x===flightX&&gallery.live.projectiles[0].y===flightY);
+  var galleryErrors=G.__studioErrors.length;
+  G.castingStudioDraw(gallery);
+  check('gallery frame renders through the real frame loop without stage errors',G.__studioErrors.length===galleryErrors&&G.projectiles===galleryBaseline.projectiles);
+  G.setCastingStudioScene('bolt:ice');
+  check('scene selection is scoped to the studio job',gallery.scene==='bolt:ice'&&G._castingStudioScene==='bolt:ice'&&gallery.time===0&&gallery.live.projectiles.length===1&&gallery.live.projectiles[0].spell.id==='ice');
+  var burstSeen=false;
+  for(var galleryT=0;galleryT<=2400&&!burstSeen;galleryT+=20){G.castingStudioAdvance(gallery,galleryT);burstSeen=gallery.galleryPhase==='burst';}
+  check('bolt arrival produces one burst record with the scene spell',burstSeen&&gallery.live.projectiles.length===0&&gallery.live.impacts.length===1&&gallery.live.impacts[0].spellId==='ice'&&galleryCombat===0);
+  G.setCastingStudioArt(false);
+  check('original spell drawing toggles only the scoped kill switch',gallery.live.SPELL_VISUALS_ENABLED===false&&G.SPELL_VISUALS_ENABLED===galleryBaseline.visuals&&gallery.time===0);
+  G.stopCastingStudio('gallery complete');
+  check('gallery stop restores live arrays and the shipping kill switch',G._castingStudio===null&&G.SPELL_VISUALS_ENABLED===galleryBaseline.visuals&&G.projectiles===galleryBaseline.projectiles&&G.impacts===galleryBaseline.impacts&&galleryCombat===0);
+  G.castCurrentSpell=savedGalleryCast;G.updateProjectiles=savedGalleryProjectiles;G.tickEffects=savedGalleryEffects;
   G.setCastingStudioMode('hand');
   var rigBaseline={preview:G.HAND_RIG_PREVIEW,time:G.HAND_RIG_TIME_MS,yaw:G.HAND_RIG_VIEW_YAW,grip:G.HAND_RIG_GRIP,style:G.HAND_RIG_STYLE};
   var savedCast=G.castCurrentSpell,savedProjectiles=G.updateProjectiles,savedEffects=G.tickEffects,combatCalls=0;

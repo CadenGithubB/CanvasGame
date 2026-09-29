@@ -131,6 +131,17 @@ var _floorBandThresholds = [-0.9, -0.6, -0.3, -0.1, 0.1, 0.3, 0.5];
 // have to rebuild authored chunk colors and cached artwork and is not provided.
 var GAME_MATERIAL_COLORS = {
   missileMagic: {core:'#fff3d8', light:'#c4edf0', mid:'#79b9d0', deep:'#315677', rune:'#bfa16a'},
+  // Spell visual archetypes (14-spell-visuals.js) share these five roles:
+  // ivory core, lit edge, body, shadowed body and a rune/trim accent. Keep
+  // saturation restrained; the painters add shape, not glow, for readability.
+  fireMagic:   {core:'#fff3c4', light:'#ffc966', mid:'#f0762c', deep:'#7a2a12', rune:'#f6d27a'},
+  frostMagic:  {core:'#f4fbff', light:'#bfeaf6', mid:'#6fb9d6', deep:'#2a4f74', rune:'#d8ecf2'},
+  stormMagic:  {core:'#ffffff', light:'#fff6a8', mid:'#e9d45a', deep:'#6b5a1c', rune:'#bfa16a'},
+  venomMagic:  {core:'#f2ffd6', light:'#c8f28a', mid:'#7bbf4a', deep:'#2f5a25', rune:'#b7a85c'},
+  arcaneMagic: {core:'#fbf3ff', light:'#e2bfff', mid:'#a76fe0', deep:'#4a2a73', rune:'#c9a86b'},
+  towerMagic:  {core:'#fff9e3', light:'#ffe9a3', mid:'#e0b34c', deep:'#7a5a1c', rune:'#f2d9a0'},
+  slimeMagic:  {core:'#f4ffe8', light:'#b9f29a', mid:'#63c25c', deep:'#2c5e2a', rune:'#a8c98a'},
+  haloMagic:   {core:'#fffaf0', light:'#f7e3b0', mid:'#d9b46a', deep:'#6e5230', rune:'#efd9a8'},
   casterSkin: {shadow:'#714b40', base:'#b98265', light:'#e2bb94', crease:'#755047', nail:'#d9b59c'},
   casterCloth: {deep:'#16242e', mid:'#344b58', lit:'#607a83', cuff:'#4c3c2c', linen:'#c4b493'},
   casterMetal: {shadow:'#50422c', base:'#a78b54', light:'#dfc78d'},
