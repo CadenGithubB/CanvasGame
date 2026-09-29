@@ -61,7 +61,10 @@
         if (mesh.l0Color[i] !== G.caveMaterialColorHex(mesh.caveStone[i])) stoneSame = false;
         if (mesh.l0Color[i] !== color) stoneDistinct++;
       }
-      if (!hasCap && mesh.l0Type[i] === 1 && !mesh.water[i] && mesh.l0TopZ[i] === mesh.surfaceH[i]) {
+      // River banks the water system reshaped and recoloured are listed in
+      // mesh.waterCarveColors, like shoreline tint a later material pass.
+      var riverBank = mesh.waterCarveColors && mesh.waterCarveColors[i] !== undefined;
+      if (!hasCap && mesh.l0Type[i] === 1 && !mesh.water[i] && !riverBank && mesh.l0TopZ[i] === mesh.surfaceH[i]) {
         dryCount++;
         // Shoreline tint is a legitimate post-snapshot material treatment.
         // Ordinary ground must retain that actual authored chunk color, not

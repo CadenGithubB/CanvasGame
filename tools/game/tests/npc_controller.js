@@ -18,7 +18,7 @@
       source=mutate(source,'--removed-target-present','if (!enemy && !ally) return false;','/* mutation: stale party references retain attack eligibility */');
       source=mutate(source,'--list-order-target','best=target;bestD=d;bestId=id;','best=target;bestD=d;bestId=id;break;');
       source=mutate(source,'--ignore-occlusion',"return spatialRaycast(a,b).status==='clear';",'return true;');
-      source=mutate(source,'--eighty-ms-movement','travel=Math.min(d-stop,speed*dt)','travel=Math.min(d-stop,speed*.08)');
+      source=mutate(source,'--eighty-ms-movement','travel=Math.min(d-stop,speed*wade*dt)','travel=Math.min(d-stop,speed*wade*.08)');
       source=mutate(source,'--think-every-tick','if (now<n.nextThinkAt) return false;','/* mutation: perception scans on every movement tick */');
       source=mutate(source,'--ignore-trait-overrides',"if(actor.npcTraits && Object.prototype.hasOwnProperty.call(actor.npcTraits,name))return !!actor.npcTraits[name];",'/* mutation: ignore per-creature capability overrides */');
     }

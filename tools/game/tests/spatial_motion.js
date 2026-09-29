@@ -41,7 +41,7 @@
   (0, eval)(source);
   source=slurp('assets/games/src/09-physics.js');
   mutate('--player-bypass-controller',
-    'var movement=spatialMoveBody(movementBody,vel.x*dt,vel.y*dt);',
+    'var movement=spatialMoveBody(movementBody,vel.x*dt+(current?current.x*dt:0),vel.y*dt+(current?current.y*dt:0));',
     'movementBody.x+=vel.x*dt; movementBody.y+=vel.y*dt; var movement={hitX:false,hitY:false};');
   (0, eval)(source);
   (0, eval)(slurp('assets/games/src/10-npc-controller.js'));

@@ -460,6 +460,8 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_artwork_cache", "tools.game.tests.test_casting_presentation",
                            "tools.game.tests.test_firstperson_art", "tools.game.tests.test_casting_studio",
                            "tools.game.tests.test_hand_rig", "tools.game.tests.test_casting_styles",
+                           "tools.game.tests.test_water_system", "tools.game.tests.test_water_movement",
+                           "tools.game.tests.test_water_render",
                            "tools.game.tests.test_frame_pause"]
                 if args.suite:
                     module = f"tools/webui/tests/test_game_{args.suite}.py"

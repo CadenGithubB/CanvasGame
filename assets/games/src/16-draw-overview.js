@@ -813,6 +813,7 @@ function draw() {
     _pt('platforms3D', function(){ if (!DEBUG_HIDE_PLATS) drawLayersFloor3D(); });
     _pt('walls3D', function(){ if (!DEBUG_HIDE_WALLS) drawWalls3D(); });
     _pt('caveEntrance3D', function(){ drawCaveEntrance3D(); });
+    _pt('water3D', function(){ if (typeof drawWater3D === 'function') drawWater3D(); });
     _pt('sceneEntities', function(){
       drawFloorScatter3D();
       drawTreasureChests3D();
