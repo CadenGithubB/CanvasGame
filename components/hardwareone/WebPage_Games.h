@@ -401,6 +401,9 @@ var GAME_MATERIAL_COLORS = {
   casterSkin: {shadow:'#714b40', base:'#b98265', light:'#e2bb94', crease:'#755047', nail:'#d9b59c'},
   casterCloth: {deep:'#16242e', mid:'#344b58', lit:'#607a83', cuff:'#4c3c2c', linen:'#c4b493'},
   casterMetal: {shadow:'#50422c', base:'#a78b54', light:'#dfc78d'},
+  // Held staff (15-staff-rig.js): gnarled wood, leather grip wrap and lacing.
+  casterStaff: {woodDeep:'#2e1d12', wood:'#6a4529', woodLit:'#a4774a', grain:'#3f2819',
+    wrapDeep:'#23160f', wrap:'#5b3a26', wrapLit:'#8d6343', lacing:'#c9b48a'},
   // Ashen Reliquary interior stone. `base` remains the compatibility/fallback
   // color; the secondary roles are blended softly into world-authored albedo.
   caveStone: {
@@ -18543,7 +18546,8 @@ var HAND_RIG_DEFAULT_GRIP = 'handle';
 var HAND_RIG_GRIP = HAND_RIG_DEFAULT_GRIP;
 var HAND_RIG_STYLE = 'arcane';
 var HAND_RIG_MATERIAL = {skin:0,cloth:1,cuff:2,lining:3,trim:4};
-// Reusable hand shapes only; these do not equip or create an item.
+// Reusable hand shapes; none equips an item. The staff grip also draws a
+// held preview staff (see HAND_RIG_ITEMS below).
 var HAND_RIG_REST_POSES = {
   reach:{finger:[.25,.32,.15],thumb:[.14,.23,.16],axialRoll:0},
   // A staff grip rolls around the forearm's own longitudinal axis, not around
@@ -18553,8 +18557,23 @@ var HAND_RIG_REST_POSES = {
     root:[[.80,3.02,-.07],[.70,3.01,-.04],[1.15,3.01,-.07]],
     // A held handle thrusts away even when the free-hand style has recoil.
     placement:{distance:[57,58,70],anchorX:[.735,.732,.680],anchorY:[.930,.928,.855]}},
-  cradle:{finger:[.48,.63,.32],thumb:[.22,.39,.28],axialRoll:0}
+  cradle:{finger:[.48,.63,.32],thumb:[.22,.39,.28],axialRoll:0},
+  // Staff casting is its own rig, not a free-hand style. The hand closes on the
+  // shaft authored in 15-staff-rig.js; each finger's curl was solved against
+  // that cylinder so the pads meet it without entering it. `forearm` holds the
+  // sleeve, `root` the hand, and their wrist bend spreads over `wristSpan`
+  // units of cuff; `arm` then turns both rigidly for the reach. Rest leans the
+  // staff out along the right edge; the thrust tips it forward beside the aim.
+  staff:{fingers:[[.95,1.65,.45],[1.45,1.55,.70],[1.35,1.50,.70],[.85,1.35,.50]],
+    thumb:[.19,1.03,.34],axialRoll:0,item:'staff',fingerSpread:.35,
+    thumbPose:{splay:.63,opposition:.16,twist:.02},
+    forearm:[-.895,.032,1.031],root:[[-.86,.249,1.211],[-.817,.211,1.348],[-.971,.644,1.043]],
+    arm:[[0,0,0],[.07,0,0],[-.349,.524,-.524]],wristSpan:5,
+    placement:{distance:[66,64,84],anchorX:[.79,.795,.68],anchorY:[.95,.94,.8]}}
 };
+// Held items register geometry by id; a grip names the one it holds. An item
+// is posed rigidly with the hand and shares its projection, light and ordering.
+var HAND_RIG_ITEMS = {};
 // Animation recipes share one skeleton and renderer. The preference catalog
 // maps a stable style ID to one of these recipes; spells never read this data.
 // Digit order: index, middle, ring, little, thumb. Angles are local radians.
@@ -18774,15 +18793,16 @@ function handRigDigitFrame(d,pose) {
   var rest=HAND_RIG_REST_POSES[pose.grip]||HAND_RIG_REST_POSES.reach;
   var animation=handRigAnimation(pose),slot=d.slot;
   var flex=[0,1,2].map(function(i){return handRigBlend(animation.fingers.map(function(frame){return frame[slot][i];}),pose);});
-  // Item grip is an independent constraint, not a style or unlock. Until an
-  // item author supplies contact targets, occupied hands retain their template.
-  if(pose.grip!=='reach')flex=(d.thumb?rest.thumb:rest.finger).map(function(value,i){return value+(d.thumb?0:d.curl*(i===2?.6:1));});
+  // Item grip is an independent constraint, not a style or unlock. Occupied
+  // hands keep their template; a held item's grip authors per-finger curls.
+  if(pose.grip!=='reach')flex=!d.thumb&&rest.fingers?rest.fingers[slot].slice():
+    (d.thumb?rest.thumb:rest.finger).map(function(value,i){return value+(d.thumb?0:d.curl*(i===2?.6:1));});
   var handedness=d.handedness||1;
-  var occupied=pose.grip!=='reach';
-  var splay=d.thumb?(occupied?.88:handRigBlend(animation.thumbSplay,pose))*handedness:
-    d.splay*(occupied?1:handRigBlend(animation.fingerSpread,pose));
-  var opposition=d.thumb?(occupied?(pose.grip==='handle'?.55:.20):handRigBlend(animation.thumbOpposition,pose))*handedness:0;
-  var twist=d.thumb?(occupied?-.45:handRigBlend(animation.thumbTwist,pose))*handedness:0;
+  var occupied=pose.grip!=='reach',hold=occupied&&rest.thumbPose;
+  var splay=d.thumb?(occupied?(hold?hold.splay:.88):handRigBlend(animation.thumbSplay,pose))*handedness:
+    d.splay*(occupied?(rest.fingerSpread!==undefined?rest.fingerSpread:1):handRigBlend(animation.fingerSpread,pose));
+  var opposition=d.thumb?(occupied?(hold?hold.opposition:pose.grip==='handle'?.55:.20):handRigBlend(animation.thumbOpposition,pose))*handedness:0;
+  var twist=d.thumb?(occupied?(hold?hold.twist:-.45):handRigBlend(animation.thumbTwist,pose))*handedness:0;
   var angles=[flex[0],flex[0]+flex[1],flex[0]+flex[1]+flex[2]];
   var centers=[[0,0,0]],cy=0,cz=0;
   for(var i=0;i<3;i++){
@@ -18791,17 +18811,34 @@ function handRigDigitFrame(d,pose) {
   }
   return {angles:angles,centers:centers,splay:splay,opposition:opposition,twist:twist};
 }
+function handRigPoseFrame(pose,yaw) {
+  // A face-on inspection isolates the silhouette from first-person wrist pose
+  // and foreshortening. The ordinary player/side views retain their full motion.
+  var palmStudy=yaw==='palm',rest=HAND_RIG_REST_POSES[pose.grip];
+  var angles=palmStudy?[0,0,Math.PI/2]:handRigRootAngles(pose,0);
+  var arm=!palmStudy&&rest.arm?[0,1,2].map(function(i){return handRigBlend([rest.arm[0][i],rest.arm[1][i],rest.arm[2][i]],pose);}):null;
+  // A grip may hold its forearm apart from the hand; the wrist bend between
+  // them then spreads across `wristSpan`. Otherwise both start at rest.
+  return {angles:angles,neutral:palmStudy?angles:rest.forearm||handRigRootFrames(pose)[0],
+    inspectionYaw:Number.isFinite(yaw)?yaw:0,axialCos:Math.cos(rest.axialRoll),axialSin:Math.sin(rest.axialRoll),
+    arm:arm,wristSpan:rest.wristSpan||20};
+}
+// Wrist rotation scaled by `weight`, then any rigid arm turn. Inspection yaw
+// turns the finished arm as a whole, so it stays outermost when an arm exists.
+function handRigPlace(frame,x,y,z,weight) {
+  var angles=frame.angles,neutral=frame.neutral,arm=frame.arm;
+  var rotated=handRigRotate(x,y,z,neutral[0]+(angles[0]-neutral[0])*weight,
+    neutral[1]+(angles[1]-neutral[1])*weight+(arm?0:frame.inspectionYaw),neutral[2]+(angles[2]-neutral[2])*weight);
+  if(!arm)return rotated;
+  rotated=handRigRotate(rotated[0],rotated[1],rotated[2],arm[0],arm[1],arm[2]);
+  return frame.inspectionYaw?handRigRotate(rotated[0],rotated[1],rotated[2],0,frame.inspectionYaw,0):rotated;
+}
 function poseHandRigMesh(mesh,pose,yaw) {
   var P=mesh.positions,N=mesh.normals,F=mesh.faces;
   N.fill(0);
   var digitFrames=mesh.digits.map(function(d){return handRigDigitFrame(d,pose);});
-  // A face-on inspection isolates the silhouette from first-person wrist pose
-  // and foreshortening. The ordinary player/side views retain their full motion.
-  var palmStudy=yaw==='palm';
-  var angles=palmStudy?[0,0,Math.PI/2]:handRigRootAngles(pose,0);
-  var neutral=palmStudy?angles:handRigRootFrames(pose)[0],inspectionYaw=Number.isFinite(yaw)?yaw:0;
-  var axialRoll=HAND_RIG_REST_POSES[pose.grip].axialRoll;
-  var axialCos=Math.cos(axialRoll),axialSin=Math.sin(axialRoll);
+  var rig=handRigPoseFrame(pose,yaw);mesh.frame=rig;
+  var axialCos=rig.axialCos,axialSin=rig.axialSin,axialRoll=HAND_RIG_REST_POSES[pose.grip].axialRoll;
   for(var i=0;i<mesh.desc.length;i++){
     var d=mesh.desc[i],x=d.x,y=d.y,z=d.z,weight=1,axisX=0,axisZ=0;
     if(d.kind===2){
@@ -18818,7 +18855,7 @@ function poseHandRigMesh(mesh,pose,yaw) {
         center[2]+Math.sin(angle)*along+Math.cos(ringAngle)*pad,0,frame.opposition,frame.splay);
       x=finger.x+local[0];y=finger.y+local[1];z=finger.z+local[2];
     } else if(d.kind===1){
-      weight=handRigEase((y+20)/20);
+      weight=handRigEase((y+rig.wristSpan)/rig.wristSpan);
       // A small delayed cuff bend visibly differs from rigid hand rotation.
       axisX=d.axisX;axisZ=Math.sin((-y/20)*Math.PI)*pose.settle*5;z+=axisZ;
     }
@@ -18832,8 +18869,7 @@ function poseHandRigMesh(mesh,pose,yaw) {
     }
     // The entire forearm shares the outward rest orientation. Only additional
     // casting twist fades toward the elbow, avoiding a permanently twisted arm.
-    var rotated=handRigRotate(x,y,z,neutral[0]+(angles[0]-neutral[0])*weight,
-      neutral[1]+(angles[1]-neutral[1])*weight+inspectionYaw,neutral[2]+(angles[2]-neutral[2])*weight);
+    var rotated=handRigPlace(rig,x,y,z,weight);
     P[i*3]=rotated[0];P[i*3+1]=rotated[1];P[i*3+2]=rotated[2];
   }
   // Area-weighted vertex normals follow the deformed surface, not a painted
@@ -18881,18 +18917,20 @@ function handRigColor(level,material,palette) {
   else rgb=handRigRgbMix(ramp[1],ramp[2],(t-.58)/.42);
   return 'rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
 }
-function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
-  if(!MODE3D||shopOpen)return;
-  var begin=performance.now(),mesh=buildHandRigMesh(),pose=sampleHandRigPose(timeMs,grip||HAND_RIG_GRIP,styleId||HAND_RIG_STYLE);
-  var palmStudy=yaw==='palm';
-  yaw=palmStudy?'palm':Number.isFinite(yaw)?yaw:0;poseHandRigMesh(mesh,pose,yaw);
-  var P=mesh.positions,N=mesh.normals,S=mesh.screen,I=mesh.light,faces=mesh.faces;
-  var palette=handRigMaterialPalette();
-  var placement=handRigPlacementFrames(pose),distance=palmStudy?48:handRigBlend(placement.distance,pose);
-  var focal=canvas.height*1.28,anchorX=canvas.width*(palmStudy?.70:handRigBlend(placement.anchorX,pose));
-  var anchorY=canvas.height*(palmStudy?.78:handRigBlend(placement.anchorY,pose));
-  var ambient=typeof ambientLight==='number'?Math.max(.25,Math.min(1,ambientLight)):.8;
-  for(var v=0;v<mesh.desc.length;v++){
+// Rigid held item: same axial roll, wrist and arm turn as the palm (weight 1).
+// The transform is rotation only, so authored unit normals follow it exactly.
+function poseHandRigItem(item,frame) {
+  var L=item.local,LN=item.localNormals,P=item.positions,N=item.normals,c=frame.axialCos,s=frame.axialSin;
+  for(var p=0;p<item.count*3;p+=3){
+    var q=handRigPlace(frame,L[p]*c+L[p+2]*s,L[p+1],L[p+2]*c-L[p]*s,1);
+    var n=handRigPlace(frame,LN[p]*c+LN[p+2]*s,LN[p+1],LN[p+2]*c-LN[p]*s,1);
+    P[p]=q[0];P[p+1]=q[1];P[p+2]=q[2];N[p]=n[0];N[p+1]=n[1];N[p+2]=n[2];
+  }
+  return item;
+}
+function handRigProjectPart(part,count,distance,focal,anchorX,anchorY,ambient) {
+  var P=part.positions,N=part.normals,S=part.screen,I=part.light;
+  for(var v=0;v<count;v++){
     var p=v*3,depth=distance-P[p+2];
     S[p]=anchorX+P[p]*focal/depth;S[p+1]=anchorY-P[p+1]*focal/depth;S[p+2]=depth;
     var length=Math.hypot(N[p],N[p+1],N[p+2])||1;
@@ -18900,7 +18938,9 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
     var rim=Math.max(0,(.65*N[p]-.2*N[p+1]-.72*N[p+2])/length);
     I[v]=.27+ambient*.16+diffuse*.55+rim*.13;
   }
-  var order=mesh.order;order.length=0;
+}
+function handRigCullPart(part,offset,order) {
+  var S=part.screen,faces=part.faces;
   for(var f=0;f<faces.length;f++){
     var F=faces[f],a=F[0]*3,b=F[1]*3,c=F[2]*3;
     if(S[a+2]<3||S[b+2]<3||S[c+2]<3)continue;
@@ -18908,21 +18948,50 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
     if(area>=-.015)continue;
     if(Math.max(S[a],S[b],S[c])<0||Math.min(S[a],S[b],S[c])>canvas.width||
       Math.max(S[a+1],S[b+1],S[c+1])<0||Math.min(S[a+1],S[b+1],S[c+1])>canvas.height)continue;
-    mesh.faceDepth[f]=(S[a+2]+S[b+2]+S[c+2])/3;order.push(f);
+    part.faceDepth[f]=(S[a+2]+S[b+2]+S[c+2])/3;order.push(offset+f);
   }
-  order.sort(function(a,b){return mesh.faceDepth[b]-mesh.faceDepth[a]||a-b;});
+}
+function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
+  if(!MODE3D||shopOpen)return;
+  var begin=performance.now(),mesh=buildHandRigMesh(),pose=sampleHandRigPose(timeMs,grip||HAND_RIG_GRIP,styleId||HAND_RIG_STYLE);
+  var palmStudy=yaw==='palm';
+  yaw=palmStudy?'palm':Number.isFinite(yaw)?yaw:0;poseHandRigMesh(mesh,pose,yaw);
+  var S=mesh.screen,I=mesh.light,faces=mesh.faces,handFaces=faces.length;
+  var palette=handRigMaterialPalette(),itemBase=palette.length,itemLift=null;
+  var itemDef=HAND_RIG_REST_POSES[pose.grip].item,item=null;
+  itemDef=itemDef&&Object.prototype.hasOwnProperty.call(HAND_RIG_ITEMS,itemDef)?HAND_RIG_ITEMS[itemDef]:null;
+  if(itemDef){
+    item=poseHandRigItem(itemDef.build(),mesh.frame);
+    palette=palette.concat(itemDef.palette());itemLift=itemDef.lift(pose);
+  }
+  var placement=handRigPlacementFrames(pose),distance=palmStudy?48:handRigBlend(placement.distance,pose);
+  var focal=canvas.height*1.28,anchorX=canvas.width*(palmStudy?.70:handRigBlend(placement.anchorX,pose));
+  var anchorY=canvas.height*(palmStudy?.78:handRigBlend(placement.anchorY,pose));
+  var ambient=typeof ambientLight==='number'?Math.max(.25,Math.min(1,ambientLight)):.8;
+  handRigProjectPart(mesh,mesh.desc.length,distance,focal,anchorX,anchorY,ambient);
+  if(item)handRigProjectPart(item,item.count,distance,focal,anchorX,anchorY,ambient);
+  var order=mesh.order;order.length=0;
+  handRigCullPart(mesh,0,order);
+  if(item)handRigCullPart(item,handFaces,order);
+  // Hand and item faces share one far-to-near order; item indices follow the hand's.
+  if(item)order.sort(function(a,b){
+    return (b<handFaces?mesh.faceDepth[b]:item.faceDepth[b-handFaces])-
+      (a<handFaces?mesh.faceDepth[a]:item.faceDepth[a-handFaces])||a-b;});
+  else order.sort(function(a,b){return mesh.faceDepth[b]-mesh.faceDepth[a]||a-b;});
   ctx.save();
   try {
     ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.shadowBlur=0;
     ctx.lineJoin='round';ctx.lineWidth=.55;
     for(var fi=0;fi<order.length;fi++){
-      var face=faces[order[fi]],ia=face[0],ib=face[1],ic=face[2],aa=ia*3,bb=ib*3,cc=ic*3;
+      var k=order[fi],held=k>=handFaces,face=held?item.faces[k-handFaces]:faces[k];
+      if(held){S=item.screen;I=item.light;}else{S=mesh.screen;I=mesh.light;}
+      var ia=face[0],ib=face[1],ic=face[2],aa=ia*3,bb=ib*3,cc=ic*3;
       var x0=S[aa],y0=S[aa+1],x1=S[bb],y1=S[bb+1],x2=S[cc],y2=S[cc+1];
       var den=(x1-x0)*(y2-y0)-(x2-x0)*(y1-y0);
       var gx=((I[ib]-I[ia])*(y2-y0)-(I[ic]-I[ia])*(y1-y0))/den;
       var gy=((x1-x0)*(I[ic]-I[ia])-(x2-x0)*(I[ib]-I[ia]))/den;
-      var mag=gx*gx+gy*gy,shade,material=face[3];
-      var materialLift=material===HAND_RIG_MATERIAL.trim ? .07 :
+      var mag=gx*gx+gy*gy,shade,material=held?itemBase+face[3]:face[3];
+      var materialLift=held?itemLift[face[3]]:material===HAND_RIG_MATERIAL.trim ? .07 :
         material===HAND_RIG_MATERIAL.lining ? .025 : 0;
       var rawLo=Math.min(I[ia],I[ib],I[ic]),rawHi=Math.max(I[ia],I[ib],I[ic]);
       var lo=rawLo+materialLift,hi=rawHi+materialLift;
@@ -18936,9 +19005,175 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
       // Subpixel seam cover, not an outline or lower-resolution raster layer.
       ctx.stroke();
     }
+    if(itemDef&&itemDef.overlay)itemDef.overlay(item,pose,palette.slice(itemBase));
   } finally {ctx.restore();}
   _handRigStats.visibleFaces=order.length;_handRigStats.lastRenderMs=performance.now()-begin;
 }
+// Held staff for the staff-casting hand rig (grip 'staff' in 15-hand-rig.js).
+// Preview-only like the hand: native Canvas2D triangles in hand units, posed
+// rigidly with the palm. No raster art, world depth, spell or gameplay state.
+// Geometry is authored along the staff's own axis, then mounted once into the
+// hand's local frame (+x thumb side, +y fingers, +z palmar).
+var STAFF_RIG_MATERIAL = {wood:0,grain:1,wrap:2,lacing:3,brass:4,crystal:5};
+// The grip's finger curls were solved against this cylinder: its axis runs
+// across the palm through (0, 7.0, 2.25), rising 0.1 toward the thumb side.
+var STAFF_RIG_GRIP = {center:[0,7.0,2.25],slope:.1,radius:1.2};
+var _staffRigMesh = null;
+var _staffRigStats = {vertices:0,triangles:0,buildMs:0,builds:0,topologyBytes:0};
+function clearStaffRigCache() {
+  _staffRigMesh=null;
+  _staffRigStats={vertices:0,triangles:0,buildMs:0,builds:0,topologyBytes:0};
+}
+function getStaffRigStats() {return Object.assign({},_staffRigStats);}
+function buildStaffRigMesh() {
+  if(_staffRigMesh)return _staffRigMesh;
+  var start=performance.now(),verts=[],faces=[];
+  var g=STAFF_RIG_GRIP,al=Math.hypot(1,g.slope);
+  // Staff axis A, with U (palmar) and V completing a right-handed U,V,A frame.
+  var A=[1/al,g.slope/al,0],U=[0,0,1],V=[A[1],-A[0],0];
+  // Staff station s=0 sits mid-fist, slightly toward the little finger.
+  var O=[g.center[0]-.2*A[0],g.center[1]-.2*A[1],g.center[2]];
+  function at(s,r,theta){
+    var c=Math.cos(theta)*r,n=Math.sin(theta)*r;
+    return [O[0]+s*A[0]+c*U[0]+n*V[0],O[1]+s*A[1]+c*U[1]+n*V[1],O[2]+s*A[2]+c*U[2]+n*V[2]];
+  }
+  function vertex(p){verts.push(p);return verts.length-1;}
+  // Rings along s; quads [a,b,c],[a,c,d] wind outward (right-handed U,V,A).
+  function lathe(stations,sides,radius,material,caps){
+    var first=verts.length;
+    stations.forEach(function(s){for(var j=0;j<sides;j++){var th=j*Math.PI*2/sides;verts.push(at(s,radius(s,th),th));}});
+    for(var i=0;i<stations.length-1;i++)for(var j=0;j<sides;j++){
+      var a=first+i*sides+j,b=first+i*sides+(j+1)%sides,c=b+sides,d=a+sides;
+      var m=typeof material==='function'?material(stations[i],j):material;
+      faces.push([a,b,c,m],[a,c,d,m]);
+    }
+    if(caps){
+      var bottom=vertex(at(stations[0],0,0)),top=vertex(at(stations[stations.length-1],0,0));
+      var last=first+(stations.length-1)*sides;
+      for(var k=0;k<sides;k++){
+        var m0=typeof material==='function'?material(stations[0],k):material;
+        faces.push([bottom,first+(k+1)%sides,first+k,m0],[top,last+k,last+(k+1)%sides,m0]);
+      }
+    }
+  }
+  function range(from,to,step){var out=[];for(var s=from;s<to-1e-9;s+=step)out.push(s);out.push(to);return out;}
+  // Gnarled wood: slow swelling, a few knots and a flare into the head.
+  var knots=[[14,2.0],[22,4.4],[-14,.9],[-31,3.3],[27,1.1]];
+  function wood(s,th){
+    var r=1.1*(1+.035*Math.sin(.23*s+1.3)+.02*Math.sin(.61*s));
+    knots.forEach(function(k){var d=(s-k[0])/1.3,c=Math.max(0,Math.cos(th-k[1]));r+=.24*Math.exp(-d*d)*c*c*c;});
+    var flare=Math.max(0,Math.min(1,(s-26)/7));
+    return r+.9*flare*flare*(3-2*flare);
+  }
+  // Two spiral streaks of darker grain; they turn with the staff, not the camera.
+  function grain(s,j){return ((j+Math.floor(s*.18))%7+7)%7===0?STAFF_RIG_MATERIAL.grain:STAFF_RIG_MATERIAL.wood;}
+  var SIDES=12;
+  lathe(range(-90,-26,8).concat(range(-24,-6.4,1.6)),SIDES,wood,grain,true);
+  lathe(range(8.4,33,1.5),SIDES,wood,grain,true);
+  // Leather wrap is the contact cylinder; fine rings keep painter order local
+  // where fingers and thumb close around it.
+  // Every third band is raised cord lacing over the leather.
+  lathe(range(-5.6,7.6,.6),SIDES,function(){return g.radius;},function(s){
+    return Math.round((s+5.6)/.6)%3===1?STAFF_RIG_MATERIAL.lacing:STAFF_RIG_MATERIAL.wrap;},true);
+  // Brass collars at both wrap ends and under the head.
+  function collar(s0,s1,r){lathe([s0,s0+.15,s1-.15,s1],SIDES,function(s){return s===s0||s===s1?r-.1:r;},STAFF_RIG_MATERIAL.brass,true);}
+  collar(-6.5,-5.5,1.34);collar(7.5,8.5,1.34);collar(25.4,27.2,1.46);
+  collar(-94,-89.5,1.2);
+  // Three wooden prongs curl out of the flare and back in around the crystal.
+  for(var k=0;k<3;k++){
+    var phi=k*Math.PI*2/3+.5,E=[Math.cos(phi),Math.sin(phi)];
+    var path=[];
+    for(var t=0;t<=1.0001;t+=1/11){
+      var s=32.2+19*t,rho=.95+3.0*Math.sin(Math.PI*Math.min(1,t*1.15))*(1-.3*t)-.5*t*t;
+      path.push([s,rho,.8*(1-t)+.16]);
+    }
+    var first=verts.length;
+    path.forEach(function(q,i){
+      var prev=path[Math.max(0,i-1)],next=path[Math.min(path.length-1,i+1)];
+      // In-plane tangent: along A and the prong's radial direction E.
+      var ds=next[0]-prev[0],dr=next[1]-prev[1],tl=Math.hypot(ds,dr);ds/=tl;dr/=tl;
+      var T=[ds*A[0]+dr*(E[0]*U[0]+E[1]*V[0]),ds*A[1]+dr*(E[0]*U[1]+E[1]*V[1]),ds*A[2]+dr*(E[0]*U[2]+E[1]*V[2])];
+      var P0=[-E[1]*U[0]+E[0]*V[0],-E[1]*U[1]+E[0]*V[1],-E[1]*U[2]+E[0]*V[2]];
+      var Q0=[T[1]*P0[2]-T[2]*P0[1],T[2]*P0[0]-T[0]*P0[2],T[0]*P0[1]-T[1]*P0[0]];
+      var c=at(q[0],q[1],phi);
+      for(var j=0;j<6;j++){var a=j*Math.PI/3,ca=Math.cos(a)*q[2],sa=Math.sin(a)*q[2];
+        verts.push([c[0]+ca*P0[0]+sa*Q0[0],c[1]+ca*P0[1]+sa*Q0[1],c[2]+ca*P0[2]+sa*Q0[2]]);}
+    });
+    for(var i=0;i<path.length-1;i++)for(var j=0;j<6;j++){
+      var a=first+i*6+j,b=first+i*6+(j+1)%6,c=b+6,d=a+6;
+      faces.push([a,b,c,STAFF_RIG_MATERIAL.wood],[a,c,d,STAFF_RIG_MATERIAL.wood]);
+    }
+    var tip=vertex(at(path[path.length-1][0]+.5,path[path.length-1][1]-.35,phi)),end=first+(path.length-1)*6;
+    for(var j2=0;j2<6;j2++)faces.push([tip,end+j2,end+(j2+1)%6,STAFF_RIG_MATERIAL.wood]);
+  }
+  // Faceted crystal: unshared vertices per facet keep hard, readable facets.
+  var crystalFirst=verts.length,cs=[36.2,39.8,43.6,49.0],cr=2.2,rot=.5+Math.PI/6;
+  function facet(p,q,r){faces.push([vertex(p),vertex(q),vertex(r),STAFF_RIG_MATERIAL.crystal]);}
+  for(var f=0;f<6;f++){
+    var t0=rot+f*Math.PI/3,t1=rot+(f+1)*Math.PI/3;
+    var lo0=at(cs[1],cr,t0),lo1=at(cs[1],cr,t1),hi0=at(cs[2],cr*.94,t0),hi1=at(cs[2],cr*.94,t1);
+    facet(lo0,lo1,hi1);facet(lo0,hi1,hi0);
+    facet(hi0,hi1,at(cs[3],0,0));facet(lo1,lo0,at(cs[0],0,0));
+  }
+  // Unreferenced marker at the crystal center; it is posed and projected with
+  // the mesh so the glow follows the actual head.
+  var headIndex=vertex(at((cs[1]+cs[2])/2,0,0));
+  var n=verts.length,local=new Float64Array(n*3),normals=new Float64Array(n*3);
+  verts.forEach(function(p,i){local[i*3]=p[0];local[i*3+1]=p[1];local[i*3+2]=p[2];});
+  // Area-weighted normals once in the rest frame; the pose is a pure rotation.
+  faces.forEach(function(F){
+    var a=F[0]*3,b=F[1]*3,c=F[2]*3;
+    var abx=local[b]-local[a],aby=local[b+1]-local[a+1],abz=local[b+2]-local[a+2];
+    var acx=local[c]-local[a],acy=local[c+1]-local[a+1],acz=local[c+2]-local[a+2];
+    var nx=aby*acz-abz*acy,ny=abz*acx-abx*acz,nz=abx*acy-aby*acx;
+    for(var k=0;k<3;k++){var index=F[k]*3;normals[index]+=nx;normals[index+1]+=ny;normals[index+2]+=nz;}
+  });
+  for(var v=0;v<n;v++){var len=Math.hypot(normals[v*3],normals[v*3+1],normals[v*3+2])||1;
+    normals[v*3]/=len;normals[v*3+1]/=len;normals[v*3+2]/=len;}
+  _staffRigMesh={count:n,local:local,localNormals:normals,faces:faces,crystalFirst:crystalFirst,
+    headIndex:headIndex,axis:A,origin:O,positions:new Float64Array(n*3),normals:new Float64Array(n*3),
+    screen:new Float64Array(n*3),light:new Float64Array(n),faceDepth:new Float64Array(faces.length)};
+  _staffRigStats.vertices=n;_staffRigStats.triangles=faces.length;
+  _staffRigStats.buildMs=performance.now()-start;_staffRigStats.builds++;
+  _staffRigStats.topologyBytes=n*13*8+faces.length*8;
+  return _staffRigMesh;
+}
+function staffRigPalette() {
+  var M=typeof GAME_MATERIALS!=='undefined'?GAME_MATERIALS:{};
+  var wood=M.casterStaff&&M.casterStaff.hex?M.casterStaff.hex:
+    {woodDeep:'#2e1d12',wood:'#6a4529',woodLit:'#a4774a',grain:'#3f2819',wrapDeep:'#23160f',wrap:'#5b3a26',wrapLit:'#8d6343',lacing:'#c9b48a'};
+  var metal=M.casterMetal&&M.casterMetal.hex?M.casterMetal.hex:{shadow:'#50422c',base:'#a78b54',light:'#dfc78d'};
+  var magic=M.missileMagic&&M.missileMagic.hex?M.missileMagic.hex:{core:'#fff3d8',light:'#c4edf0',mid:'#79b9d0',deep:'#315677'};
+  var h=handRigHexRgb;
+  return [
+    [h(wood.woodDeep,'#2e1d12'),h(wood.wood,'#6a4529'),h(wood.woodLit,'#a4774a')],
+    [h(wood.woodDeep,'#2e1d12'),h(wood.grain,'#3f2819'),h(wood.wood,'#6a4529')],
+    [h(wood.wrapDeep,'#23160f'),h(wood.wrap,'#5b3a26'),h(wood.wrapLit,'#8d6343')],
+    [h(wood.wrap,'#5b3a26'),h(wood.lacing,'#c9b48a'),handRigRgbMix(h(wood.lacing,'#c9b48a'),[255,246,222],.3)],
+    [h(metal.shadow,'#50422c'),h(metal.base,'#a78b54'),h(metal.light,'#dfc78d')],
+    [h(magic.deep,'#315677'),h(magic.mid,'#79b9d0'),h(magic.core,'#fff3d8')]
+  ];
+}
+// Crystal charge follows the shared casting timeline: it gathers, holds
+// through the thrust and fades on recovery. Presentation only.
+function staffRigCharge(pose) {return Math.max(pose.gather,pose.release);}
+function staffRigLift(pose) {
+  return [0,0,0,.02,.07,.10+staffRigCharge(pose)*.45];
+}
+// Soft additive light around the crystal while charged. Drawn after every
+// face inside the rig's save/restore; it never touches world depth.
+function staffRigOverlay(item,pose,palette) {
+  var charge=staffRigCharge(pose),S=item.screen,h=item.headIndex*3,depth=S[h+2];
+  if(charge<=.01||depth<3)return;
+  var radius=canvas.height*1.28*4.2/depth*(.75+charge*.45),core=palette[STAFF_RIG_MATERIAL.crystal];
+  var glow=ctx.createRadialGradient(S[h],S[h+1],0,S[h],S[h+1],radius);
+  glow.addColorStop(0,'rgba('+core[2].join(',')+','+(.42*charge).toFixed(3)+')');
+  glow.addColorStop(.4,'rgba('+core[1].join(',')+','+(.16*charge).toFixed(3)+')');
+  glow.addColorStop(1,'rgba('+core[0].join(',')+',0)');
+  ctx.globalCompositeOperation='lighter';ctx.fillStyle=glow;
+  ctx.beginPath();ctx.arc(S[h],S[h+1],radius,0,Math.PI*2);ctx.fill();
+}
+HAND_RIG_ITEMS.staff={build:buildStaffRigMesh,palette:staffRigPalette,lift:staffRigLift,overlay:staffRigOverlay};
 // =============================================
 // SECTION 15: RENDERING - HUD & MENU
 // =============================================
@@ -21217,6 +21452,16 @@ var HUD_COLORS = {
   health: '#b84d51', mana: '#539ab6', warning: '#f2a193'
 };
 
+// The spell panel appears when a spell is chosen or cast and stays while it
+// recharges, streams or mana is short; then it fades so the lower-right corner
+// (and the casting hand) stays clear. Game time, so a pause holds the fade.
+var SPELL_HUD_HOLD_MS = 2500, SPELL_HUD_FADE_MS = 600;
+function spellHudAlpha(now, lastActivityMs, busy) {
+  if (busy) return 1;
+  var idle = now - lastActivityMs;
+  return idle <= SPELL_HUD_HOLD_MS ? 1 : Math.max(0, 1 - (idle - SPELL_HUD_HOLD_MS) / SPELL_HUD_FADE_MS);
+}
+
 function drawHudPanel(x, y, w, h, S) {
   ctx.fillStyle = HUD_COLORS.panel;
   ctx.fillRect(x, y, w, h);
@@ -21291,8 +21536,8 @@ function drawHudOverlay() {
     ctx.fillText('[E]  Enter Shop', w / 2, h / 2 + 40 * S);
   }
 
-  // Keep the equipped spell visible. The thin readiness line communicates a
-  // cooldown, while a written warning remains useful when the mana bar is empty.
+  // The thin readiness line communicates a cooldown, while a written warning
+  // remains useful when the mana bar is empty. Idle, the panel fades away.
   var spell = getCurrentSpell();
   var spellCost = spell.manaCost * ((equipment.robes && equipment.robes.manaCostReduction) ?
     (1 - equipment.robes.manaCostReduction) : 1);
@@ -21302,21 +21547,26 @@ function drawHudOverlay() {
   var spellDetail = !canAfford ? 'Low mana' :
     (Math.round(spellCost * 10) / 10) + (spell.attackType === 'stream' ? ' mana / tick' : ' mana');
   if (canAfford && spell.attackType !== 'stream') spellDetail += spellReady < 1 ? ' · Recharging' : ' · Ready';
-  ctx.font = Math.max(9, Math.floor(10 * S)) + 'px Arial';
-  var spellW = Math.min(164 * S, Math.max(112 * S, ctx.measureText(spellDetail).width + 18 * S,
-    ctx.measureText(spell.name).width + 28 * S));
-  var spellX = w - pad - spellW, spellY = h - pad - 38 * S;
-  ctx.globalAlpha = 1;
-  drawHudPanel(spellX, spellY, spellW, 30 * S, S);
-  ctx.fillStyle = spell.color;
-  ctx.fillRect(spellX + 7 * S, spellY + 7 * S, 4 * S, 4 * S);
-  ctx.fillStyle = HUD_COLORS.ink; ctx.textAlign = 'left';
-  ctx.fillText(spell.name, spellX + 16 * S, spellY + 12 * S, spellW - 22 * S);
-  ctx.font = Math.max(8, Math.floor(8 * S)) + 'px Arial';
-  ctx.fillStyle = canAfford ? HUD_COLORS.muted : HUD_COLORS.warning;
-  ctx.fillText(spellDetail, spellX + 7 * S, spellY + 23 * S, spellW - 14 * S);
-  ctx.fillStyle = canAfford ? spell.color : HUD_COLORS.warning;
-  ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);
+  var spellAlpha = spellHudAlpha(now, Math.max(lastSpellChangeMs, lastShotMs),
+    !canAfford || spellReady < 1 || flameStreamActive);
+  if (spellAlpha > 0) {
+    ctx.font = Math.max(9, Math.floor(10 * S)) + 'px Arial';
+    var spellW = Math.min(164 * S, Math.max(112 * S, ctx.measureText(spellDetail).width + 18 * S,
+      ctx.measureText(spell.name).width + 28 * S));
+    var spellX = w - pad - spellW, spellY = h - pad - 38 * S;
+    ctx.globalAlpha = spellAlpha;
+    drawHudPanel(spellX, spellY, spellW, 30 * S, S);
+    ctx.fillStyle = spell.color;
+    ctx.fillRect(spellX + 7 * S, spellY + 7 * S, 4 * S, 4 * S);
+    ctx.fillStyle = HUD_COLORS.ink; ctx.textAlign = 'left';
+    ctx.fillText(spell.name, spellX + 16 * S, spellY + 12 * S, spellW - 22 * S);
+    ctx.font = Math.max(8, Math.floor(8 * S)) + 'px Arial';
+    ctx.fillStyle = canAfford ? HUD_COLORS.muted : HUD_COLORS.warning;
+    ctx.fillText(spellDetail, spellX + 7 * S, spellY + 23 * S, spellW - 14 * S);
+    ctx.fillStyle = canAfford ? spell.color : HUD_COLORS.warning;
+    ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);
+    ctx.globalAlpha = 1;
+  }
 
   // Short onboarding hint uses the active control mode, then leaves the view.
   var hintAge = (now - startMs) / 1000;
@@ -26406,7 +26656,8 @@ function castingStudioDraw(job) {
 function castingStudioDescribe(job) {
   if(job.mode==='hand')return castingStudioArtLabel(job)+' · neutral hand motion study · '+job.light+
     ' · '+handStudioPhase(job.time)+' · '+Math.round(job.time)+' / '+HAND_STUDIO_CYCLE_MS+' ms'+
-    ' · '+job.style+' style · '+job.grip+' resting template · ¼-speed casting flourish · no equipped item, spell or damage';
+    (job.grip==='staff'?' · staff casting rig · held staff preview, not equipped · ¼-speed reach and point · no spell or damage':
+    ' · '+job.style+' style · '+job.grip+' resting template · ¼-speed casting flourish · no equipped item, spell or damage');
   var phase = !job.requested ? 'Ready' : !job.released ? 'Gather / wind-up' : job.hitAt !== null ?
     (job.time-job.hitAt < 250 ? 'Actual target hit' : 'Follow-through / recovery') :
     job.live.projectiles.length ? 'Missile in flight' : 'Missile stopped by existing geometry';
@@ -26545,7 +26796,7 @@ function setCastingStudioHandView(yaw) {
 
 function setCastingStudioHandGrip(grip) {
   if(_castingStudio&&(_castingStudio.profile||_castingStudio.fullscreenPending))return;
-  _castingStudioGrip=grip==='reach'||grip==='handle'||grip==='cradle'?grip:
+  _castingStudioGrip=grip==='reach'||grip==='handle'||grip==='cradle'||grip==='staff'?grip:
     typeof HAND_RIG_DEFAULT_GRIP==='string'?HAND_RIG_DEFAULT_GRIP:'handle';
   castingStudioUpdateChoices();
   if(_castingStudioMode!=='hand')return;
@@ -26725,7 +26976,8 @@ function castingStudioArtworkStats() {
   return {
     hands:typeof getCastingArtworkStats==='function'?getCastingArtworkStats():{builds:0,buildMs:0,bytes:0},
     missile:typeof getMagicMissileArtworkStats==='function'?getMagicMissileArtworkStats():{builds:0,buildMs:0,bytes:0},
-    handRig:typeof getHandRigStats==='function'?getHandRigStats():{vertices:0,triangles:0,visibleFaces:0,buildMs:0,builds:0,lastRenderMs:0,topologyBytes:0}
+    handRig:typeof getHandRigStats==='function'?getHandRigStats():{vertices:0,triangles:0,visibleFaces:0,buildMs:0,builds:0,lastRenderMs:0,topologyBytes:0},
+    staffRig:typeof getStaffRigStats==='function'?getStaffRigStats():{vertices:0,triangles:0,buildMs:0,builds:0,topologyBytes:0}
   };
 }
 
@@ -26816,6 +27068,7 @@ async function profileCastingStudio(mode) {
       if (typeof clearCastingArtworkCache==='function') clearCastingArtworkCache();
       if (typeof clearMagicMissileArtworkCache==='function') clearMagicMissileArtworkCache();
       if(job.mode==='hand'&&typeof clearHandRigCache==='function')clearHandRigCache();
+      if(job.mode==='hand'&&typeof clearStaffRigCache==='function')clearStaffRigCache();
       var before=castingStudioArtworkStats(), coldLegacy=0, firstFrame=null, renders=[], intervals=[], stages={},rigTimes=[];
       var coldBuildFrames=[], hits=[];
       for (var cycle=0;cycle<2;cycle++) {
@@ -26831,7 +27084,7 @@ async function profileCastingStudio(mode) {
           var cacheBefore=castingStudioArtworkStats(), sample=castingStudioDraw(job), cacheAfter=castingStudioArtworkStats();
           if (firstFrame===null) firstFrame=sample.renderMs;
           coldLegacy+=sample.legacyBuildMs;
-          if (cycle===0 && (sample.legacyBuildMs>0 || cacheAfter.hands.builds>cacheBefore.hands.builds || cacheAfter.missile.builds>cacheBefore.missile.builds||cacheAfter.handRig.builds>cacheBefore.handRig.builds))
+          if (cycle===0 && (sample.legacyBuildMs>0 || cacheAfter.hands.builds>cacheBefore.hands.builds || cacheAfter.missile.builds>cacheBefore.missile.builds||cacheAfter.handRig.builds>cacheBefore.handRig.builds||cacheAfter.staffRig.builds>cacheBefore.staffRig.builds))
             coldBuildFrames.push({timeMs:job.time,renderCommandsMs:sample.renderMs});
           if (cycle===1) {
             renders.push(sample.renderMs); if (previous!==null) intervals.push(ts-previous);
@@ -26881,7 +27134,7 @@ async function profileCastingStudio(mode) {
   var panel=document.createElement('details');panel.id='castingStudioPanel';
   panel.style.cssText='margin-top:8px;padding:6px;border:1px solid #536777;border-radius:4px;background:#17222b';
   var summary=document.createElement('summary');summary.textContent='Casting studio';panel.appendChild(summary);
-  var note=document.createElement('p');note.textContent='Handle grip is the default upright resting pose; Play previews your personal Casting Style at ¼ speed. All styles are available; your selection is remembered in this browser when storage is available. Resting grip templates stay independent and show shape only: no item is equipped, no spell is cast. The rejected flat study is archived in the mode selector.';
+  var note=document.createElement('p');note.textContent='Handle grip is the default upright resting pose; Play previews your personal Casting Style at ¼ speed. All styles are available; your selection is remembered in this browser when storage is available. Resting grip templates stay independent and show shape only: no item is equipped, no spell is cast. Staff casting is a separate rig: the hand holds a 3D staff, then reaches and points it forward (preview only; nothing is equipped). The rejected flat study is archived in the mode selector.';
   note.style.cssText='margin:6px 0;max-width:720px';panel.appendChild(note);
   function select(id,label,options,fn){
     var wrap=document.createElement('label');wrap.style.margin='2px 8px 2px 0';wrap.textContent=label+' ';
@@ -26892,7 +27145,7 @@ async function profileCastingStudio(mode) {
   select('castingStudioMode','Study mode',[['hand','Hand motion study'],['casting','Rejected flat casting study']],setCastingStudioMode);
   var styleOptions=typeof getCastingStyleOptions==='function'?getCastingStyleOptions():[{id:'arcane',label:'Arcane (default)'}];
   select('castingStudioStyle','Casting Style',styleOptions.map(function(style){return[style.id,style.label];}),setCastingStudioStyle);
-  select('castingStudioGrip','Resting pose',[['reach','Reach'],['handle','Handle grip'],['cradle','Cradle']],setCastingStudioHandGrip);
+  select('castingStudioGrip','Resting pose',[['reach','Reach'],['handle','Handle grip'],['cradle','Cradle'],['staff','Staff casting (held staff)']],setCastingStudioHandGrip);
   select('castingStudioHandView','Hand inspection view',[['0','Player view'],['palm','Palm study'],['-0.8','Left side'],['0.8','Right side'],[String(Math.PI),'Back']],setCastingStudioHandView);
   select('castingStudioPhase','Hand pose',[['0','Ready'],['780','Gather'],['1220','Release'],['1560','Follow-through'],['2110','Recovery']],scrubCastingStudio);
   var scrubLabel=document.createElement('label');scrubLabel.textContent='Pose time ';scrubLabel.style.marginRight='8px';

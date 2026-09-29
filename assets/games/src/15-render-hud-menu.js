@@ -2276,6 +2276,16 @@ var HUD_COLORS = {
   health: '#b84d51', mana: '#539ab6', warning: '#f2a193'
 };
 
+// The spell panel appears when a spell is chosen or cast and stays while it
+// recharges, streams or mana is short; then it fades so the lower-right corner
+// (and the casting hand) stays clear. Game time, so a pause holds the fade.
+var SPELL_HUD_HOLD_MS = 2500, SPELL_HUD_FADE_MS = 600;
+function spellHudAlpha(now, lastActivityMs, busy) {
+  if (busy) return 1;
+  var idle = now - lastActivityMs;
+  return idle <= SPELL_HUD_HOLD_MS ? 1 : Math.max(0, 1 - (idle - SPELL_HUD_HOLD_MS) / SPELL_HUD_FADE_MS);
+}
+
 function drawHudPanel(x, y, w, h, S) {
   ctx.fillStyle = HUD_COLORS.panel;
   ctx.fillRect(x, y, w, h);
@@ -2350,8 +2360,8 @@ function drawHudOverlay() {
     ctx.fillText('[E]  Enter Shop', w / 2, h / 2 + 40 * S);
   }
 
-  // Keep the equipped spell visible. The thin readiness line communicates a
-  // cooldown, while a written warning remains useful when the mana bar is empty.
+  // The thin readiness line communicates a cooldown, while a written warning
+  // remains useful when the mana bar is empty. Idle, the panel fades away.
   var spell = getCurrentSpell();
   var spellCost = spell.manaCost * ((equipment.robes && equipment.robes.manaCostReduction) ?
     (1 - equipment.robes.manaCostReduction) : 1);
@@ -2361,21 +2371,26 @@ function drawHudOverlay() {
   var spellDetail = !canAfford ? 'Low mana' :
     (Math.round(spellCost * 10) / 10) + (spell.attackType === 'stream' ? ' mana / tick' : ' mana');
   if (canAfford && spell.attackType !== 'stream') spellDetail += spellReady < 1 ? ' · Recharging' : ' · Ready';
-  ctx.font = Math.max(9, Math.floor(10 * S)) + 'px Arial';
-  var spellW = Math.min(164 * S, Math.max(112 * S, ctx.measureText(spellDetail).width + 18 * S,
-    ctx.measureText(spell.name).width + 28 * S));
-  var spellX = w - pad - spellW, spellY = h - pad - 38 * S;
-  ctx.globalAlpha = 1;
-  drawHudPanel(spellX, spellY, spellW, 30 * S, S);
-  ctx.fillStyle = spell.color;
-  ctx.fillRect(spellX + 7 * S, spellY + 7 * S, 4 * S, 4 * S);
-  ctx.fillStyle = HUD_COLORS.ink; ctx.textAlign = 'left';
-  ctx.fillText(spell.name, spellX + 16 * S, spellY + 12 * S, spellW - 22 * S);
-  ctx.font = Math.max(8, Math.floor(8 * S)) + 'px Arial';
-  ctx.fillStyle = canAfford ? HUD_COLORS.muted : HUD_COLORS.warning;
-  ctx.fillText(spellDetail, spellX + 7 * S, spellY + 23 * S, spellW - 14 * S);
-  ctx.fillStyle = canAfford ? spell.color : HUD_COLORS.warning;
-  ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);
+  var spellAlpha = spellHudAlpha(now, Math.max(lastSpellChangeMs, lastShotMs),
+    !canAfford || spellReady < 1 || flameStreamActive);
+  if (spellAlpha > 0) {
+    ctx.font = Math.max(9, Math.floor(10 * S)) + 'px Arial';
+    var spellW = Math.min(164 * S, Math.max(112 * S, ctx.measureText(spellDetail).width + 18 * S,
+      ctx.measureText(spell.name).width + 28 * S));
+    var spellX = w - pad - spellW, spellY = h - pad - 38 * S;
+    ctx.globalAlpha = spellAlpha;
+    drawHudPanel(spellX, spellY, spellW, 30 * S, S);
+    ctx.fillStyle = spell.color;
+    ctx.fillRect(spellX + 7 * S, spellY + 7 * S, 4 * S, 4 * S);
+    ctx.fillStyle = HUD_COLORS.ink; ctx.textAlign = 'left';
+    ctx.fillText(spell.name, spellX + 16 * S, spellY + 12 * S, spellW - 22 * S);
+    ctx.font = Math.max(8, Math.floor(8 * S)) + 'px Arial';
+    ctx.fillStyle = canAfford ? HUD_COLORS.muted : HUD_COLORS.warning;
+    ctx.fillText(spellDetail, spellX + 7 * S, spellY + 23 * S, spellW - 14 * S);
+    ctx.fillStyle = canAfford ? spell.color : HUD_COLORS.warning;
+    ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);
+    ctx.globalAlpha = 1;
+  }
 
   // Short onboarding hint uses the active control mode, then leaves the view.
   var hintAge = (now - startMs) / 1000;
