@@ -20,8 +20,9 @@ class CastingStudioTests(unittest.TestCase):
         # independent of the live spell-change time". 96 after the merge fix
         # that keeps studio and cave profile frames out of the live Perf HUD
         # (studio frames, profile frames, and the live table and 5 s dump
-        # afterwards).
-        self.assertIn("CASTING_STUDIO_RESULT PASS 96", result.stdout.splitlines())
+        # afterwards). 97 with "hand study spell HUD stays hidden through the
+        # flourish (it never casts), on studio state only".
+        self.assertIn("CASTING_STUDIO_RESULT PASS 97", result.stdout.splitlines())
 
     def _assert_mutation_fails(self, flag: str, check: str, cause: str = "") -> None:
         result = run_js(Path(__file__).with_name("casting_studio.js"), [flag], timeout=120)
@@ -87,6 +88,14 @@ class CastingStudioTests(unittest.TestCase):
         self._assert_mutation_fails("--gallery-hud-idle",
                                     "gallery HUD names the scene spell for the whole loop, independent of the live spell-change time",
                                     '"start":[],"end":[]')
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_hand_study_showing_the_spell_panel(self) -> None:
+        # Merge fix: the hand study has no cast, so seeding its spell-change
+        # time (as a new run does) would show a panel nothing ever refreshes.
+        self._assert_mutation_fails("--hand-hud-shown",
+                                    "hand study spell HUD stays hidden through the flourish (it never casts), on studio state only",
+                                    "DETAIL hand HUD [1,1,1")
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_studio_frames_in_the_live_perf_hud(self) -> None:

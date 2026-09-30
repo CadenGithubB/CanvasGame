@@ -14,6 +14,7 @@
   //   --field-global-serial     the ambient field draws its columns from a session-wide serial
   //   --studio-hud-unscoped     the spell HUD's spell-change time is not studio state
   //   --gallery-hud-idle        the gallery starts idle, so the HUD fade hides its spell label
+  //   --hand-hud-shown          the hand study starts with the spell panel shown, as a new run does
   //   --studio-perf-unscoped    the Perf HUD's stage table, ring and dump time are not studio state
   //   --profile-perf-unscoped   the cave profile draws into the live Perf HUD state
   var load="manifest.parts.MAIN.forEach(function (path) { (0, eval)(slurp('assets/games/' + path)); });";
@@ -27,6 +28,7 @@
     '--field-global-serial':['src/11-fx-engine.js','  var base = S.fieldSerial, salt = F.salt ^ S.seed,','  var base = (window._fxSessionFieldSerial = (window._fxSessionFieldSerial || 0) + 1), salt = F.salt ^ S.seed,'],
     '--studio-hud-unscoped':['src/20-casting-preview.js','currentSpellIdx lastShotMs lastSpellChangeMs castAnimUntil','currentSpellIdx lastShotMs castAnimUntil'],
     '--gallery-hud-idle':['src/20-casting-preview.js',"job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;","job.live.lastSpellChangeMs = -1e12;"],
+    '--hand-hud-shown':['src/20-casting-preview.js',"job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;","job.live.lastSpellChangeMs = job.mode !== 'casting' ? job.clockBase : -1e12;"],
     '--studio-perf-unscoped':['src/20-casting-preview.js',"  '_perfBreakdown _perfBreakdownLog _perfStageHistory _perfSecStages ' +\n",''],
     '--profile-perf-unscoped':['src/20-browser-profile.js','  _perfBreakdown=perf.breakdown;_perfBreakdownLog=perf.log;_perfStageHistory=perf.history;_perfSecStages=perf.sec;\n','']};
   G.__studioSource=function(path,src){
@@ -141,8 +143,9 @@
   var beforeErrors=G.__studioErrors.length;
   G.castingStudioAdvance(job,1000);var castHud=hudTexts(function(){G.castingStudioDraw(job);});
   check('actual full render reports no swallowed stage errors',G.__studioErrors.length===beforeErrors);
-  // Decision: the casting study starts idle, as in play (not P1's always-on
-  // panel), so the practice cast at 600 ms brings the panel in.
+  // Decision: the casting study starts idle (not P1's always-on panel, and
+  // not as a new run, which shows the panel for its hold), so the practice
+  // cast at 600 ms brings the panel in.
   var castingHud={idle:hudAlphas(idleHud,G.spells.missile.name),cast:hudAlphas(castHud,G.spells.missile.name),live:G.lastSpellChangeMs===job.clockBase};
   if(!(castingHud.idle.length===0&&castingHud.cast.length===1&&castingHud.cast[0]===1&&castingHud.live))output('DETAIL casting HUD '+JSON.stringify(castingHud));
   check('casting study spell HUD is idle before the practice cast and shown after it, on studio state only',
@@ -332,6 +335,14 @@
   var hand=G.startCastingStudio();
   check('hand study requires no target or firing lane',hand.mode==='hand'&&hand.target===null&&hand.live.enemies.length===0&&G.castingStudioCycleMs(hand)===2800);
   check('default hand study is paused in handle grip with synchronized selector',!hand.playing&&hand.time===0&&hand.grip==='handle'&&hand.live.HAND_RIG_GRIP==='handle'&&G.document.getElementById('castingStudioGrip').value==='handle');
+  // The hand study never casts, so its spell panel stays hidden through the
+  // flourish (rest, Gather 780 ms, Release 1220 ms, the end), even with the
+  // live spell-change time at the studio clock's own start.
+  var liveHandSpellChange=G.lastSpellChangeMs,handHud=[];G.lastSpellChangeMs=hand.clockBase;
+  [0,780,1220,2400].forEach(function(t){G.castingStudioAdvance(hand,t);handHud=handHud.concat(hudAlphas(hudTexts(function(){G.castingStudioDraw(hand);}),G.getCurrentSpell().name));});
+  G.castingStudioAdvance(hand,0);G.castingStudioDraw(hand);G.lastSpellChangeMs=liveHandSpellChange;
+  if(handHud.length)output('DETAIL hand HUD '+JSON.stringify(handHud));
+  check('hand study spell HUD stays hidden through the flourish (it never casts), on studio state only',handHud.length===0&&hand.time===0&&combatCalls===0);
   check('rig state is isolated and rejected cutout stays disabled',hand.live.HAND_RIG_PREVIEW===true&&hand.live.CASTING_ART_ENABLED===false&&G.HAND_RIG_PREVIEW===rigBaseline.preview);
   G.setCastingStudioHandGrip('reach');
   G.scrubCastingStudio(780);

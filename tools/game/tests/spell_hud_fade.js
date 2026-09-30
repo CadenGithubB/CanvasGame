@@ -9,6 +9,11 @@
   (0,eval)(host.slice(0,end)+'G.__hudErrors=errors; }());');
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
   if(__argv.indexOf('--always-show-spell')>=0)G.spellHudAlpha=function(){return 1;};
+  // --run-starts-idle: a run and a level start with no spell-change time (the
+  // casting study's idle start taken for play's), stood in after each reset.
+  if(__argv.indexOf('--run-starts-idle')>=0)['resetEndlessMode','resetLevel'].forEach(function(name){
+    var real=G[name];G[name]=function(){var r=real.apply(this,arguments);G.lastSpellChangeMs=-1e12;return r;};
+  });
   G.ENDLESS_MODE=G.running=true;G.gameOverState=false;G.terrain='plains';G.resetEndlessMode();
   G.MODE3D=true;G.menuOpen=G.settingsOpen=G.shopOpen=false;
   var spell=G.getCurrentSpell(),texts=[];
@@ -27,11 +32,18 @@
     var entry=texts.filter(function(t){return t.text===spell.name;})[0];return entry?entry.alpha:0;}
   try {
     check('game host draws the real HUD with the equipped spell',!!spell&&typeof G.drawHudOverlay==='function');
+    var runStart=G.startMs,runSpellChange=G.lastSpellChangeMs;   // as the reset above (a new run) left them
     G.mana=G.MANA_MAX;G.flameStreamActive=false;G.lastShotMs=0;G.lastSpellChangeMs=10000;
     check('panel shows fully when a spell is selected',hud(10000)===1&&hud(12400)===1);
     var fading=hud(12800);
     check('idle panel fades after its hold instead of staying on screen',fading>0&&fading<1&&hud(13200)===0);
     check('other HUD text still draws while the spell panel is hidden',texts.some(function(t){return /HEALTH/i.test(t.text);}));
+    // A new run (the reset above, before the game clock started) opens with
+    // the panel shown for its hold, from the run's start time.
+    G.lastSpellChangeMs=runSpellChange;
+    check('a new run shows the panel for its hold, then it fades',Number.isFinite(runStart)&&runSpellChange===runStart&&
+      hud(runStart)===1&&hud(runStart+2400)===1&&hud(runStart+3200)===0);
+    G.lastSpellChangeMs=10000;
     G.lastShotMs=20000;
     check('casting brings the panel back and keeps it while recharging',hud(20010)===1&&hud(20300)===1);
     check('after recharging the panel fades on the same hold',hud(22400)===1&&hud(23200)===0);
@@ -44,6 +56,9 @@
     check('an active stream keeps the panel visible',hud(70000)===1);
     G.flameStreamActive=false;
     check('fade follows game time, not wall-clock time, so pausing holds it',hud(31000)===1&&hud(31000)===1&&G.__hudErrors.length===0);
+    // A new level (resetLevel at game time 80 s) does the same.
+    G._gameClockElapsedMs=80000;G.resetLevel(2);
+    check('a new level shows the panel for its hold, then it fades',G.startMs===80000&&hud(80000)===1&&hud(82400)===1&&hud(83200)===0&&G.__hudErrors.length===0);
     output('SPELL_HUD_RESULT PASS '+checked);
   } finally {Date.now=realNow;}
 }());

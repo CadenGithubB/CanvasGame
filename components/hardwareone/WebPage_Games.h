@@ -38579,8 +38579,10 @@ function castingStudioResetCycle(job) {
   job.live.mana = MANA_MAX; job.live.lastShotMs = -1e12; job.live.castAnimUntil = 0;
   // The spell HUD fades on the studio clock (2e12 + t), so its activity time
   // is studio state. The gallery labels its scene's spell for the whole loop
-  // (shorter than SPELL_HUD_HOLD_MS); hand and casting studies start idle, as
-  // in play, so the corner stays clear until the practice cast.
+  // (shorter than SPELL_HUD_HOLD_MS). The casting study starts idle, unlike a
+  // new run (which shows the panel for its hold), so the corner stays clear
+  // until the practice cast brings the panel in; the hand study never casts,
+  // so its panel stays hidden.
   job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;
   job.live._castingPoseState = {castAt:-1e12, spellId:'missile', cooldown:450, lastNow:0, walkPhase:0};
   job.live.walkBobPhase = 0;

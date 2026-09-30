@@ -739,10 +739,12 @@ spell recharges, streams, or mana is short. Otherwise it holds for 2.5 s and
 fades over 0.6 s (`SPELL_HUD_HOLD_MS`, `SPELL_HUD_FADE_MS`), clearing the corner
 where the casting hand sits. It runs on game time, so pausing holds it.
 `tools/game/tests/spell_hud_fade.js` drives the production HUD on a controlled clock.
+A new run or level shows the panel for its first 2.5 s, then it fades.
 In the casting studio the panel's spell-change time is studio state on the
-studio clock: the spell gallery labels its scene's spell for the whole loop,
-while the hand and casting studies start idle, as in play, so the panel appears
-only with the practice cast (`casting_studio.js` checks both).
+studio clock: the spell gallery labels its scene's spell for the whole loop;
+the casting study starts idle (not as a new run does), so the panel appears
+with the practice cast; the hand study has no cast, so its panel stays hidden
+(`casting_studio.js` checks all three).
 
 ## Water system (2026-09-27)
 
