@@ -278,8 +278,12 @@
   if (loadErrors.length) { output('PARTICLE_RENDER_RESULT FAIL ' + failed + '/' + checked + ' (load failed)'); return; }
   // Merge with the 3D integration: the torches below are synthetic sprite-era
   // lights 0.5 u off their wall with no model drawn, so wall prop models stay
-  // off and the torch-glow corona tests the light, as these oracles state.
-  // The modelled torch's flame-point test is in wall_decor_driver.js (glow).
+  // off and the torch-glow corona tests the light. The base checks pass either
+  // way (no model writes depth here); the pin is load-bearing for
+  // --torch-depth-distance, whose named cause reads the corona at the light's
+  // forward depth: with models on the corona re-derives its depth at the
+  // flame point and never sees the mutated one. The modelled torch's
+  // flame-point test and its forward-depth mutation are in wall_decor_driver.js (glow).
   if (typeof G.setRenderFeatures === 'function') G.setRenderFeatures({wallPropModels: false});
 
   // ── Recording Canvas: calls, property sets, a real save/restore stack for

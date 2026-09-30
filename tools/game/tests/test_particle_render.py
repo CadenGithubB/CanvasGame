@@ -1,9 +1,14 @@
 """Particle render (unified effects S2b): occlusion, tiles clips, batching, state, caps, lighting, presentation, governor, the Effects page and empty stages; S8: the torch glow stage and its frame-loop wiring; S9: the governor's raster input (every primitive category, the input law, the 2D view, the glow cap) and occlusion contracts.
 
 Merge with the 3D integration: the harness's torches are synthetic sprite-era
-lights with no model drawn, so it pins wallPropModels off (the corona then
-tests the light, as its oracles state); the modelled torch's flame-point
-corona is covered in wall_decor_driver.js (glow). No count change."""
+lights with no model drawn, so it pins wallPropModels off and the corona tests
+the light. The base checks pass without the pin (no model writes depth here);
+the pin is what keeps --torch-depth-distance failing for its named cause (the
+corona at the light's forward depth): with models on the corona re-derives
+its depth at the flame point and bypasses the mutated one. The modelled
+torch's flame-point corona, with its own forward-depth mutation
+(--glow-flame-depth-distance), is covered in wall_decor_driver.js (glow). No
+count change."""
 
 from concurrent.futures import ThreadPoolExecutor
 import os

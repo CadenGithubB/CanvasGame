@@ -49,6 +49,8 @@
 //   --glow-flame-always  the corona tests the flame point for sprite torches too
 //   --glow-sconce-torch-point  sconce lights test the torch's point (2 out, 2
 //                      up), low in the flame, behind the bowl rim from below
+//   --glow-flame-depth-distance  the flame-point corona tests at the flame's
+//                      distance instead of its forward depth
 // --sections a,b runs only: spec, edge, oblique, phase, flame, glow, work,
 // variant, model, decal, lab.
 (function () {
@@ -72,6 +74,8 @@
       var GATE = "  var atFlame = !tiles && typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels');\n";
       source = swap(source, '--glow-at-light', GATE, '  var atFlame = false;\n');
       source = swap(source, '--glow-flame-always', GATE, '  var atFlame = !tiles;\n');
+      source = swap(source, '--glow-flame-depth-distance', '(F.cameraZ - wz - fu) / ff * ps); ciz = 1 / ff;',
+        '(F.cameraZ - wz - fu) / ff * ps); ciz = 1 / Math.hypot(fdx, fdy);');
       return source;
     }
     if (path === MODELS) {

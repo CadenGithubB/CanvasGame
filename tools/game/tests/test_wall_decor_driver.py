@@ -111,6 +111,7 @@ MUTATIONS = {
     "--glow-at-light": ("glow", ("glow: with wall prop models on, the unified torch glow's corona tests the visible flame",)),
     "--glow-flame-always": ("glow", ("glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself",)),
     "--glow-sconce-torch-point": ("glow", ("glow: a modelled sconce's corona tests its flame body's centre",)),
+    "--glow-flame-depth-distance": ("glow", ("glow: with wall prop models on, the unified torch glow's corona tests the visible flame",)),
 }
 
 
