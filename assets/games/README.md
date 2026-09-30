@@ -853,9 +853,15 @@ frames) with 148 visible tiles. Known limits: the terrain is coloured per
 12-unit square, so up close a diagonal river still shows a faint staircase in
 its bed and bank colours; rivers from springs outside the window appear when
 the window moves; level (non-Endless) maps keep their legacy water for now.
-Carving and lakes leave generated objects (floor props, chests) where chunk
-generation put them, so some stand in water: models there are tinted below
-the surface, while billboards and Legacy sprites draw over it.
+Carving and lakes leave generated objects (floor props, chests, shrines)
+where chunk generation put them, so some stand in water, a few deep under it
+(seeds 1, 15, 29 and 31: 6 of 69 chests and 1 of 6 shrine pedestals fully
+submerged, up to 42 units deep). Their models draw before the water, whose
+alpha rises from 0.64 at the shore to 0.94 at 1.2 H deep, so a deep chest or
+pedestal shows only faintly through it, while its billboards (chest glow,
+sparkle and label; shrine crystal, glow and prompt) and Legacy sprites draw
+over the surface. Moving or skipping deep-water placements would change world
+generation and is not done yet.
 
 ## Shared cave contracts
 
