@@ -38,9 +38,17 @@ function caveProfileNextFrame(job) {
 
 // Globals are restored before returning to the browser, even if a draw throws.
 // The clock and random seed are the same in each synchronous render only.
+// Profile frames stay out of the live Perf HUD: its stage table, ring and
+// per-second stacks are the job's own sinks while it draws (made once, so
+// no sampled frame allocates them), and the 5 s breakdown dump, which reads
+// the frozen clock, keeps the job's time instead of leaving the live one in
+// the future, where the live dump never ran again.
 function caveProfileRender(job, collect) {
   var oldDate=Date.now,oldRandom=Math.random,oldPt=_pt,state=job.randomSeed,stages={};
   var oldGameClock=gameTimeNow,oldPresentationRandom=_presentationRandomState;
+  var perf=job.perf||(job.perf={breakdown:{},log:job.frozenTime,history:{},sec:{}});
+  var oldPerf=[_perfBreakdown,_perfBreakdownLog,_perfStageHistory,_perfSecStages];
+  _perfBreakdown=perf.breakdown;_perfBreakdownLog=perf.log;_perfStageHistory=perf.history;_perfSecStages=perf.sec;
   Date.now=function(){return job.frozenTime;};
   gameTimeNow=function(){return job.frozenTime;};
   _presentationRandomState=job.randomSeed;
@@ -52,7 +60,11 @@ function caveProfileRender(job, collect) {
   };
   var start=performance.now();
   try{drawCaveVisibilityFixtures();}
-  finally{Date.now=oldDate;Math.random=oldRandom;_pt=oldPt;gameTimeNow=oldGameClock;_presentationRandomState=oldPresentationRandom;}
+  finally{
+    Date.now=oldDate;Math.random=oldRandom;_pt=oldPt;gameTimeNow=oldGameClock;_presentationRandomState=oldPresentationRandom;
+    perf.breakdown=_perfBreakdown;perf.log=_perfBreakdownLog;
+    _perfBreakdown=oldPerf[0];_perfBreakdownLog=oldPerf[1];_perfStageHistory=oldPerf[2];_perfSecStages=oldPerf[3];
+  }
   var elapsed=performance.now()-start;
   if(collect){
     job.renderMs.push(elapsed);

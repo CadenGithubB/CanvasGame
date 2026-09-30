@@ -224,6 +224,10 @@ It includes inclusive subsystem times: do not add `draw()` to its child stages.
 This is a frozen render workload, not a complete simulation or device benchmark.
 The Perf HUD also uses animation-frame cadence for FPS, rather than the
 reciprocal of CPU work time. Hidden Cave Debug maps are no longer redrawn.
+The Perf HUD's stage table counts each stage once per rendered frame (its
+average and max are per frame; a frame's simulation ticks are one call). The
+profile's frames, like the casting studio's, time into their own tables and
+never reach the live Perf HUD or its 5 s breakdown reset.
 
 Particle, exploration, and lighting inputs are made repeatable temporarily and
 the real world's references are restored afterward. **Verify pixels after

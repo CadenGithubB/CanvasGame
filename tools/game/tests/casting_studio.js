@@ -14,6 +14,8 @@
   //   --field-global-serial     the ambient field draws its columns from a session-wide serial
   //   --studio-hud-unscoped     the spell HUD's spell-change time is not studio state
   //   --gallery-hud-idle        the gallery starts idle, so the HUD fade hides its spell label
+  //   --studio-perf-unscoped    the Perf HUD's stage table, ring and dump time are not studio state
+  //   --profile-perf-unscoped   the cave profile draws into the live Perf HUD state
   var load="manifest.parts.MAIN.forEach(function (path) { (0, eval)(slurp('assets/games/' + path)); });";
   if(bootstrap.split(load).length!==2)throw Error('shipping manifest loader boundary missing');
   bootstrap=bootstrap.replace(load,"manifest.parts.MAIN.forEach(function (path) { (0, eval)(G.__studioSource(path, slurp('assets/games/' + path))); });");
@@ -24,7 +26,9 @@
     '--thin-ignores-pin':['src/14-fx-render.js','(S.seedA[i] & 1023) >= F.g * 1024)','(S.seedA[i] & 1023) >= _fxRender.governor * 1024)'],
     '--field-global-serial':['src/11-fx-engine.js','  var base = S.fieldSerial, salt = F.salt ^ S.seed,','  var base = (window._fxSessionFieldSerial = (window._fxSessionFieldSerial || 0) + 1), salt = F.salt ^ S.seed,'],
     '--studio-hud-unscoped':['src/20-casting-preview.js','currentSpellIdx lastShotMs lastSpellChangeMs castAnimUntil','currentSpellIdx lastShotMs castAnimUntil'],
-    '--gallery-hud-idle':['src/20-casting-preview.js',"job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;","job.live.lastSpellChangeMs = -1e12;"]};
+    '--gallery-hud-idle':['src/20-casting-preview.js',"job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;","job.live.lastSpellChangeMs = -1e12;"],
+    '--studio-perf-unscoped':['src/20-casting-preview.js',"  '_perfBreakdown _perfBreakdownLog _perfStageHistory _perfSecStages ' +\n",''],
+    '--profile-perf-unscoped':['src/20-browser-profile.js','  _perfBreakdown=perf.breakdown;_perfBreakdownLog=perf.log;_perfStageHistory=perf.history;_perfSecStages=perf.sec;\n','']};
   G.__studioSource=function(path,src){
     Object.keys(MUTATIONS).forEach(function(flag){
       var m=MUTATIONS[flag];
@@ -259,6 +263,68 @@
   G.stopCastingStudio('gallery complete');
   check('gallery stop restores live arrays and the shipping kill switch',G._castingStudio===null&&G.SPELL_VISUALS_ENABLED===galleryBaseline.visuals&&G.projectiles===galleryBaseline.projectiles&&G.impacts===galleryBaseline.impacts&&galleryCombat===0);
   G.castCurrentSpell=savedGalleryCast;G.updateProjectiles=savedGalleryProjectiles;G.tickEffects=savedGalleryEffects;
+  // Perf HUD (merge fix): studio and cave profile frames are not game frames.
+  // On a fixed wall clock T0, five live frames (the loop's ring step, then
+  // renderFrame) fill the live stage table; a casting study then draws 13
+  // frames with the loop stopped (its practice cast at 600 ms) and the cave
+  // profile renders 4 frozen fixture frames. Oracles: the live table, ring
+  // slot and per-second stacks are the same objects with the same values
+  // after each, and the 5 s breakdown dump keeps its live time; one more live
+  // frame is the table's sixth draw() call, its all-time max within the
+  // longest live frame timed here, and 6 s later the live dump runs. Positive
+  // controls: 13 and 4 frames went through renderFrame, one draw() call a
+  // frame in the studio's and the profile's own sinks.
+  var perfNow=Date.now,perfT0=perfNow(),perfClock=perfT0,perfLiveMs=[];
+  Date.now=function(){return perfClock;};
+  var hudCanvas=G.document.getElementById('perfHudCanvas');hudCanvas.width=300;hudCanvas.height=200;hudCanvas.getContext=function(){return G.ctx;};
+  function perfLiveFrame(){
+    G._perfRingIdx=(G._perfRingIdx+1)%G.PERF_HISTORY_LEN;
+    for(var pk in G._perfStageHistory)G._perfStageHistory[pk][G._perfRingIdx]=0;
+    var t0=performance.now();G.renderFrame();perfLiveMs.push(performance.now()-t0);
+  }
+  function perfLiveState(){
+    var slot={},sec={};
+    Object.keys(G._perfStageHistory).forEach(function(k){slot[k]=G._perfStageHistory[k][G._perfRingIdx];});
+    Object.keys(G._perfSecStages).forEach(function(k){sec[k]=G._perfSecStages[k][G._perfSecIdx];});
+    return {table:G._perfBreakdown,tableJSON:JSON.stringify(G._perfBreakdown),history:G._perfStageHistory,sec:G._perfSecStages,
+      slotJSON:JSON.stringify(slot),secJSON:JSON.stringify(sec),log:G._perfBreakdownLog,max:JSON.stringify(G._hudAllTimeMax)};
+  }
+  function perfSame(a,b){return a.table===b.table&&a.tableJSON===b.tableJSON&&a.history===b.history&&a.sec===b.sec&&a.slotJSON===b.slotJSON&&a.secJSON===b.secJSON&&a.log===b.log&&a.max===b.max;}
+  // The fixture draw cancels (replaces) the pending cast queue; later checks compare the live queue's identity.
+  var perfRunning=G.running,perfPending=G.pendingMissileCasts,perfFixtures=G.document.getElementById('ctVisibilityFixtures'),perfFixturesChecked=perfFixtures.checked;
+  try{
+    // The game is running, so closing the studio resumes the loop rather than drawing a live frame.
+    G.running=true;G._perfBreakdown={};G._hudAllTimeMax={};G._perfBreakdownLog=perfT0-1000;G._hudBreakdownFlush=0;
+    for(var pf=0;pf<5;pf++)perfLiveFrame();
+    var perfBefore=perfLiveState(),perfSerial=G._perfFrameSerial,perfStudioDraws=[];
+    G.setCastingStudioMode('casting');var perfJob=G.startCastingStudio();
+    for(var pt=0;pt<=2400;pt+=200){G.castingStudioAdvance(perfJob,pt);perfStudioDraws.push(G.castingStudioDraw(perfJob).stages['draw()']);}
+    var perfStudioSink=perfJob.live._perfBreakdown&&perfJob.live._perfBreakdown['draw()'],perfStudioSerials=G._perfFrameSerial-perfSerial;
+    G.stopCastingStudio('perf check complete');
+    var perfAfterStudio=perfLiveState(),perfStudio={same:perfSame(perfBefore,perfAfterStudio),log:G._perfBreakdownLog,draws:perfStudioDraws.length,
+      serials:perfStudioSerials,sinkCount:perfStudioSink?perfStudioSink.count:null,hit:perfJob.hitAt!==null,liveDraw:G._perfBreakdown['draw()']};
+    if(!(perfStudio.same&&perfStudio.draws===13&&perfStudio.serials===13&&perfStudio.sinkCount===13&&perfStudio.hit))output('DETAIL studio perf '+JSON.stringify(perfStudio));
+    check('casting-study frames (the loop stopped) never reach the live Perf HUD: its stage table, ring slot and per-second stacks are unchanged and the breakdown dump keeps its live time',
+      perfStudio.same&&perfStudio.draws===13&&perfStudio.serials===13&&perfStudio.sinkCount===13&&perfStudio.hit&&
+      perfStudioDraws.every(function(ms){return ms>0;}));
+    perfFixtures.checked=true;
+    var perfProfile={frozenTime:2000000000000,randomSeed:1234567,renderMs:[],stages:{}},perfProfileSerial=G._perfFrameSerial;
+    for(var pp=0;pp<4;pp++)G.caveProfileRender(perfProfile,true);
+    var perfAfterProfile=perfLiveState(),perfProf={same:perfSame(perfBefore,perfAfterProfile),log:G._perfBreakdownLog,serials:G._perfFrameSerial-perfProfileSerial,
+      samples:(perfProfile.stages['draw()']||[]).length,sinkCount:perfProfile.perf&&perfProfile.perf.breakdown['draw()']?perfProfile.perf.breakdown['draw()'].count:null};
+    if(!(perfProf.same&&perfProf.serials===4&&perfProf.samples===4&&perfProf.sinkCount===4))output('DETAIL profile perf '+JSON.stringify(perfProf));
+    check('cave profile frames (frozen clock) never reach the live Perf HUD: its stage table, ring slot and per-second stacks are unchanged and the breakdown dump keeps its live time',
+      perfProf.same&&perfProf.serials===4&&perfProf.samples===4&&perfProf.sinkCount===4);
+    perfFixtures.checked=perfFixturesChecked;G.running=perfRunning;
+    perfLiveFrame();G._hudBreakdownFlush=0;G.drawPerfHud();
+    var perfDraw=G._perfBreakdown['draw()'],perfTable=G._perfBreakdown,perfLiveMax=Math.max.apply(null,perfLiveMs);
+    var perfLive={count:perfDraw?perfDraw.count:null,max:perfDraw?perfDraw.max:null,allTimeMax:G._hudAllTimeMax['draw()'],liveMax:perfLiveMax};
+    perfClock=perfT0+6000;perfLiveFrame();
+    perfLive.dumped=G._perfBreakdownLog===perfT0+6000&&G._perfBreakdown!==perfTable;perfLive.log=G._perfBreakdownLog;
+    if(!(perfLive.count===6&&perfLive.allTimeMax===perfLive.max&&perfLive.max<=perfLiveMax&&perfLive.dumped))output('DETAIL live perf '+JSON.stringify(perfLive));
+    check('after the studio and the profile the live Perf HUD counts only live frames (6 draw() calls, all-time max within the longest live frame) and its 5 s breakdown dump still runs on the live clock',
+      perfLive.count===6&&perfLive.allTimeMax===perfLive.max&&perfLive.max<=perfLiveMax&&perfLive.dumped);
+  }finally{Date.now=perfNow;perfFixtures.checked=perfFixturesChecked;G.running=perfRunning;G.pendingMissileCasts=perfPending;if(G._castingStudio)G.stopCastingStudio('perf check cleanup');}
   G.setCastingStudioMode('hand');
   var rigBaseline={preview:G.HAND_RIG_PREVIEW,time:G.HAND_RIG_TIME_MS,yaw:G.HAND_RIG_VIEW_YAW,grip:G.HAND_RIG_GRIP,style:G.HAND_RIG_STYLE};
   var savedCast=G.castCurrentSpell,savedProjectiles=G.updateProjectiles,savedEffects=G.tickEffects,combatCalls=0;

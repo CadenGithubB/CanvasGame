@@ -8,6 +8,8 @@
   G.cancelAnimationFrame=function(id){cancelled.push(id);};
   G.requestAnimationFrame=function(fn){rafCalls++;return rafCalls;};
   G._pt=function(name,fn){return fn();};
+  // The live Perf HUD state (19-companions-loot.js, 20-diagnostics.js).
+  G._perfBreakdown={live:1};G._perfBreakdownLog=1234;G._perfStageHistory={};G._perfSecStages={};
   (0,eval)(slurp('assets/games/src/20-browser-profile.js'));
   function check(name,okay){if(!okay)throw Error(name);checked++;__out('PASS '+name);}
   var samples=[9,1,3,5];
@@ -31,6 +33,26 @@
   var failed=false;try{G.caveProfileRender(job,true);}catch(e){failed=e.message==='injected draw failure';}
   check('failed render propagates error and restores all temporarily replaced globals',failed && Date.now===oldDate && Math.random===oldRandom && G._pt===oldPt && G.gameTimeNow===oldGameClock && G._presentationRandomState===oldPresentationState);
   check('failed render is not counted as a successful sample',job.renderMs.length===2);
+  // Perf HUD (merge fix): each profile draw times its stages into the job's
+  // own table, ring and per-second stacks (the same ones every frame) and
+  // runs renderFrame's 5 s dump on the frozen clock; the live state and the
+  // dump's live time come back untouched, after a failed draw too.
+  var livePerf={table:G._perfBreakdown,history:G._perfStageHistory,sec:G._perfSecStages},perfSeen=[];
+  var perfJob={frozenTime:2000000000000,randomSeed:1234567,renderMs:[],stages:{}};
+  G.drawCaveVisibilityFixtures=function(){
+    perfSeen.push([G._perfBreakdown,G._perfStageHistory,G._perfSecStages,G._perfBreakdownLog]);
+    G._perfBreakdown.draw=(G._perfBreakdown.draw||0)+1;G._perfStageHistory.draw=1;G._perfSecStages.draw=1;
+    if(Date.now()-G._perfBreakdownLog>5000){G._perfBreakdownLog=Date.now();G._perfBreakdown={};}
+  };
+  G.caveProfileRender(perfJob,true);G.caveProfileRender(perfJob,true);
+  var perfSinkDraws=perfJob.perf&&perfJob.perf.breakdown.draw;
+  G.drawCaveVisibilityFixtures=function(){G._perfBreakdown={broken:1};G._perfBreakdownLog=Date.now();throw Error('injected perf failure');};
+  failed=false;try{G.caveProfileRender(perfJob,true);}catch(e){failed=e.message==='injected perf failure';}
+  check('profile draws time into the job\'s own Perf HUD sinks and the live Perf HUD state and dump time come back untouched, after a failed draw too',
+    failed && perfSeen.length===2 && perfSeen[0][0]!==livePerf.table && perfSeen[0][1]!==livePerf.history && perfSeen[0][2]!==livePerf.sec &&
+    perfSeen[1][0]===perfSeen[0][0] && perfSeen[1][1]===perfSeen[0][1] && perfSeen[0][3]===perfJob.frozenTime && perfSinkDraws===2 &&
+    G._perfBreakdown===livePerf.table && JSON.stringify(G._perfBreakdown)==='{"live":1}' && G._perfBreakdownLog===1234 &&
+    G._perfStageHistory===livePerf.history && G._perfSecStages===livePerf.sec && !Object.keys(livePerf.history).length && !Object.keys(livePerf.sec).length);
   var resumed=0;
   G._caveBrowserProfile={raf:17,resume:function(value){if(value===null)resumed++;}};
   G.cancelCaveBrowserProfile('fixture changed');

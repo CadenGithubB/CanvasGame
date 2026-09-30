@@ -34,6 +34,7 @@ var _castingStudioKeys = (
   '_surfaceFloorLightBake _surfaceFloorLightMesh _surfaceFloorLightScale _surfaceFloorLightStats ' +
   'exploredCells minimapCanvas minimapDirty _lastExploredUpdate ' +
   'CASTING_ART_ENABLED HAND_RIG_PREVIEW HAND_RIG_TIME_MS HAND_RIG_VIEW_YAW HAND_RIG_GRIP HAND_RIG_STYLE DEBUG_PERF_HUD DEBUG_CAVE DEBUG_COMBAT DEBUG_EFFECTS ' +
+  '_perfBreakdown _perfBreakdownLog _perfStageHistory _perfSecStages ' +
   '_armRightIdle _armRightCast _armLeftIdle _armLeftCast _armLastRobeId'
 ).split(' ');
 if (typeof effectRegistryStudioKeys === 'function') _castingStudioKeys = _castingStudioKeys.concat(effectRegistryStudioKeys(_castingStudioKeys));
@@ -225,6 +226,12 @@ function startCastingStudio() {
   ['enemySpawners','oreVeins','companions','fortressAllies','arcaneTomes','statPickups'].forEach(function (key) { live[key] = []; });
   live.ambientParticles = ambientParticles.map(function (p) { return Object.assign({}, p); });
   live._lightGrid = _lightGrid ? new Float32Array(_lightGrid) : null;
+  // Studio frames are not game frames: the Perf HUD's stage table, ring and
+  // per-second stacks get studio-owned sinks (the studio reports its own
+  // stage times), so no studio draw reaches the live averages or the
+  // all-time max. The 5 s breakdown dump reads the studio clock (2e12 + t),
+  // so its time is studio state too, or the live dump never ran again.
+  live._perfBreakdown = {}; live._perfStageHistory = {}; live._perfSecStages = {};
   // Upper-terrain visibility is baked once and immutable. Share that buffer;
   // its daylight/flicker scalar is isolated by castingStudioScoped above.
   live.daySpeed = 0;
@@ -236,6 +243,7 @@ function startCastingStudio() {
     raf:0, playing:false, profile:false, stopped:false, resume:null, clockBase:2000000000000,
     fog:document.createElement('canvas')};
   job.fog.width = MINIMAP_W; job.fog.height = MINIMAP_H;
+  live._perfBreakdownLog = job.clockBase;   // the studio's dump runs on its own clock
   castingStudioResetCycle(job);
   // Prepare independent minimap storage once, outside timing and the live map.
   castingStudioScoped(job, function () { initMinimap(); updateDayNight(0); updateLightGrid(); });

@@ -17,8 +17,11 @@ class CastingStudioTests(unittest.TestCase):
         # spell HUD's spell-change time studio state: "casting study spell HUD
         # is idle before the practice cast and shown after it, on studio state
         # only" and "gallery HUD names the scene spell for the whole loop,
-        # independent of the live spell-change time".
-        self.assertIn("CASTING_STUDIO_RESULT PASS 93", result.stdout.splitlines())
+        # independent of the live spell-change time". 96 after the merge fix
+        # that keeps studio and cave profile frames out of the live Perf HUD
+        # (studio frames, profile frames, and the live table and 5 s dump
+        # afterwards).
+        self.assertIn("CASTING_STUDIO_RESULT PASS 96", result.stdout.splitlines())
 
     def _assert_mutation_fails(self, flag: str, check: str, cause: str = "") -> None:
         result = run_js(Path(__file__).with_name("casting_studio.js"), [flag], timeout=120)
@@ -84,6 +87,22 @@ class CastingStudioTests(unittest.TestCase):
         self._assert_mutation_fails("--gallery-hud-idle",
                                     "gallery HUD names the scene spell for the whole loop, independent of the live spell-change time",
                                     '"start":[],"end":[]')
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_studio_frames_in_the_live_perf_hud(self) -> None:
+        # Merge fix: the studio's draws went into the live Perf HUD table and
+        # its studio-clock dump left the live dump time at 2e12, so the live
+        # table was never reset again in the session.
+        self._assert_mutation_fails("--studio-perf-unscoped",
+                                    "casting-study frames (the loop stopped) never reach the live Perf HUD",
+                                    '"log":2000000000000')
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_profile_frames_in_the_live_perf_hud(self) -> None:
+        # Merge fix: the cave profile's frozen-clock frames drew into the live Perf HUD state.
+        self._assert_mutation_fails("--profile-perf-unscoped",
+                                    "cave profile frames (frozen clock) never reach the live Perf HUD",
+                                    '"same":false')
 
 
 if __name__ == "__main__":
