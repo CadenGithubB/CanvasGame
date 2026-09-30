@@ -388,10 +388,15 @@ Also owed:
     and throws on an unknown material or role, which stops the main script, so
     the game does not start. Spell slice 1 must therefore land first and keep
     those names and roles. Otherwise, move those colours into
-    `FX_MATERIAL_COLORS` in `11-fx-recipes.js`.
-  - **Base copy.** This branch carries a copy of spell slice 1. Once that slice
-    is committed, diff the copy against it for drift, then rebase so the
-    spell-only files come from its commit. The carried files are:
+    `FX_MATERIAL_COLORS` in `11-fx-recipes.js`. Met: spell slice 1
+    (`cdbdf0f`) is this branch's base and keeps those names and roles.
+  - **Base copy.** Done: `4fd4c69` is rebased onto spell slice 1 (`cdbdf0f`,
+    its parent) and carries no spell-only files; `git diff cdbdf0f 4fd4c69`
+    touches none of them, and the mixed files below hold only this branch's
+    hunks. The instruction as written before the rebase: this branch carried
+    a copy of spell slice 1. Once that slice was committed, the copy was to be
+    diffed against it for drift, then rebased so the spell-only files come
+    from its commit. The carried files were:
     - **Spell-only:** the `01-materials.js` hunk; `material_palette.js` and
       `spell_visibility.js` with their wrappers; the `_bootstrap.js` engine
       repair; `14-spell-visuals.js`; `spell_visuals.js` and
@@ -399,7 +404,7 @@ Also owed:
       hunks among these are byte-identical to the spell-visuals working tree's
       hunks at the time the copy was taken. The `_bootstrap.js` repair belongs
       in spell slice 1's first commit.
-    - **Mixed, to split hunk by hunk:** `manifest.json`,
+    - **Mixed, split hunk by hunk by the rebase:** `manifest.json`,
       `14-render-entities.js` (the spell dispatch and the flame-ember guards),
       `20-casting-preview.js` (the gallery and the studio hooks),
       `21-frame-loop.js` (the reorder and the effect stages), `dev.py`,
