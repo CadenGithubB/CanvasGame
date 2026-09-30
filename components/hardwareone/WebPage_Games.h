@@ -10959,8 +10959,16 @@ function buildPointLights() {
     if (!attachment) continue;
     // Glow and illumination originate at the visible flame, just OUTSIDE its
     // supporting face. The former half-cell offset pointed into solid rock.
+    // glowOut/glowUp: where the modelled flame's corona is tested, from the
+    // light (14-fx-render.js fxTorchGlows, wall prop models on). A torch's
+    // flame clears its shaft 2 out, 2 up (where embers leave it). A sconce's
+    // bowl rim (1 below the light) hides the flame's base from below, so it
+    // tests the flame body's centre: the bowl axis (2.7 out, the light 0.5),
+    // 0.19 size above the rim (the flame recipe's outer ellipse).
+    var sconce = d.type === 'sconce';
     pointLights.push({x: attachment.x, y: attachment.y, z: attachment.flameZ,
-      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny});
+      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny,
+      glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});
   }
   // Warm amber glow at cave entrances — subtle light spilling from the archway
   // onto the approach. Offset slightly into the cave mouth so the opening reads
@@ -29611,9 +29619,11 @@ function fxTorchGlows() {
   // Merge fix (3D integration): with wallPropModels on, a torch's or sconce's
   // own depth-writing shaft or bowl stands in front of its light (0.5 u out;
   // the modelled flame hangs 2.2-2.7 u out), so from in front and below it
-  // hid most corona samples. The corona then tests the visible flame, where
-  // embers leave it (2 u out, 2 u up: PARTICLE_ANCHORS.torch); the glow is
-  // still drawn at the light. Sprite torches keep the test at the light.
+  // hid most corona samples. The corona then tests the visible flame at the
+  // light's glowOut/glowUp (buildPointLights: a torch 2 out, 2 up, where
+  // embers leave it; a sconce its flame body's centre above the bowl rim;
+  // 2 and 2 when a light has none); the glow is still drawn at the light.
+  // Sprite torches keep the test at the light.
   var atFlame = !tiles && typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels');
   try {
     for (var i = 0; i < lights.length; i++) {
@@ -29637,10 +29647,11 @@ function fxTorchGlows() {
         st.corona++;
         var csx = sx, csy = sy, ciz = iz, nx = L.nx, ny = L.ny;
         if (atFlame && L.kind === 'torch' && Number.isFinite(nx) && Number.isFinite(ny) && (nx || ny)) {
-          var fdx = dx + nx * 2, fdy = dy + ny * 2, ff = fdx * F.cos + fdy * F.sin;
+          var fo = Number.isFinite(L.glowOut) ? L.glowOut : 2, fu = Number.isFinite(L.glowUp) ? L.glowUp : 2;
+          var fdx = dx + nx * fo, fdy = dy + ny * fo, ff = fdx * F.cos + fdy * F.sin;
           if (ff >= 1) {
             csx = Math.floor(((-fdx * F.sin + fdy * F.cos) / ff * F.invTanHalf * 0.5 + 0.5) * w);
-            csy = Math.floor(F.horizonY + (F.cameraZ - wz - 2) / ff * ps); ciz = 1 / ff;
+            csy = Math.floor(F.horizonY + (F.cameraZ - wz - fu) / ff * ps); ciz = 1 / ff;
           }
         }
         var seen = fxCorona(csx, csy, ciz, 0.2 * R); alpha *= seen / 5; cls = seen ? 1 : 0;

@@ -67,6 +67,16 @@ The glow section checks that point by the harness's own projection and by
 segment tests against the authored part boxes, a camera-facing occluder as a
 negative control, and that sprite torches keep the test at the light. 38 ->
 41 checks: the three glow checks.
+
+Merge fix (sconce glow): sconce lights share the torch's kind, so the point
+applied to them too, but a sconce's light is 1 above its bowl rim and the
+bowl hides the flame's base from below: from the lower poses (the flat-floor
+eye is about 78 below the light) the torch's point was behind the rim, and
+the glow faded to 1-3 of 5 samples while most of the flame showed. Lights
+now carry their own test point (glowOut, glowUp); a sconce tests its flame
+body's centre (bowl axis, 0.19 S above the rim). Two sconce checks over 27
+poses: segment tests against the authored sconceParts(), the sprite control
+and the occluder. 41 -> 43 checks.
 """
 from pathlib import Path
 import unittest
@@ -74,7 +84,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("wall_decor_driver.js")
-EXPECTED = 41
+EXPECTED = 43
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--clamp-model": ("edge", ("edge: anchor near x = -20: painted pixels are exactly",)),
@@ -100,6 +110,7 @@ MUTATIONS = {
     # Merge with the unified effects system
     "--glow-at-light": ("glow", ("glow: with wall prop models on, the unified torch glow's corona tests the visible flame",)),
     "--glow-flame-always": ("glow", ("glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself",)),
+    "--glow-sconce-torch-point": ("glow", ("glow: a modelled sconce's corona tests its flame body's centre",)),
 }
 
 
@@ -126,7 +137,7 @@ class WallDecorDriverTests(unittest.TestCase):
                        "NOTE oblique flame halves ", "NOTE oblique flame panel ",
                        "NOTE work ", "NOTE lab ", "NOTE edge -20 sconce ", "NOTE edge -20 shield ", "NOTE edge -20 banner ",
                        "NOTE spec heraldic ", "NOTE oblique banner fold ", "NOTE phase four props ", "NOTE phase recipes ",
-                       "NOTE decal ", "NOTE glow "):
+                       "NOTE decal ", "NOTE glow ", "NOTE glow sconce "):
             self.assertTrue(any(line.startswith(prefix) for line in notes), (prefix, notes))
 
     def test_each_mutation_fails_its_named_check(self) -> None:

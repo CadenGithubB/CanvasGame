@@ -47,6 +47,8 @@
 //   --glow-at-light    (merge with unified effects) the torch glow's corona
 //                      tests the light again, behind the modelled shaft
 //   --glow-flame-always  the corona tests the flame point for sprite torches too
+//   --glow-sconce-torch-point  sconce lights test the torch's point (2 out, 2
+//                      up), low in the flame, behind the bowl rim from below
 // --sections a,b runs only: spec, edge, oblique, phase, flame, glow, work,
 // variant, model, decal, lab.
 (function () {
@@ -84,6 +86,8 @@
       return source;
     }
     if (path !== DECOR) return source;
+    source = swap(source, '--glow-sconce-torch-point', 'glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});',
+      'glowOut: 2, glowUp: 2});');
     source = swap(source, '--sconce-torch-flame', '    if (sconce) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);\n',
       '    if (false) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);\n');
     source = swap(source, '--window-key',
@@ -940,6 +944,88 @@
       glowOcc.length === 9 && glowOcc.every(function (r) { return r.seen === 0 && r.drawn === 0 && r.hidden === 1; }), glowOcc);
     check('glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself; head-on all five samples pass in front of the wall',
       glowRows.every(function (r) { return r.offCalledAtLight && r.drawnOff === 1 && (r.deg !== 0 || r.seenOff === 5); }), glowRows);
+
+    // Sconce (F2): its light is also 0.5 out, 1 above the bowl rim, and the
+    // bowl (six-sided round the axis 2.7 out, 0.09 S tall, widening 1.6x to
+    // the rim) hides the flame's base from below. The torch's point (2 out, 2
+    // up) sits there, behind the rim wherever the eye is well below it, while
+    // most of the flame shows; the sconce tests its flame body's centre (the
+    // axis, 0.19 S above the rim). Poses: the torch rows' distances with the
+    // flat-floor eye (78 below the light) added, and nearer ones. Oracles:
+    // segment tests against the authored sconceParts() (a point on a face
+    // counts as inside), the sprite control and the same occluder.
+    var SREC = recAt('sconce', 24), SFR = frameOf(SREC);
+    world([SREC]); G.buildPointLights();
+    var SL = G.pointLights[0], S_UP = SFR.at.flameZ - SFR.at.z, sconceRows = [], sconceOcc = [];
+    var sLightL = {r: 0, o: 0.5, z: S_UP}, sFlameL = {r: 0, o: SC_AXIS, z: SC_TOP + 0.19 * S}, sTorchPtL = {r: 0, o: 2.5, z: S_UP + 2};
+    function sconceHit(a, b) {   // does segment a -> b (local r, o, z) cross an authored sconce part?
+      function inConvex(poly, x, y) {
+        var sgn = 0;
+        for (var i = 0; i < poly.length; i++) {
+          var p0 = poly[i], p1 = poly[(i + 1) % poly.length], c = (p1[0] - p0[0]) * (y - p0[1]) - (p1[1] - p0[1]) * (x - p0[0]);
+          if (Math.abs(c) < 1e-12) continue;
+          if (!sgn) sgn = c > 0 ? 1 : -1; else if ((c > 0 ? 1 : -1) !== sgn) return false;
+        }
+        return true;
+      }
+      var parts = sconceParts(), plate = parts[0].pts.slice(0, 8).map(function (q) { return [q[0], q[2]]; });
+      var arm = parts[1].pts, bowl0 = parts[2].pts.slice(0, 6), bowl1 = parts[2].pts.slice(6);
+      function inside(r, o, z) {
+        if (o >= 0 && o <= 0.4 && inConvex(plate, r, z)) return 'plate';
+        if (r >= arm[0][0] && r <= arm[1][0] && o >= arm[0][1] && o <= arm[2][1] && z >= arm[0][2] && z <= arm[4][2]) return 'arm';
+        if (z >= SC_BOTTOM && z <= SC_TOP) {
+          var t = (z - SC_BOTTOM) / (SC_TOP - SC_BOTTOM);
+          if (inConvex(bowl0.map(function (q, k) { return [q[0] + (bowl1[k][0] - q[0]) * t, q[1] + (bowl1[k][1] - q[1]) * t]; }), r, o)) return 'bowl';
+        }
+        return '';
+      }
+      for (var k = 1; k < 2000; k++) {
+        var u = k / 2000, hit = inside(a.r + (b.r - a.r) * u, a.o + (b.o - a.o) * u, a.z + (b.z - a.z) * u);
+        if (hit) return hit;
+      }
+      return '';
+    }
+    function sconcePose(D, deg, below) {
+      var a = deg * Math.PI / 180, cx = SL.x + Math.sin(a) * D, cy = SL.y - Math.cos(a) * D;
+      var C = pose(cx, cy, Math.atan2(SL.y - cy, SL.x - cx), SL.z - below);
+      G.cam.pitch = (C.cameraZ - SL.z) / ((SL.x - cx) * C.cosAng + (SL.y - cy) * C.sinAng);
+      return G.getCam3D();
+    }
+    function sconceAt(p, C) { var q = project(localF(SFR, p.r, p.o, p.z), C); return {x: Math.floor(q.x), y: Math.floor(q.y), iz: 1 / q.depth}; }
+    [[20, 40], [30, 35], [30, 78], [40, 35], [40, 78], [60, 45], [60, 78], [90, 70], [90, 78]].forEach(function (dv) {
+      [-25, 0, 25].forEach(function (deg) {
+        var C = sconcePose(dv[0], deg, dv[1]), eye = {r: G.cam.x - SFR.ox, o: SFR.oy - G.cam.y, z: C.cameraZ - SFR.at.z};
+        var on = glowFrame(C, true), c = on.calls[0], fp = sconceAt(sFlameL, C), lp = sconceAt(sLightL, C), tp = sconceAt(sTorchPtL, C);
+        var off = glowFrame(C, false), co = off.calls[0];
+        G.setRenderFeatures({wallPropModels: true}); G.beginSceneDepthFrame(W, HT); wallPlane(C); G.drawWallDecorations('opaque');
+        var row = {D: dv[0], below: dv[1], deg: deg, lightBehind: sconceHit(eye, sLightL), flameHit: sconceHit(eye, sFlameL), torchPtHit: sconceHit(eye, sTorchPtL),
+          flameSeen: G.fxDepthNearest(fp.x, fp.y, fp.iz), torchPtSeen: G.fxDepthNearest(tp.x, tp.y, tp.iz), calledAtFlame: sameCall(c, fp), seenOn: c ? c.seen : null,
+          atTorchPt: c ? G.fxCorona(tp.x, tp.y, tp.iz, c.q) : null, atLight: c ? G.fxCorona(lp.x, lp.y, lp.iz, c.q) : null,
+          drawnOn: on.drawn, seenOff: co ? co.seen : null, offCalledAtLight: sameCall(co, lp), drawnOff: off.drawn, calls: on.calls.length + off.calls.length};
+        sconceRows.push(row);
+        var mid = {x: G.cam.x + (SL.x - G.cam.x) / 3, y: G.cam.y + (SL.y - G.cam.y) / 3}, ox = -C.sinAng, oy = C.cosAng, oz = C.cameraZ + (SL.z - C.cameraZ) / 3;
+        var occ = glowFrame(C, true, function (Cc) {
+          writeQuad([{x: mid.x - ox * 40, y: mid.y - oy * 40, z: oz - 40}, {x: mid.x + ox * 40, y: mid.y + oy * 40, z: oz - 40},
+            {x: mid.x + ox * 40, y: mid.y + oy * 40, z: oz + 40}, {x: mid.x - ox * 40, y: mid.y - oy * 40, z: oz + 40}], Cc);
+        });
+        sconceOcc.push({D: dv[0], below: dv[1], deg: deg, seen: occ.calls.length ? occ.calls[0].seen : null, drawn: occ.drawn, hidden: occ.hidden});
+      });
+    });
+    world();
+    var torchPtBehind = sconceRows.filter(function (r) { return r.torchPtHit; });
+    function total(rows, key) { return rows.reduce(function (a, r) { return a + r[key]; }, 0); }
+    // [D, below, deg, samples passing: at the flame centre (the fix), at the torch's point, at the light, as a sprite]
+    out('NOTE glow sconce ' + JSON.stringify(sconceRows.map(function (r) { return [r.D, r.below, r.deg, r.seenOn, r.atTorchPt, r.atLight, r.seenOff]; })) +
+      ' torch point behind the bowl at ' + torchPtBehind.length + ' of ' + sconceRows.length);
+    check('glow: a modelled sconce\'s corona tests its flame body\'s centre, which its bowl never hides: the light is behind the sconce, the torch\'s point is behind the bowl rim (centre sample hidden) from the lower poses, and the glow keeps at most one sample fewer than the sprite sconce and at least as many as a test at the light or at the torch\'s point (more in total where that point is behind the rim)',
+      sconceRows.length === 27 && torchPtBehind.length >= 6 && total(torchPtBehind, 'seenOn') > total(torchPtBehind, 'atTorchPt') &&
+      sconceRows.every(function (r) {
+        return r.calls === 2 && r.lightBehind !== '' && r.flameHit === '' && r.flameSeen === 1 && r.calledAtFlame && r.drawnOn === 1 &&
+          (!r.torchPtHit || r.torchPtSeen === 0) && r.seenOn >= r.seenOff - 1 && r.seenOn >= r.atLight && r.seenOn >= r.atTorchPt &&
+          r.offCalledAtLight && r.drawnOff === 1;
+      }), {behind: torchPtBehind.length, seenOn: total(torchPtBehind, 'seenOn'), atTorchPt: total(torchPtBehind, 'atTorchPt'), rows: sconceRows});
+    check('glow: negative control, the same camera-facing occluder hides the modelled sconce\'s glow (no sample passes, not drawn)',
+      sconceOcc.length === 27 && sconceOcc.every(function (r) { return r.seen === 0 && r.drawn === 0 && r.hidden === 1; }), sconceOcc);
   }
 
   // ── work: pixels tested per torch below the flat-quad baseline ──

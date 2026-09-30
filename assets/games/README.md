@@ -1161,9 +1161,12 @@ floor props, landmarks and structure models) do write scene depth, all inside
 `draw()` and so before every fx stage: with those switches on (Recommended)
 particles are depth-tested against them, and in Legacy they are sprites again.
 In New mode the torch glow uses `corona`. With `wallPropModels` on, its samples
-centre on the visible flame (2 units out and 2 up from the light, where embers
-leave it) rather than on the light, which the modelled shaft hides from in
-front and below; the glow is still drawn at the light. For the exact A/B, set
+centre on the visible flame rather than on the light, which the modelled shaft
+or bowl hides from in front and below: for a torch 2 units out and 2 up from
+the light (where embers leave it), for a sconce its flame body's centre (the
+bowl axis, 0.19 size above the rim), whose lower flame the bowl rim hides from
+below. Each point light carries its point (`glowOut`, `glowUp`); the glow is
+still drawn at the light. For the exact A/B, set
 `fxTorchGlowOcclusion = 'tiles'` in the console.
 
 ### Switches and console controls

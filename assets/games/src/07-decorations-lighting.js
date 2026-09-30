@@ -347,8 +347,16 @@ function buildPointLights() {
     if (!attachment) continue;
     // Glow and illumination originate at the visible flame, just OUTSIDE its
     // supporting face. The former half-cell offset pointed into solid rock.
+    // glowOut/glowUp: where the modelled flame's corona is tested, from the
+    // light (14-fx-render.js fxTorchGlows, wall prop models on). A torch's
+    // flame clears its shaft 2 out, 2 up (where embers leave it). A sconce's
+    // bowl rim (1 below the light) hides the flame's base from below, so it
+    // tests the flame body's centre: the bowl axis (2.7 out, the light 0.5),
+    // 0.19 size above the rim (the flame recipe's outer ellipse).
+    var sconce = d.type === 'sconce';
     pointLights.push({x: attachment.x, y: attachment.y, z: attachment.flameZ,
-      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny});
+      radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny,
+      glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});
   }
   // Warm amber glow at cave entrances — subtle light spilling from the archway
   // onto the approach. Offset slightly into the cave mouth so the opening reads
