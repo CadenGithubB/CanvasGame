@@ -38203,12 +38203,23 @@ function caveProfilePrepareInputs(job) {
 function caveProfileCanonicalInputs(){
   // The render preset and switches (models, textures, effects) change the
   // frame's work, so profiles taken under different switches record them.
+  // renderFeatures holds the effect switches too (fxUnified, fxWeather,
+  // fxDebris, fxFootDust): 02-effect-registry.js registers them as render
+  // features. effectFamilies is each migrated family's mode, which a console
+  // override (setEffectFamilyMode, never persisted) sets apart from any switch.
   return{ambientParticles:ambientParticles.length,
     particles:(typeof getEffectStats==='function'?getEffectStats().live:0)+ambientParticles.length,
     particleSetting:settings.particles,exploration:'radius 30 around fixture',
     lighting:'forced frozen-time update',profilingOverlays:false,
     renderPreset:typeof renderPresetName==='function'?renderPresetName():null,
-    renderFeatures:typeof renderFeatureSnapshot==='function'?renderFeatureSnapshot():null};
+    renderFeatures:typeof renderFeatureSnapshot==='function'?renderFeatureSnapshot():null,
+    effectFamilies:caveProfileEffectFamilies()};
+}
+function caveProfileEffectFamilies(){
+  if(typeof effectFamilyMode!=='function'||typeof EFFECT_FAMILY_MIGRATED!=='object')return null;
+  var out={};
+  Object.keys(EFFECT_FAMILY_MIGRATED).forEach(function(family){out[family]=effectFamilyMode(family);});
+  return out;
 }
 
 function caveProfileRestoreInputs(job) {

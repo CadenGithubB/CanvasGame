@@ -9,6 +9,9 @@
 //   --no-frame-stats-reset      draw() no longer resets the per-frame counters
 //   --texture-button-inert      Toggle Textures changes its label only
 //   --keep-control-focus        Graphics-row controls keep keyboard focus after use
+//   --effect-toggles-unshared   the effect switches keep their own store, outside
+//                               the render registry (the particle branch alone)
+//   --profile-no-families       the cave profile's inputs leave out the family modes
 // --skip-replay / --skip-lab leave out the slow sections (mutation runs only).
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
@@ -42,6 +45,11 @@
     }
     if (path === 'src/16-draw-overview.js')
       source = swap(source, '--no-frame-stats-reset', "    if (typeof beginRenderFrameStats === 'function') beginRenderFrameStats();\n", '');
+    if (path === 'src/02-effect-registry.js')
+      source = swap(source, '--effect-toggles-unshared', "  var shared = typeof defineRenderFeature === 'function' && typeof renderFeatureValue === 'function' && typeof setRenderFeature === 'function';\n",
+        '  var shared = false;\n');
+    if (path === 'src/20-browser-profile.js')
+      source = swap(source, '--profile-no-families', ',\n    effectFamilies:caveProfileEffectFamilies()};', '};');
     return source;
   }
   var loaded = H.loadManifest(mutate);
@@ -275,6 +283,33 @@
   check('getRenderFeatureStats reports preset, features, textures, rows, canvas, actions and frame counters',
     stats.preset === 'recommended' && stats.features.labProbe === true && stats.textures === true && stats.fullscreenRows === 'native' &&
     stats.canvas === '360x240' && stats.actions.indexOf('goToNearestLandmark') >= 0 && stats.frame.labCounter === 3, stats);
+
+  // ── The cave browser profile's record of the switches (merge fix) ──
+  // Its canonicalInputs record the render preset and switches; those include
+  // the effect switches, which 02-effect-registry.js registers as render
+  // features, and it records each effect family's mode, which a console
+  // override (setEffectFamilyMode) sets apart from any switch. Oracles: the
+  // effect registry's own switch list and values, and three A/B pairs whose
+  // frames do different work: Legacy against Recommended, Unified effects off
+  // against on (a Custom combination) and the ambient family (torch embers
+  // follow it) overridden to Legacy with every switch unchanged.
+  var effectKeys = G.EFFECT_TOGGLE_DEFS.map(function (d) { return d.key; });
+  function withoutCounts(inputs) { var o = Object.assign({}, inputs); delete o.particles; delete o.ambientParticles; return JSON.stringify(o); }
+  var inputsRec = G.caveProfileCanonicalInputs();
+  G.applyRenderPreset('legacy'); var inputsLegacy = G.caveProfileCanonicalInputs(); G.applyRenderPreset('recommended');
+  G.setEffectToggle('fxUnified', false); var inputsUnifiedOff = G.caveProfileCanonicalInputs(); G.setEffectToggle('fxUnified', true);
+  G.setEffectFamilyMode('ambient', 'legacy'); var inputsOverride = G.caveProfileCanonicalInputs(); G.setEffectFamilyMode('ambient', null);
+  var profileRecord = {keys: effectKeys, rec: inputsRec, legacy: inputsLegacy, unifiedOff: inputsUnifiedOff, override: inputsOverride,
+    restored: withoutCounts(G.caveProfileCanonicalInputs()) === withoutCounts(inputsRec)};
+  function families(inputs, mode) { return !!inputs.effectFamilies && Object.keys(inputs.effectFamilies).length >= 6 && Object.keys(inputs.effectFamilies).every(function (f) { return inputs.effectFamilies[f] === mode; }); }
+  check('the cave browser profile records every effect switch (as render features) and each effect family\'s mode: Legacy, Unified effects off and a console family override each change its inputs',
+    effectKeys.length === 4 && !!inputsRec.renderFeatures && effectKeys.every(function (k) { return k in inputsRec.renderFeatures && inputsRec.renderFeatures[k] === G.effectToggleValue(k); }) &&
+    inputsRec.renderPreset === 'recommended' && families(inputsRec, 'new') &&
+    inputsLegacy.renderPreset === 'legacy' && inputsLegacy.renderFeatures.fxUnified === false && families(inputsLegacy, 'legacy') &&
+    inputsUnifiedOff.renderPreset === 'custom' && inputsUnifiedOff.renderFeatures.fxUnified === false && families(inputsUnifiedOff, 'legacy') &&
+    inputsOverride.renderPreset === 'recommended' && JSON.stringify(inputsOverride.renderFeatures) === JSON.stringify(inputsRec.renderFeatures) &&
+    inputsOverride.effectFamilies.ambient === 'legacy' && inputsOverride.effectFamilies.torchEmbers === 'legacy' && inputsOverride.effectFamilies.bones === 'new' &&
+    withoutCounts(inputsOverride) !== withoutCounts(inputsRec) && profileRecord.restored, profileRecord);
 
   // ── Presentation-only replay: flipping presets never touches simulation ──
   function tag(object, id) { try { Object.defineProperty(object, '__replayId', {value: id, enumerable: false}); } catch (e) {} }

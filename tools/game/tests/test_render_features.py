@@ -12,6 +12,12 @@ exit) and a 240-tick replay compared with and without G every 30 ticks
 (pos, cam, enemies, seed, Math.random draws, chest/spawner records, object
 identity, window assemblies). Each mutation below must fail its named check.
 Not browser evidence: the lab page's timing and pixel checks run in a browser.
+
+Merge fix (profile record): the cave browser profile's canonical inputs
+record the effect switches through the render registry, where
+02-effect-registry.js registers them, and each effect family's mode, so
+profiles taken under Legacy, Unified effects off or a console family
+override (setEffectFamilyMode) can be told apart from their inputs.
 """
 from pathlib import Path
 import unittest
@@ -19,7 +25,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("render_features.js")
-EXPECTED = 38
+EXPECTED = 39
 
 
 @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
@@ -70,6 +76,15 @@ class RenderFeatureTests(unittest.TestCase):
 
     def test_a_texture_button_that_only_relabels_is_detected(self) -> None:
         self.assertMutantFails("--texture-button-inert", "Toggle Textures flips USE_TEXTURES and its label")
+
+    def test_effect_switches_outside_the_render_registry_are_detected(self) -> None:
+        # The particle branch alone: the profile's render switches have no effect switch.
+        self.assertMutantFails("--effect-toggles-unshared",
+                               "the cave browser profile records every effect switch (as render features)")
+
+    def test_a_profile_record_without_family_modes_is_detected(self) -> None:
+        self.assertMutantFails("--profile-no-families",
+                               "the cave browser profile records every effect switch (as render features)")
 
 
 if __name__ == "__main__":

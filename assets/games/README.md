@@ -1289,7 +1289,10 @@ tab. Its header comment gives the procedure. Its report's `env.game` records
 the effect switches and the render preset and switches (`render`), as the
 cave browser profile's `canonicalInputs` does: models and textures change what
 particles are depth-tested against and the frame's work, so runs taken under
-different switches can be told apart.
+different switches can be told apart. The profile's `renderFeatures` hold the
+effect switches too (they are registered as render features), and its
+`effectFamilies` record each effect family's mode, which a console
+`setEffectFamilyMode` override sets apart from every switch.
 
 ### Adding an effect
 
