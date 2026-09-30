@@ -26,6 +26,11 @@
 //   --water-after-props water3D runs after sceneEntities' overlay phase
 //   --timer-per-call    _pt counts every call again, so the Perf HUD shows
 //                       sceneEntities' two halves as two calls a frame
+//   --timer-ring-frame  _pt keys "same frame" on the ring slot again, which
+//                       only the loop advances: frames drawn with the loop
+//                       stopped (studio, cave profile) merge into one call
+//   --timer-tick-serial every simulation tick advances the frame serial, so
+//                       a frame's catch-up ticks are counted as calls apiece
 //   --fx-before-late-landmarks  fxCombat3D runs before marketStalls3D (the
 //                       late landmark stages then write depth after it)
 // --sections a,b runs only: ruin, lintel, entities, overlays, calls, legacy,
@@ -46,6 +51,7 @@
     return source.replace(before, after);
   }
   var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js', DIAG = 'src/20-diagnostics.js', LOOP = 'src/21-frame-loop.js';
+  var CLOCK = 'src/02-simulation-clock.js', SAME_FRAME = '  var sameFrame = bd.serial === _perfFrameSerial;\n';
   var FX_COMBAT_STAGE = "    _pt('fxCombat3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(1); });\n";
   var STALLS_STAGE = "    _pt('marketStalls3D', function(){ drawMarketStalls3D(); });\n";
   var LANDMARK_STAGE = "    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())\n" +
@@ -75,7 +81,14 @@
       source = swap(source, '--fx-before-late-landmarks', FX_COMBAT_STAGE, '');
       source = swap(source, '--fx-before-late-landmarks', STALLS_STAGE, FX_COMBAT_STAGE + STALLS_STAGE);
     }
-    if (path === DIAG) source = swap(source, '--timer-per-call', '  var sameFrame = bd.slot === _perfRingIdx && arr[_perfRingIdx] === bd.mark;\n', '  var sameFrame = false;\n');
+    if (path === DIAG) {
+      source = swap(source, '--timer-per-call', SAME_FRAME, '  var sameFrame = false;\n');
+      // The ring-keyed rule of the first per-frame merge.
+      source = swap(source, '--timer-ring-frame', SAME_FRAME, '  var sameFrame = bd.slot === _perfRingIdx && arr[_perfRingIdx] === bd.mark;\n');
+      source = swap(source, '--timer-ring-frame', '  bd.serial = _perfFrameSerial;\n', '  bd.slot = _perfRingIdx; bd.mark = arr[_perfRingIdx];\n');
+    }
+    if (path === CLOCK) source = swap(source, '--timer-tick-serial', '  captureRenderInterpolation();\n  advanceGameClock(dt);\n',
+      '  _perfFrameSerial++;\n  captureRenderInterpolation();\n  advanceGameClock(dt);\n');
     return source;
   });
   check('real manifest loads with the landmark pass and no console errors',
@@ -680,6 +693,37 @@
       ringSums.every(function (v) { return Math.abs(v - 8) < 0.2; }) &&
       !!wa && wa.count === FRAMES && Math.abs(wa.avg - 2) < 0.2 && !!wl3 && wl3.count === FRAMES && Math.abs(wl3.avg - 1) < 0.2 &&
       hudRow.length === 2 && Math.abs(hudRow[0] - se.avg) < 0.006 && Math.abs(hudRow[1] - se.max) < 0.006, timer);
+
+    // Frames drawn while the loop is stopped (the casting studio, the cave
+    // browser profile) never advance the ring, which only loop() does; each
+    // is still one call: three such frames are three 8 ms sceneEntities
+    // calls (max 8), not one growing call (24 ms, max 24) that the Perf HUD
+    // would keep as its all-time max. A loop iteration's simulation ticks
+    // run before its render: two authored 1 ms gameUpdate ticks (the input
+    // stages stubbed empty) before each frame are one 2 ms call a frame, the
+    // frame's share as the ring and per-second stacks count it.
+    var STOPPED = 3, tGame = G.gameUpdate, tInput = G.handleInput, tCamera = G.updateInputCamera;
+    var clockSaved = [G._gameClockOriginMs, G._gameClockElapsedMs, G.simulationTiming.ticks], ringAt = G._perfRingIdx;
+    G.drawWallDecorations = function (phase) { H.clock.perf += cost[phase] || 0; return tDecor.apply(this, arguments); };
+    G.drawWater3D = function () { H.clock.perf += 2; return tWater.apply(this, arguments); };
+    G.drawWalls3D = function () { H.clock.perf += 1; return tWalls.apply(this, arguments); };
+    G.gameUpdate = function () { H.clock.perf += 1; };
+    G.handleInput = G.updateInputCamera = function () {};
+    try {
+      G._perfBreakdown = {}; G._perfBreakdownLog = Date.now();
+      for (var sf = 0; sf < STOPPED; sf++) { G.runSimulationTick(G.FIXED_DT); G.runSimulationTick(G.FIXED_DT); frame(); }
+    } finally {
+      G.drawWallDecorations = tDecor; G.drawWater3D = tWater; G.drawWalls3D = tWalls;
+      G.gameUpdate = tGame; G.handleInput = tInput; G.updateInputCamera = tCamera;
+      G._gameClockOriginMs = clockSaved[0]; G._gameClockElapsedMs = clockSaved[1]; G.simulationTiming.ticks = clockSaved[2];
+    }
+    var stopped = {ringStill: G._perfRingIdx === ringAt, sceneEntities: row('sceneEntities'), gameUpdate: row('gameUpdate'), handleInput: row('handleInput')};
+    var sse = stopped.sceneEntities, sgu = stopped.gameUpdate, shi = stopped.handleInput;
+    out('NOTE timer stopped ' + JSON.stringify(stopped));
+    check('timer: frames drawn while the loop is stopped (casting studio, cave profile: the ring never advances) are one sceneEntities call each, three frames three 8 ms calls (max 8)',
+      stopped.ringStill && !!sse && sse.count === STOPPED && Math.abs(sse.avg - 8) < 0.2 && Math.abs(sse.max - 8) < 0.2, stopped);
+    check('timer: a frame\'s simulation ticks are one call a frame, two 1 ms gameUpdate ticks before each of three frames three 2 ms calls (max 2)',
+      !!sgu && sgu.count === STOPPED && Math.abs(sgu.avg - 2) < 0.2 && Math.abs(sgu.max - 2) < 0.2 && !!shi && shi.count === STOPPED, stopped);
   }
 
   // ── depth: every depth-writing pass runs before the unified fx stages ──

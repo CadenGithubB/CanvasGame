@@ -36806,6 +36806,10 @@ var _ptErrors = {};
 // boundary bumps _perfRingIdx.
 var PERF_HISTORY_LEN = 120;
 var _perfRingIdx = 0;
+// Advanced by every rendered frame (renderFrame), including the frames the
+// casting studio and the cave profile draw while the loop, which owns the
+// ring, is stopped. _pt counts a stage once per serial.
+var _perfFrameSerial = 0;
 var _perfStageHistory = {};    // name → Float32Array(HISTORY_LEN)
 var _perfFrameTotals = new Float32Array(PERF_HISTORY_LEN);
 // Frame delivery and CPU work are different measurements. Record actual rAF
@@ -36856,17 +36860,21 @@ function _pt(name, fn) {
   if (!arr) { arr = new Float32Array(PERF_HISTORY_LEN); _perfStageHistory[name] = arr; }
   // The breakdown (Perf HUD avg/max) is per frame, like the ring: a stage
   // timed twice in one frame (draw()'s sceneEntities halves around water3D)
-  // is one call whose time and max are the frame's sum. The ring slot still
-  // holds this stage's earlier time exactly when no frame boundary has zeroed
-  // it since.
+  // is one call whose time and max are the frame's sum. The frame is the
+  // rendered frame's serial, not the ring slot: only the loop advances the
+  // ring, so keyed on it every frame the casting studio or the cave profile
+  // draws with the loop stopped was one ever-growing call. A loop
+  // iteration's simulation ticks run before its render, on one serial, so
+  // handleInput and gameUpdate are per frame too (the sum of its catch-up
+  // ticks), as the ring and the per-second stacks are.
   var bd = _perfBreakdown[name];
-  if (!bd) bd = _perfBreakdown[name] = {total:0, count:0, max:0, slot:-1, mark:0, frameMs:0};
-  var sameFrame = bd.slot === _perfRingIdx && arr[_perfRingIdx] === bd.mark;
+  if (!bd) bd = _perfBreakdown[name] = {total:0, count:0, max:0, serial:-1, frameMs:0};
+  var sameFrame = bd.serial === _perfFrameSerial;
   arr[_perfRingIdx] += elapsed;
   bd.total += elapsed;
   if (sameFrame) bd.frameMs += elapsed; else { bd.count++; bd.frameMs = elapsed; }
   if (bd.frameMs > bd.max) bd.max = bd.frameMs;
-  bd.slot = _perfRingIdx; bd.mark = arr[_perfRingIdx];
+  bd.serial = _perfFrameSerial;
   // Per-second aggregate: accumulate sum; drawPerfHud divides by frame count.
   var sArr = _perfSecStages[name];
   if (!sArr) { sArr = new Float32Array(PERF_SEC_LEN); _perfSecStages[name] = sArr; }
@@ -39262,6 +39270,7 @@ async function profileCastingStudio(mode) {
   });
 }());
 function renderFrame() {
+  _perfFrameSerial++;   // one Perf HUD call per stage per rendered frame (_pt)
   if (overviewActive) {
     drawDebugOverview();
     drawMenuOverlay();

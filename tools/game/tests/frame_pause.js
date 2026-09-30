@@ -8,7 +8,7 @@
     shopOpen: false, inventoryOpen: false, forgeOpen: false, gameOverState: false,
     performance: {now: function () { return 1; }}, window: {}, document: {hidden:false},
     recordPerfFrameCadence: function () {}, _perfRingIdx: 0, PERF_HISTORY_LEN: 10,
-    _perfFrameTotals: [], _perfStageHistory: {}, _perfSecIdx: 0,
+    _perfFrameTotals: [], _perfStageHistory: {}, _perfSecIdx: 0, _perfFrameSerial: 0,
     _perfSecFrameCount: [0], _perfSecTotalMs: [0], _perfTickSecondBucket: function () {},
     _pt: function (_, fn) { fn(); }, handleInput: function () {},
     pollInputControls: function () {}, updateInputCamera: function () {}, clearGameplayInput: function () {},

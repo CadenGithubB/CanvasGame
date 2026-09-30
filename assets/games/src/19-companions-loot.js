@@ -569,5 +569,9 @@ var _ptErrors = {};
 // boundary bumps _perfRingIdx.
 var PERF_HISTORY_LEN = 120;
 var _perfRingIdx = 0;
+// Advanced by every rendered frame (renderFrame), including the frames the
+// casting studio and the cave profile draw while the loop, which owns the
+// ring, is stopped. _pt counts a stage once per serial.
+var _perfFrameSerial = 0;
 var _perfStageHistory = {};    // name → Float32Array(HISTORY_LEN)
 var _perfFrameTotals = new Float32Array(PERF_HISTORY_LEN);

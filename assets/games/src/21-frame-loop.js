@@ -1,4 +1,5 @@
 function renderFrame() {
+  _perfFrameSerial++;   // one Perf HUD call per stage per rendered frame (_pt)
   if (overviewActive) {
     drawDebugOverview();
     drawMenuOverlay();

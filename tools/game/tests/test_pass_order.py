@@ -31,6 +31,13 @@ That order times sceneEntities in two _pt calls (one name) around water3D;
 the "timer" section checks, with authored stage costs on the host clock,
 that the Perf HUD's stage table still counts it as one call a frame (its
 average and max are per frame, as the ring's are), not two half-calls.
+Merge fix (frame serial): "same frame" was first keyed on the ring slot,
+which only the game loop advances, so every frame the casting studio or the
+cave profile drew with the loop stopped merged into one growing call (its
+sum became the Perf HUD's all-time max). It is now the rendered frame's
+serial. Two more timer checks: three frames drawn without advancing the ring
+are three calls, and a frame's simulation ticks (two authored gameUpdate
+ticks before each frame) are one call a frame.
 
 Merge fix (depth before fx): the unified fx stages depth-test particles
 against scene depth, so every pass that writes it must run before them. The
@@ -50,7 +57,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("pass_order.js")
-EXPECTED = 33  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks; merge fixes: +1 timer, +1 depth check
+EXPECTED = 35  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks; merge fixes: +1 timer, +1 depth check; frame serial: +2 timer checks
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--late-landmarks": ("ruin,lintel,overlays", (
@@ -69,6 +76,11 @@ MUTATIONS = {
         "water: a sprite on the near shore draws after the water")),
     "--timer-per-call": ("timer", (
         "timer: the Perf HUD times sceneEntities' two halves (opaque 3 ms, overlay 5 ms) as one 8 ms call a frame",)),
+    "--timer-ring-frame": ("timer", (
+        "timer: frames drawn while the loop is stopped (casting studio, cave profile: the ring never advances) are one sceneEntities call each",
+        "timer: a frame's simulation ticks are one call a frame")),
+    "--timer-tick-serial": ("timer", (
+        "timer: a frame's simulation ticks are one call a frame",)),
     "--fx-before-late-landmarks": ("depth", (
         "depth: every depth-writing pass runs before fxCombat3D",)),
 }
@@ -90,7 +102,7 @@ class PassOrderTests(unittest.TestCase):
         self.assertIn(f"PASS_ORDER_RESULT PASS {EXPECTED} failed 0", self.lines, self.output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in self.lines), self.output)
         self.assertNotIn("SETUP", self.output)
-        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest ", "NOTE timer ", "NOTE depth "):
+        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest ", "NOTE timer ", "NOTE timer stopped ", "NOTE depth "):
             self.assertTrue(any(line.startswith(note) for line in self.lines), note)
 
     def test_each_mutation_fails_its_named_check(self) -> None:
