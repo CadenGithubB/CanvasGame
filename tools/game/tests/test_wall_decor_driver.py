@@ -77,6 +77,17 @@ now carry their own test point (glowOut, glowUp); a sconce tests its flame
 body's centre (bowl axis, 0.19 S above the rim). Two sconce checks over 27
 poses: segment tests against the authored sconceParts(), the sprite control
 and the occluder. 41 -> 43 checks.
+
+Merge fix (scaled glow point): a prop's model and flame scale by k = size /
+35.2 about the wall plane, and a wall face spanning under about 117 units
+clamps the size, but the light stays 0.5 out and size / 4 or size / 6 up, so
+the fixed offsets (sconce 2.2 out, 0.19 size - 1 up; torch 2 and 2) missed
+the flame on lower walls: on walls 0.35 and 0.25 of full height the sconce's
+point sat 0.8 and 1.4 from its flame body's centre. The point is now the
+full-size one in model units, scaled by k. One check over 72 poses on those
+two walls (sconce and torch): the model's own flame anchor is the authored
+one scaled by k, the corona call is at the scaled point, which segment tests
+against the scaled parts find clear, and the glow is drawn. 43 -> 44 checks.
 """
 from pathlib import Path
 import unittest
@@ -84,7 +95,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("wall_decor_driver.js")
-EXPECTED = 43
+EXPECTED = 44
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--clamp-model": ("edge", ("edge: anchor near x = -20: painted pixels are exactly",)),
@@ -112,6 +123,7 @@ MUTATIONS = {
     "--glow-flame-always": ("glow", ("glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself",)),
     "--glow-sconce-torch-point": ("glow", ("glow: a modelled sconce's corona tests its flame body's centre",)),
     "--glow-flame-depth-distance": ("glow", ("glow: with wall prop models on, the unified torch glow's corona tests the visible flame",)),
+    "--glow-unscaled": ("glow", ("glow: on lower walls (prop size clamped to 25.2 and 18) a modelled sconce's and torch's corona tests the flame point scaled with the model",)),
 }
 
 
@@ -138,7 +150,7 @@ class WallDecorDriverTests(unittest.TestCase):
                        "NOTE oblique flame halves ", "NOTE oblique flame panel ",
                        "NOTE work ", "NOTE lab ", "NOTE edge -20 sconce ", "NOTE edge -20 shield ", "NOTE edge -20 banner ",
                        "NOTE spec heraldic ", "NOTE oblique banner fold ", "NOTE phase four props ", "NOTE phase recipes ",
-                       "NOTE decal ", "NOTE glow ", "NOTE glow sconce "):
+                       "NOTE decal ", "NOTE glow ", "NOTE glow sconce ", "NOTE glow clamped "):
             self.assertTrue(any(line.startswith(prefix) for line in notes), (prefix, notes))
 
     def test_each_mutation_fails_its_named_check(self) -> None:

@@ -1181,10 +1181,13 @@ stage after `structures3D` (`tools/game/tests/pass_order.js`, section
 In New mode the torch glow uses `corona`. With `wallPropModels` on, its samples
 centre on the visible flame rather than on the light, which the modelled shaft
 or bowl hides from in front and below: for a torch 2 units out and 2 up from
-the light (where embers leave it), for a sconce its flame body's centre (the
-bowl axis, 0.19 size above the rim), whose lower flame the bowl rim hides from
-below. Each point light carries its point (`glowOut`, `glowUp`); the glow is
-still drawn at the light. For the exact A/B, set
+the light at full size (where embers leave it), for a sconce its flame body's
+centre (the bowl axis, 0.19 size above the rim), whose lower flame the bowl
+rim hides from below. The model and its flame scale with the prop's size
+(clamped on walls spanning under about 117 units) while the light's 0.5 out
+does not, so the point is set in model units and scales with the prop. Each
+point light carries its point (`glowOut`, `glowUp`); the glow is still drawn
+at the light. For the exact A/B, set
 `fxTorchGlowOcclusion = 'tiles'` in the console.
 
 ### Switches and console controls

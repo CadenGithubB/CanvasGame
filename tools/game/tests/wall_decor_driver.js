@@ -49,6 +49,8 @@
 //   --glow-flame-always  the corona tests the flame point for sprite torches too
 //   --glow-sconce-torch-point  sconce lights test the torch's point (2 out, 2
 //                      up), low in the flame, behind the bowl rim from below
+//   --glow-unscaled    the glow test point keeps its full-size offsets from
+//                      the light on a scaled (clamped) prop
 //   --glow-flame-depth-distance  the flame-point corona tests at the flame's
 //                      distance instead of its forward depth
 // --sections a,b runs only: spec, edge, oblique, phase, flame, glow, work,
@@ -90,8 +92,9 @@
       return source;
     }
     if (path !== DECOR) return source;
-    source = swap(source, '--glow-sconce-torch-point', 'glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});',
-      'glowOut: 2, glowUp: 2});');
+    var GLOW_POINT = 'glowOut: (sconce ? 2.7 : 2.5) * k - 0.5, glowUp: sconce ? attachment.size * 0.19 - k : 2 * k});';
+    source = swap(source, '--glow-sconce-torch-point', GLOW_POINT, 'glowOut: 2, glowUp: 2});');
+    source = swap(source, '--glow-unscaled', GLOW_POINT, 'glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});');
     source = swap(source, '--sconce-torch-flame', '    if (sconce) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);\n',
       '    if (false) drawWallSconceFlame(sx, sy, s, s, variant, now, fade);\n');
     source = swap(source, '--window-key',
@@ -1030,6 +1033,68 @@
       }), {behind: torchPtBehind.length, seenOn: total(torchPtBehind, 'seenOn'), atTorchPt: total(torchPtBehind, 'atTorchPt'), rows: sconceRows});
     check('glow: negative control, the same camera-facing occluder hides the modelled sconce\'s glow (no sample passes, not drawn)',
       sconceOcc.length === 27 && sconceOcc.every(function (r) { return r.seen === 0 && r.drawn === 0 && r.hidden === 1; }), sconceOcc);
+
+    // Lower walls (merge fix): attachment.size is min(35.2, 0.3 x the wall
+    // span), so on walls 0.35 and 0.25 of full height (spans 84 and 60) a
+    // prop is 25.2 or 18 and its model and flame scale by k = size / S about
+    // the wall plane, while its light stays 0.5 out and size / 4 (torch) or
+    // size / 6 (sconce) up. The test point is the full-size one in model
+    // units, scaled: the sconce's flame body centre (axis 2.7 k out, 0.19
+    // size above the rim at (S / 6 - 1) k) and the torch's point 2.5 k out
+    // and (S / 4 + 2) k up (0.3 k out and 3.3 k up of its shaft tip).
+    // Oracles: the model's own flame anchor (where its flame is drawn) is the
+    // authored rim centre or shaft tip scaled by k; the corona call is at the
+    // scaled point's projection; segment tests against the authored parts
+    // scaled by k find it clear from every eye, and the depth the frame wrote
+    // passes there. Poses: the flat-floor eye (camera 60, above these lights)
+    // and one 30 below the light, 30-90 in front, 25 degrees either side.
+    // Fixture check: the full-size offsets miss the scaled point by 0.5 or
+    // more on every clamped prop (so the check can tell them apart).
+    var clampRows = [], clampProps = [];
+    [0.35, 0.25].forEach(function (wallH) {
+      ['sconce', 'torch'].forEach(function (type) {
+        var rec = recAt(type, 24);
+        world([rec]); G.wallHeights.fill(wallH); G.buildPointLights();
+        var F = frameOf(rec), L = G.pointLights[0], k = F.at.size / S, sconceProp = type === 'sconce';
+        var anchorL = sconceProp ? {r: 0, o: SC_AXIS * k, z: SC_TOP * k} : {r: 0, o: AXIS * k, z: TIP * k};
+        var pointL = sconceProp ? {r: 0, o: SC_AXIS * k, z: SC_TOP * k + 0.19 * F.at.size} : {r: 0, o: 2.5 * k, z: (0.25 * S + 2) * k};
+        var up = F.at.flameZ - F.at.z, oldOut = sconceProp ? 2.2 : 2, oldUp = sconceProp ? F.at.size * 0.19 - 1 : 2;
+        var anchorW = G.modelAnchorWorld(G.wallPropModelFor(type, 0), G.wallPropInstance(F.at, false, {}), 'flame', {}), anchorA = localF(F, anchorL.r, anchorL.o, anchorL.z);
+        var prop = {type: type, wallH: wallH, size: F.at.size, k: k, point: [pointL.o - 0.5, pointL.z - up], light: [L.glowOut, L.glowUp], fullSize: [oldOut, oldUp],
+          anchorErr: Math.hypot(anchorW.x - anchorA.x, anchorW.y - anchorA.y, anchorW.z - anchorA.z), rows: 0};
+        prop.fullSizeMiss = Math.hypot(oldOut - prop.point[0], oldUp - prop.point[1]);
+        clampProps.push(prop);
+        function scaled(p) { return {r: p.r / k, o: p.o / k, z: p.z / k}; }
+        function blocked(eye) { return sconceProp ? sconceHit(scaled(eye), scaled(pointL)) !== '' : hitsPart(scaled(eye), scaled(pointL)); }
+        [60, L.z - 30].forEach(function (eyeZ) {
+          [30, 60, 90].forEach(function (D) {
+            [-25, 0, 25].forEach(function (deg) {
+              var a = deg * Math.PI / 180, cx = L.x + Math.sin(a) * D, cy = L.y - Math.cos(a) * D;
+              var C = pose(cx, cy, Math.atan2(L.y - cy, L.x - cx), eyeZ);
+              G.cam.pitch = (C.cameraZ - L.z) / ((L.x - cx) * C.cosAng + (L.y - cy) * C.sinAng); C = G.getCam3D();
+              var eye = {r: G.cam.x - F.ox, o: F.oy - G.cam.y, z: C.cameraZ - F.at.z};
+              var on = glowFrame(C, true), c = on.calls[0], q = project(localF(F, pointL.r, pointL.o, pointL.z), C);
+              var pp = {x: Math.floor(q.x), y: Math.floor(q.y), iz: 1 / q.depth};
+              var oq = project({x: L.x + L.nx * oldOut, y: L.y + L.ny * oldOut, z: L.z + oldUp}, C), op = {x: Math.floor(oq.x), y: Math.floor(oq.y), iz: 1 / oq.depth};
+              clampRows.push({type: type, wallH: wallH, eyeZ: Math.round(eyeZ), D: D, deg: deg, calls: on.calls.length, calledAtPoint: sameCall(c, pp),
+                clear: !blocked(eye), pointSeen: G.fxDepthNearest(pp.x, pp.y, pp.iz), seenOn: c ? c.seen : null,
+                atFullSize: c ? G.fxCorona(op.x, op.y, op.iz, c.q) : null, drawnOn: on.drawn});
+              prop.rows++;
+            });
+          });
+        });
+      });
+    });
+    world();
+    // [type, wall height, eye, D, deg, samples passing at the scaled point (the fix), at the full-size offsets]
+    out('NOTE glow clamped ' + JSON.stringify(clampProps.map(function (p) { return [p.type, p.wallH, p.size, p.point.map(function (v) { return +v.toFixed(3); }), p.fullSize.map(function (v) { return +v.toFixed(3); })]; })) +
+      ' ' + JSON.stringify(clampRows.map(function (r) { return [r.type, r.wallH, r.eyeZ, r.D, r.deg, r.seenOn, r.atFullSize]; })));
+    check('glow: on lower walls (prop size clamped to 25.2 and 18) a modelled sconce\'s and torch\'s corona tests the flame point scaled with the model (sconce: its flame body\'s centre; torch: 0.3 k out and 3.3 k up of its shaft tip), where the model draws its flame, clear of its own scaled parts from every eye, and the glow is drawn',
+      clampProps.length === 4 && clampRows.length === 72 && clampProps.every(function (p) {
+        return Math.abs(p.size - (p.wallH === 0.35 ? 25.2 : 18)) < 1e-4 && p.anchorErr < 1e-9 && p.fullSizeMiss >= 0.5 && p.rows === 18;
+      }) && clampRows.every(function (r) {
+        return r.calls === 1 && r.calledAtPoint && r.clear && r.pointSeen === 1 && r.drawnOn === 1;
+      }), {props: clampProps, rows: clampRows.filter(function (r) { return !(r.calls === 1 && r.calledAtPoint && r.clear && r.pointSeen === 1 && r.drawnOn === 1); })});
   }
 
   // ── work: pixels tested per torch below the flat-quad baseline ──
