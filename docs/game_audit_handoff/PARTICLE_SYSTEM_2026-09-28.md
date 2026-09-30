@@ -423,7 +423,10 @@ Also owed:
 - **Trivial conflicts.** `manifest.json` and the `dev.py` test list are
   append-only.
 - **Pre-existing and unrelated.** A `platforms3D` crash in `drawLayersFloor3D`
-  on a hand-started classic level also happens on the pre-S1 page.
+  on a hand-started classic level also happens on the pre-S1 page. Fixed at
+  the floor-render-crash merge: `buildClassicFloorLayerColors` in
+  `03-level-generation.js` gives classic meshes their layer colours
+  (`classic_floor_render.js`).
 
 ## 7. Q6 ownership note for the spell session
 

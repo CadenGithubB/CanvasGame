@@ -3793,6 +3793,18 @@ function generateFloorMesh() {
 //   toward the target so channels meander naturally without looping.
 //   Stream cells are carved slightly into the terrain so they sit in a
 //   shallow depression visually.
+// The layered 3D floor pass reads per-layer colours (lNColor), which Endless
+// chunks author at build time. Classic meshes have one walkable layer whose
+// colour is the finished 2D colour, so derive it only after water features
+// have painted pools and streams into colors[].
+function buildClassicFloorLayerColors(mesh) {
+  if (!mesh || !mesh.layerCount) return;
+  var n = mesh.w * mesh.h;
+  mesh.l0Color = new Array(n); mesh.l1Color = new Array(n); mesh.l2Color = new Array(n);
+  mesh.l3Color = new Array(n); mesh.l4Color = new Array(n);
+  for (var i = 0; i < n; i++) mesh.l0Color[i] = mesh.colors[i];
+}
+
 function generateWaterFeatures() {
   if (!floorMesh) return;
   var mesh = floorMesh;
@@ -4041,6 +4053,7 @@ function generateBlendedFloor() {
   console.log('[FLOOR] Pre-generating blended mesh...');
   generateFloorMesh();
   generateWaterFeatures();
+  buildClassicFloorLayerColors(floorMesh);
   console.log('[FLOOR] Blended floor complete: ' + generated + ' platforms + ' + hillsPlaced + ' hills, mesh ready for runtime');
 }
 
