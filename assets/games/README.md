@@ -687,6 +687,55 @@ not a mobile, two-hand, GPU-completion, or thermal guarantee. Manual review
 covered Player, Palm, and side views in daylight/dusk at the small preview size;
 no fullscreen visual test or UI change was made.
 
+### Staff casting rig (2026-09-27, preview-only)
+
+In **Casting studio**, **Resting pose → Staff casting (held staff)** selects a
+separate rig: the articulated right hand holds a 3D staff, then reaches and
+points it forward on the shared 2800 ms timeline. Nothing is equipped, no spell
+is cast, and normal gameplay still draws the original arms.
+
+- `15-staff-rig.js` builds the staff once (gnarled wood, leather wrap with cord
+  bands, brass collars, three prongs caging a faceted crystal) in hand units and
+  registers it in `HAND_RIG_ITEMS`. The grip's `item` names it; the hand rig
+  poses it rigidly with the palm and merges its faces into one painter order.
+  Colors come from `casterStaff`, `casterMetal` and `missileMagic`.
+- The leather wrap is the contact cylinder in `STAFF_RIG_GRIP`. The per-finger
+  curls in `HAND_RIG_REST_POSES.staff` were solved offline so each phalanx pad
+  meets it without entering it; the thumb lies over the index toward the shaft.
+- `forearm`, `root` and `arm` separate the sleeve, wrist and rigid arm turn.
+  The wrist bend spreads over a 5-unit cuff (`wristSpan`) and stays under 50°,
+  so the staff can point forward without bending the sleeve like rubber.
+- Rest keeps the rig in the right third of the view: the staff leans outward
+  with its head near the right edge, clear of the crosshair. Gather draws it up
+  and brightens the crystal; the thrust extends the arm and tips the staff about
+  60° forward so its head lands below and right of the crosshair; recovery
+  returns to the exact rest projection. A soft additive glow follows the crystal
+  while charged.
+- Like a real first-person arm, the sleeve always enters from the bottom edge or
+  the bottom-right corner, never from the side, in every phase at 3:2 and 16:9.
+  The staff's magic visuals are deliberately deferred to the particle system.
+
+`tools/game/tests/staff_rig.js` checks grip contact against the authored
+cylinder, rigid attachment in all views, wrist bend, the resting layout at three
+canvas shapes, bottom-edge arm entry, the reach-and-point motion, painter order
+and Canvas state, with six mutation controls. The existing hand-rig contracts (idle stability, seam,
+off-screen sleeve end) also cover the staff grip.
+
+Draw cost, one local Chrome sample on 2026-09-27 in a background tab at 360×240
+(mean per draw over a timeline sweep, including the browser's periodic raster
+flushes): Handle 3.5 ms, staff 7.3–7.5 ms. Visible faces rise from about 770 to
+1,600 at rest and 1,900 while pointing. The staff mesh has 1,242 vertices and
+2,310 triangles. This is not a frame-time or device measurement; the studio's
+own profiler was not run with a visible pane.
+
+### Spell HUD panel
+
+The lower-right spell panel shows on a spell change or cast and stays while the
+spell recharges, streams, or mana is short. Otherwise it holds for 2.5 s and
+fades over 0.6 s (`SPELL_HUD_HOLD_MS`, `SPELL_HUD_FADE_MS`), clearing the corner
+where the casting hand sits. It runs on game time, so pausing holds it.
+`tools/game/tests/spell_hud_fade.js` drives the production HUD on a controlled clock.
+
 ## Shared cave contracts
 
 `05-endless-world.js` owns seeded networks and their entrance portals. Portal

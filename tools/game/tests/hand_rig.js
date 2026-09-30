@@ -146,7 +146,7 @@
     var styles=G.getCastingStyleOptions().map(function(style){return style.id;});
     check('registry styles share the same rig and each have an animation recipe',G.HAND_RIG_STYLE==='arcane'&&styles.indexOf('finger_guns')>=0&&styles.every(function(style){return !!G.HAND_RIG_ANIMATIONS[G.getCastingStyle(style).handAnimation];}));
     var idleStable=true,completionStable=true,styleBoundaries=true;
-    styles.forEach(function(style){['reach','handle','cradle'].forEach(function(grip){
+    styles.forEach(function(style){['reach','handle','cradle','staff'].forEach(function(grip){
       var rest=G.sampleHandRigRestPose(grip,style),restText=JSON.stringify(rest);
       G.poseHandRigMesh(mesh,rest,0);var restPositions=Array.prototype.slice.call(mesh.positions);
       [0,500,800,1050,1420,1730,2200,2450,2800,10800,1e12].forEach(function(time){
@@ -325,7 +325,7 @@
     var pairs=palmWrist.map(function(i){var d=mesh.desc[i],best=-1,error=Infinity;armWrist.forEach(function(j){var q=mesh.desc[j],delta=Math.hypot(d.x-q.x,d.y-q.y,d.z-q.z);if(delta<error){error=delta;best=j;}});return [i,best,error];});
     check('palm and forearm meet at identical wrist-ring positions',palmWrist.length>3&&palmWrist.length===armWrist.length&&pairs.every(function(pair){return pair[2]<1e-9;}));
     var seamGood=true;
-    ['reach','handle','cradle'].forEach(function(grip){[0,1050,1600,2200].forEach(function(t){[-1,0,1].forEach(function(yaw){G.poseHandRigMesh(mesh,G.sampleHandRigPose(t,grip),yaw);pairs.forEach(function(pair){var i=pair[0]*3,j=pair[1]*3;if(Math.hypot(mesh.positions[i]-mesh.positions[j],mesh.positions[i+1]-mesh.positions[j+1],mesh.positions[i+2]-mesh.positions[j+2])>1e-9)seamGood=false;});});});});
+    ['reach','handle','cradle','staff'].forEach(function(grip){[0,1050,1600,2200].forEach(function(t){[-1,0,1].forEach(function(yaw){G.poseHandRigMesh(mesh,G.sampleHandRigPose(t,grip),yaw);pairs.forEach(function(pair){var i=pair[0]*3,j=pair[1]*3;if(Math.hypot(mesh.positions[i]-mesh.positions[j],mesh.positions[i+1]-mesh.positions[j+1],mesh.positions[i+2]-mesh.positions[j+2])>1e-9)seamGood=false;});});});});
     check('wrist attachment remains closed through bend and turn poses',seamGood);
     if(__argv.indexOf('--omit-handle-roll')>=0)G.HAND_RIG_REST_POSES.handle.axialRoll=0;
     // Local +X runs across the grip opening. Read its projected direction from
@@ -451,7 +451,7 @@
     if(__argv.indexOf('--restore-short-sleeve')>=0)G.HAND_RIG_ANIMATIONS.finger_guns.root=[[-1.05,0,1.48],[-1.08,0,1.44],[-.90,.08,1.25]];
     var sleeveEndHidden=true,firstSleeveFailure=null,sleeveEnd=armRings[0];
     [[360,240],[1280,720]].forEach(function(size){G.canvas={width:size[0],height:size[1]};
-      styles.forEach(function(style){['reach','handle','cradle'].forEach(function(grip){
+      styles.forEach(function(style){['reach','handle','cradle','staff'].forEach(function(grip){
         [0,800,1050,1280,1420,1600,2200,2450].forEach(function(time){
           resetCommands();G.drawFirstPersonHandRig(time,0,grip,style);
           var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,minDepth=Infinity;

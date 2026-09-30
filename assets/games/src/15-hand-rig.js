@@ -9,7 +9,8 @@ var HAND_RIG_DEFAULT_GRIP = 'handle';
 var HAND_RIG_GRIP = HAND_RIG_DEFAULT_GRIP;
 var HAND_RIG_STYLE = 'arcane';
 var HAND_RIG_MATERIAL = {skin:0,cloth:1,cuff:2,lining:3,trim:4};
-// Reusable hand shapes only; these do not equip or create an item.
+// Reusable hand shapes; none equips an item. The staff grip also draws a
+// held preview staff (see HAND_RIG_ITEMS below).
 var HAND_RIG_REST_POSES = {
   reach:{finger:[.25,.32,.15],thumb:[.14,.23,.16],axialRoll:0},
   // A staff grip rolls around the forearm's own longitudinal axis, not around
@@ -19,8 +20,23 @@ var HAND_RIG_REST_POSES = {
     root:[[.80,3.02,-.07],[.70,3.01,-.04],[1.15,3.01,-.07]],
     // A held handle thrusts away even when the free-hand style has recoil.
     placement:{distance:[57,58,70],anchorX:[.735,.732,.680],anchorY:[.930,.928,.855]}},
-  cradle:{finger:[.48,.63,.32],thumb:[.22,.39,.28],axialRoll:0}
+  cradle:{finger:[.48,.63,.32],thumb:[.22,.39,.28],axialRoll:0},
+  // Staff casting is its own rig, not a free-hand style. The hand closes on the
+  // shaft authored in 15-staff-rig.js; each finger's curl was solved against
+  // that cylinder so the pads meet it without entering it. `forearm` holds the
+  // sleeve, `root` the hand, and their wrist bend spreads over `wristSpan`
+  // units of cuff; `arm` then turns both rigidly for the reach. Rest leans the
+  // staff out along the right edge; the thrust tips it forward beside the aim.
+  staff:{fingers:[[.95,1.65,.45],[1.45,1.55,.70],[1.35,1.50,.70],[.85,1.35,.50]],
+    thumb:[.19,1.03,.34],axialRoll:0,item:'staff',fingerSpread:.35,
+    thumbPose:{splay:.63,opposition:.16,twist:.02},
+    forearm:[-.895,.032,1.031],root:[[-.86,.249,1.211],[-.817,.211,1.348],[-.971,.644,1.043]],
+    arm:[[0,0,0],[.07,0,0],[-.349,.524,-.524]],wristSpan:5,
+    placement:{distance:[66,64,84],anchorX:[.79,.795,.68],anchorY:[.95,.94,.8]}}
 };
+// Held items register geometry by id; a grip names the one it holds. An item
+// is posed rigidly with the hand and shares its projection, light and ordering.
+var HAND_RIG_ITEMS = {};
 // Animation recipes share one skeleton and renderer. The preference catalog
 // maps a stable style ID to one of these recipes; spells never read this data.
 // Digit order: index, middle, ring, little, thumb. Angles are local radians.
@@ -240,15 +256,16 @@ function handRigDigitFrame(d,pose) {
   var rest=HAND_RIG_REST_POSES[pose.grip]||HAND_RIG_REST_POSES.reach;
   var animation=handRigAnimation(pose),slot=d.slot;
   var flex=[0,1,2].map(function(i){return handRigBlend(animation.fingers.map(function(frame){return frame[slot][i];}),pose);});
-  // Item grip is an independent constraint, not a style or unlock. Until an
-  // item author supplies contact targets, occupied hands retain their template.
-  if(pose.grip!=='reach')flex=(d.thumb?rest.thumb:rest.finger).map(function(value,i){return value+(d.thumb?0:d.curl*(i===2?.6:1));});
+  // Item grip is an independent constraint, not a style or unlock. Occupied
+  // hands keep their template; a held item's grip authors per-finger curls.
+  if(pose.grip!=='reach')flex=!d.thumb&&rest.fingers?rest.fingers[slot].slice():
+    (d.thumb?rest.thumb:rest.finger).map(function(value,i){return value+(d.thumb?0:d.curl*(i===2?.6:1));});
   var handedness=d.handedness||1;
-  var occupied=pose.grip!=='reach';
-  var splay=d.thumb?(occupied?.88:handRigBlend(animation.thumbSplay,pose))*handedness:
-    d.splay*(occupied?1:handRigBlend(animation.fingerSpread,pose));
-  var opposition=d.thumb?(occupied?(pose.grip==='handle'?.55:.20):handRigBlend(animation.thumbOpposition,pose))*handedness:0;
-  var twist=d.thumb?(occupied?-.45:handRigBlend(animation.thumbTwist,pose))*handedness:0;
+  var occupied=pose.grip!=='reach',hold=occupied&&rest.thumbPose;
+  var splay=d.thumb?(occupied?(hold?hold.splay:.88):handRigBlend(animation.thumbSplay,pose))*handedness:
+    d.splay*(occupied?(rest.fingerSpread!==undefined?rest.fingerSpread:1):handRigBlend(animation.fingerSpread,pose));
+  var opposition=d.thumb?(occupied?(hold?hold.opposition:pose.grip==='handle'?.55:.20):handRigBlend(animation.thumbOpposition,pose))*handedness:0;
+  var twist=d.thumb?(occupied?(hold?hold.twist:-.45):handRigBlend(animation.thumbTwist,pose))*handedness:0;
   var angles=[flex[0],flex[0]+flex[1],flex[0]+flex[1]+flex[2]];
   var centers=[[0,0,0]],cy=0,cz=0;
   for(var i=0;i<3;i++){
@@ -257,17 +274,34 @@ function handRigDigitFrame(d,pose) {
   }
   return {angles:angles,centers:centers,splay:splay,opposition:opposition,twist:twist};
 }
+function handRigPoseFrame(pose,yaw) {
+  // A face-on inspection isolates the silhouette from first-person wrist pose
+  // and foreshortening. The ordinary player/side views retain their full motion.
+  var palmStudy=yaw==='palm',rest=HAND_RIG_REST_POSES[pose.grip];
+  var angles=palmStudy?[0,0,Math.PI/2]:handRigRootAngles(pose,0);
+  var arm=!palmStudy&&rest.arm?[0,1,2].map(function(i){return handRigBlend([rest.arm[0][i],rest.arm[1][i],rest.arm[2][i]],pose);}):null;
+  // A grip may hold its forearm apart from the hand; the wrist bend between
+  // them then spreads across `wristSpan`. Otherwise both start at rest.
+  return {angles:angles,neutral:palmStudy?angles:rest.forearm||handRigRootFrames(pose)[0],
+    inspectionYaw:Number.isFinite(yaw)?yaw:0,axialCos:Math.cos(rest.axialRoll),axialSin:Math.sin(rest.axialRoll),
+    arm:arm,wristSpan:rest.wristSpan||20};
+}
+// Wrist rotation scaled by `weight`, then any rigid arm turn. Inspection yaw
+// turns the finished arm as a whole, so it stays outermost when an arm exists.
+function handRigPlace(frame,x,y,z,weight) {
+  var angles=frame.angles,neutral=frame.neutral,arm=frame.arm;
+  var rotated=handRigRotate(x,y,z,neutral[0]+(angles[0]-neutral[0])*weight,
+    neutral[1]+(angles[1]-neutral[1])*weight+(arm?0:frame.inspectionYaw),neutral[2]+(angles[2]-neutral[2])*weight);
+  if(!arm)return rotated;
+  rotated=handRigRotate(rotated[0],rotated[1],rotated[2],arm[0],arm[1],arm[2]);
+  return frame.inspectionYaw?handRigRotate(rotated[0],rotated[1],rotated[2],0,frame.inspectionYaw,0):rotated;
+}
 function poseHandRigMesh(mesh,pose,yaw) {
   var P=mesh.positions,N=mesh.normals,F=mesh.faces;
   N.fill(0);
   var digitFrames=mesh.digits.map(function(d){return handRigDigitFrame(d,pose);});
-  // A face-on inspection isolates the silhouette from first-person wrist pose
-  // and foreshortening. The ordinary player/side views retain their full motion.
-  var palmStudy=yaw==='palm';
-  var angles=palmStudy?[0,0,Math.PI/2]:handRigRootAngles(pose,0);
-  var neutral=palmStudy?angles:handRigRootFrames(pose)[0],inspectionYaw=Number.isFinite(yaw)?yaw:0;
-  var axialRoll=HAND_RIG_REST_POSES[pose.grip].axialRoll;
-  var axialCos=Math.cos(axialRoll),axialSin=Math.sin(axialRoll);
+  var rig=handRigPoseFrame(pose,yaw);mesh.frame=rig;
+  var axialCos=rig.axialCos,axialSin=rig.axialSin,axialRoll=HAND_RIG_REST_POSES[pose.grip].axialRoll;
   for(var i=0;i<mesh.desc.length;i++){
     var d=mesh.desc[i],x=d.x,y=d.y,z=d.z,weight=1,axisX=0,axisZ=0;
     if(d.kind===2){
@@ -284,7 +318,7 @@ function poseHandRigMesh(mesh,pose,yaw) {
         center[2]+Math.sin(angle)*along+Math.cos(ringAngle)*pad,0,frame.opposition,frame.splay);
       x=finger.x+local[0];y=finger.y+local[1];z=finger.z+local[2];
     } else if(d.kind===1){
-      weight=handRigEase((y+20)/20);
+      weight=handRigEase((y+rig.wristSpan)/rig.wristSpan);
       // A small delayed cuff bend visibly differs from rigid hand rotation.
       axisX=d.axisX;axisZ=Math.sin((-y/20)*Math.PI)*pose.settle*5;z+=axisZ;
     }
@@ -298,8 +332,7 @@ function poseHandRigMesh(mesh,pose,yaw) {
     }
     // The entire forearm shares the outward rest orientation. Only additional
     // casting twist fades toward the elbow, avoiding a permanently twisted arm.
-    var rotated=handRigRotate(x,y,z,neutral[0]+(angles[0]-neutral[0])*weight,
-      neutral[1]+(angles[1]-neutral[1])*weight+inspectionYaw,neutral[2]+(angles[2]-neutral[2])*weight);
+    var rotated=handRigPlace(rig,x,y,z,weight);
     P[i*3]=rotated[0];P[i*3+1]=rotated[1];P[i*3+2]=rotated[2];
   }
   // Area-weighted vertex normals follow the deformed surface, not a painted
@@ -347,18 +380,20 @@ function handRigColor(level,material,palette) {
   else rgb=handRigRgbMix(ramp[1],ramp[2],(t-.58)/.42);
   return 'rgb('+rgb[0]+','+rgb[1]+','+rgb[2]+')';
 }
-function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
-  if(!MODE3D||shopOpen)return;
-  var begin=performance.now(),mesh=buildHandRigMesh(),pose=sampleHandRigPose(timeMs,grip||HAND_RIG_GRIP,styleId||HAND_RIG_STYLE);
-  var palmStudy=yaw==='palm';
-  yaw=palmStudy?'palm':Number.isFinite(yaw)?yaw:0;poseHandRigMesh(mesh,pose,yaw);
-  var P=mesh.positions,N=mesh.normals,S=mesh.screen,I=mesh.light,faces=mesh.faces;
-  var palette=handRigMaterialPalette();
-  var placement=handRigPlacementFrames(pose),distance=palmStudy?48:handRigBlend(placement.distance,pose);
-  var focal=canvas.height*1.28,anchorX=canvas.width*(palmStudy?.70:handRigBlend(placement.anchorX,pose));
-  var anchorY=canvas.height*(palmStudy?.78:handRigBlend(placement.anchorY,pose));
-  var ambient=typeof ambientLight==='number'?Math.max(.25,Math.min(1,ambientLight)):.8;
-  for(var v=0;v<mesh.desc.length;v++){
+// Rigid held item: same axial roll, wrist and arm turn as the palm (weight 1).
+// The transform is rotation only, so authored unit normals follow it exactly.
+function poseHandRigItem(item,frame) {
+  var L=item.local,LN=item.localNormals,P=item.positions,N=item.normals,c=frame.axialCos,s=frame.axialSin;
+  for(var p=0;p<item.count*3;p+=3){
+    var q=handRigPlace(frame,L[p]*c+L[p+2]*s,L[p+1],L[p+2]*c-L[p]*s,1);
+    var n=handRigPlace(frame,LN[p]*c+LN[p+2]*s,LN[p+1],LN[p+2]*c-LN[p]*s,1);
+    P[p]=q[0];P[p+1]=q[1];P[p+2]=q[2];N[p]=n[0];N[p+1]=n[1];N[p+2]=n[2];
+  }
+  return item;
+}
+function handRigProjectPart(part,count,distance,focal,anchorX,anchorY,ambient) {
+  var P=part.positions,N=part.normals,S=part.screen,I=part.light;
+  for(var v=0;v<count;v++){
     var p=v*3,depth=distance-P[p+2];
     S[p]=anchorX+P[p]*focal/depth;S[p+1]=anchorY-P[p+1]*focal/depth;S[p+2]=depth;
     var length=Math.hypot(N[p],N[p+1],N[p+2])||1;
@@ -366,7 +401,9 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
     var rim=Math.max(0,(.65*N[p]-.2*N[p+1]-.72*N[p+2])/length);
     I[v]=.27+ambient*.16+diffuse*.55+rim*.13;
   }
-  var order=mesh.order;order.length=0;
+}
+function handRigCullPart(part,offset,order) {
+  var S=part.screen,faces=part.faces;
   for(var f=0;f<faces.length;f++){
     var F=faces[f],a=F[0]*3,b=F[1]*3,c=F[2]*3;
     if(S[a+2]<3||S[b+2]<3||S[c+2]<3)continue;
@@ -374,21 +411,50 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
     if(area>=-.015)continue;
     if(Math.max(S[a],S[b],S[c])<0||Math.min(S[a],S[b],S[c])>canvas.width||
       Math.max(S[a+1],S[b+1],S[c+1])<0||Math.min(S[a+1],S[b+1],S[c+1])>canvas.height)continue;
-    mesh.faceDepth[f]=(S[a+2]+S[b+2]+S[c+2])/3;order.push(f);
+    part.faceDepth[f]=(S[a+2]+S[b+2]+S[c+2])/3;order.push(offset+f);
   }
-  order.sort(function(a,b){return mesh.faceDepth[b]-mesh.faceDepth[a]||a-b;});
+}
+function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
+  if(!MODE3D||shopOpen)return;
+  var begin=performance.now(),mesh=buildHandRigMesh(),pose=sampleHandRigPose(timeMs,grip||HAND_RIG_GRIP,styleId||HAND_RIG_STYLE);
+  var palmStudy=yaw==='palm';
+  yaw=palmStudy?'palm':Number.isFinite(yaw)?yaw:0;poseHandRigMesh(mesh,pose,yaw);
+  var S=mesh.screen,I=mesh.light,faces=mesh.faces,handFaces=faces.length;
+  var palette=handRigMaterialPalette(),itemBase=palette.length,itemLift=null;
+  var itemDef=HAND_RIG_REST_POSES[pose.grip].item,item=null;
+  itemDef=itemDef&&Object.prototype.hasOwnProperty.call(HAND_RIG_ITEMS,itemDef)?HAND_RIG_ITEMS[itemDef]:null;
+  if(itemDef){
+    item=poseHandRigItem(itemDef.build(),mesh.frame);
+    palette=palette.concat(itemDef.palette());itemLift=itemDef.lift(pose);
+  }
+  var placement=handRigPlacementFrames(pose),distance=palmStudy?48:handRigBlend(placement.distance,pose);
+  var focal=canvas.height*1.28,anchorX=canvas.width*(palmStudy?.70:handRigBlend(placement.anchorX,pose));
+  var anchorY=canvas.height*(palmStudy?.78:handRigBlend(placement.anchorY,pose));
+  var ambient=typeof ambientLight==='number'?Math.max(.25,Math.min(1,ambientLight)):.8;
+  handRigProjectPart(mesh,mesh.desc.length,distance,focal,anchorX,anchorY,ambient);
+  if(item)handRigProjectPart(item,item.count,distance,focal,anchorX,anchorY,ambient);
+  var order=mesh.order;order.length=0;
+  handRigCullPart(mesh,0,order);
+  if(item)handRigCullPart(item,handFaces,order);
+  // Hand and item faces share one far-to-near order; item indices follow the hand's.
+  if(item)order.sort(function(a,b){
+    return (b<handFaces?mesh.faceDepth[b]:item.faceDepth[b-handFaces])-
+      (a<handFaces?mesh.faceDepth[a]:item.faceDepth[a-handFaces])||a-b;});
+  else order.sort(function(a,b){return mesh.faceDepth[b]-mesh.faceDepth[a]||a-b;});
   ctx.save();
   try {
     ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.shadowBlur=0;
     ctx.lineJoin='round';ctx.lineWidth=.55;
     for(var fi=0;fi<order.length;fi++){
-      var face=faces[order[fi]],ia=face[0],ib=face[1],ic=face[2],aa=ia*3,bb=ib*3,cc=ic*3;
+      var k=order[fi],held=k>=handFaces,face=held?item.faces[k-handFaces]:faces[k];
+      if(held){S=item.screen;I=item.light;}else{S=mesh.screen;I=mesh.light;}
+      var ia=face[0],ib=face[1],ic=face[2],aa=ia*3,bb=ib*3,cc=ic*3;
       var x0=S[aa],y0=S[aa+1],x1=S[bb],y1=S[bb+1],x2=S[cc],y2=S[cc+1];
       var den=(x1-x0)*(y2-y0)-(x2-x0)*(y1-y0);
       var gx=((I[ib]-I[ia])*(y2-y0)-(I[ic]-I[ia])*(y1-y0))/den;
       var gy=((x1-x0)*(I[ic]-I[ia])-(x2-x0)*(I[ib]-I[ia]))/den;
-      var mag=gx*gx+gy*gy,shade,material=face[3];
-      var materialLift=material===HAND_RIG_MATERIAL.trim ? .07 :
+      var mag=gx*gx+gy*gy,shade,material=held?itemBase+face[3]:face[3];
+      var materialLift=held?itemLift[face[3]]:material===HAND_RIG_MATERIAL.trim ? .07 :
         material===HAND_RIG_MATERIAL.lining ? .025 : 0;
       var rawLo=Math.min(I[ia],I[ib],I[ic]),rawHi=Math.max(I[ia],I[ib],I[ic]);
       var lo=rawLo+materialLift,hi=rawHi+materialLift;
@@ -402,6 +468,7 @@ function drawFirstPersonHandRig(timeMs,yaw,grip,styleId) {
       // Subpixel seam cover, not an outline or lower-resolution raster layer.
       ctx.stroke();
     }
+    if(itemDef&&itemDef.overlay)itemDef.overlay(item,pose,palette.slice(itemBase));
   } finally {ctx.restore();}
   _handRigStats.visibleFaces=order.length;_handRigStats.lastRenderMs=performance.now()-begin;
 }

@@ -9,6 +9,10 @@
 //   --window-relative-variant  restores the pre-F1 wall-decoration variant key
 //                              (window-relative gridX/Y): must reproduce the
 //                              Stage B pins, so F1's re-key is the only change
+//   --pre-fade-spell-panel     drops the spell HUD fade's trailing globalAlpha
+//                              reset; the scenes record inside the fade's hold,
+//                              so this is the pre-fade panel's exact command
+//                              stream and must reproduce the F1 pins
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   function option(name) { var i = __argv.indexOf(name); return i >= 0 ? __argv[i + 1] : null; }
@@ -20,6 +24,12 @@
     out((ok ? 'PASS ' : 'FAIL ') + name + (ok ? '' : ' ' + JSON.stringify(detail === undefined ? null : detail)));
   }
   function mutate(path, source) {
+    if (__argv.indexOf('--pre-fade-spell-panel') >= 0 && path === 'src/15-render-hud-menu.js') {
+      var reset = '    ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);\n' +
+        '    ctx.globalAlpha = 1;\n  }\n';
+      if (source.split(reset).length !== 2) throw Error('MUTATION_ANCHOR --pre-fade-spell-panel');
+      return source.replace(reset, reset.replace('    ctx.globalAlpha = 1;\n', ''));
+    }
     if (__argv.indexOf('--window-relative-variant') >= 0 && path === 'src/07-decorations-lighting.js') {
       var key = "  if (Number.isFinite(dec.worldX) && Number.isFinite(dec.worldY) && typeof cell === 'number' && cell > 0) {\n";
       if (source.split(key).length !== 2) throw Error('MUTATION_ANCHOR --window-relative-variant');

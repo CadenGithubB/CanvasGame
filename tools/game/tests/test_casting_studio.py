@@ -12,7 +12,9 @@ class CastingStudioTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         # 89 after S2b; S3 added "studio cycles replay the same New ambient
         # field" (each cycle's fresh pool primes its own field and embers).
-        self.assertIn("CASTING_STUDIO_RESULT PASS 90", result.stdout.splitlines())
+        # 91 with the held-staff merge: "staff casting rig is a selectable
+        # preview, not an equipped item".
+        self.assertIn("CASTING_STUDIO_RESULT PASS 91", result.stdout.splitlines())
 
     def _assert_mutation_fails(self, flag: str, check: str, cause: str = "") -> None:
         result = run_js(Path(__file__).with_name("casting_studio.js"), [flag], timeout=120)

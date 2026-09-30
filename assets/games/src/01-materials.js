@@ -145,6 +145,9 @@ var GAME_MATERIAL_COLORS = {
   casterSkin: {shadow:'#714b40', base:'#b98265', light:'#e2bb94', crease:'#755047', nail:'#d9b59c'},
   casterCloth: {deep:'#16242e', mid:'#344b58', lit:'#607a83', cuff:'#4c3c2c', linen:'#c4b493'},
   casterMetal: {shadow:'#50422c', base:'#a78b54', light:'#dfc78d'},
+  // Held staff (15-staff-rig.js): gnarled wood, leather grip wrap and lacing.
+  casterStaff: {woodDeep:'#2e1d12', wood:'#6a4529', woodLit:'#a4774a', grain:'#3f2819',
+    wrapDeep:'#23160f', wrap:'#5b3a26', wrapLit:'#8d6343', lacing:'#c9b48a'},
   // Ashen Reliquary interior stone. `base` remains the compatibility/fallback
   // color; the secondary roles are blended softly into world-authored albedo.
   caveStone: {

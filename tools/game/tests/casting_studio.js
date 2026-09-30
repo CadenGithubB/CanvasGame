@@ -274,6 +274,10 @@
   check('handle grip selection stops the flourish and returns to rest',!hand.playing&&hand.time===0&&hand.live.HAND_RIG_GRIP==='handle'&&G.document.getElementById('castingStudioTime').value==='0');
   G.setCastingStudioHandGrip('cradle');
   check('cradle is scoped shape data, not an equipped item',hand.live.HAND_RIG_GRIP==='cradle'&&hand.live.equipment===restingEquipment&&G.equipment===baseline.equipment&&G.HAND_RIG_GRIP===rigBaseline.grip);
+  G.setCastingStudioHandGrip('staff');
+  check('staff casting rig is a selectable preview, not an equipped item',hand.grip==='staff'&&hand.live.HAND_RIG_GRIP==='staff'&&!hand.playing&&hand.time===0&&
+    hand.live.equipment===restingEquipment&&G.equipment===baseline.equipment&&G.HAND_RIG_GRIP===rigBaseline.grip&&
+    G.document.getElementById('castingStudioGrip').value==='staff'&&/staff casting rig/.test(G.castingStudioDescribe(hand)));
   G.setCastingStudioHandGrip('invalid');
   check('invalid resting template safely falls back to handle',hand.grip==='handle'&&hand.live.HAND_RIG_GRIP==='handle'&&G.document.getElementById('castingStudioGrip').value==='handle');
   G.setCastingStudioHandGrip('reach');

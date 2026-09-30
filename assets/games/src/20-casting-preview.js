@@ -300,7 +300,8 @@ function castingStudioDraw(job) {
 function castingStudioDescribe(job) {
   if(job.mode==='hand')return castingStudioArtLabel(job)+' · neutral hand motion study · '+job.light+
     ' · '+handStudioPhase(job.time)+' · '+Math.round(job.time)+' / '+HAND_STUDIO_CYCLE_MS+' ms'+
-    ' · '+job.style+' style · '+job.grip+' resting template · ¼-speed casting flourish · no equipped item, spell or damage';
+    (job.grip==='staff'?' · staff casting rig · held staff preview, not equipped · ¼-speed reach and point · no spell or damage':
+    ' · '+job.style+' style · '+job.grip+' resting template · ¼-speed casting flourish · no equipped item, spell or damage');
   if(job.mode==='gallery'){
     var stats=typeof getSpellVisualStats==='function'?getSpellVisualStats():null;
     return castingStudioArtLabel(job)+' · '+job.gallerySceneLabel+' · '+job.light+' · '+job.galleryPhase+
@@ -471,7 +472,7 @@ function setCastingStudioHandView(yaw) {
 
 function setCastingStudioHandGrip(grip) {
   if(_castingStudio&&(_castingStudio.profile||_castingStudio.fullscreenPending))return;
-  _castingStudioGrip=grip==='reach'||grip==='handle'||grip==='cradle'?grip:
+  _castingStudioGrip=grip==='reach'||grip==='handle'||grip==='cradle'||grip==='staff'?grip:
     typeof HAND_RIG_DEFAULT_GRIP==='string'?HAND_RIG_DEFAULT_GRIP:'handle';
   castingStudioUpdateChoices();
   if(_castingStudioMode!=='hand')return;
@@ -651,7 +652,8 @@ function castingStudioArtworkStats() {
   return {
     hands:typeof getCastingArtworkStats==='function'?getCastingArtworkStats():{builds:0,buildMs:0,bytes:0},
     missile:typeof getSpellVisualStats==='function'?(function(stats){return {builds:stats.glowBuilds,buildMs:stats.glowBuildMs,bytes:stats.glowBytes,spellVisuals:stats};}(getSpellVisualStats())):{builds:0,buildMs:0,bytes:0},
-    handRig:typeof getHandRigStats==='function'?getHandRigStats():{vertices:0,triangles:0,visibleFaces:0,buildMs:0,builds:0,lastRenderMs:0,topologyBytes:0}
+    handRig:typeof getHandRigStats==='function'?getHandRigStats():{vertices:0,triangles:0,visibleFaces:0,buildMs:0,builds:0,lastRenderMs:0,topologyBytes:0},
+    staffRig:typeof getStaffRigStats==='function'?getStaffRigStats():{vertices:0,triangles:0,buildMs:0,builds:0,topologyBytes:0}
   };
 }
 
@@ -747,6 +749,7 @@ async function profileCastingStudio(mode) {
       if (typeof clearCastingArtworkCache==='function') clearCastingArtworkCache();
       if (typeof clearSpellVisualCache==='function') clearSpellVisualCache();
       if(job.mode==='hand'&&typeof clearHandRigCache==='function')clearHandRigCache();
+      if(job.mode==='hand'&&typeof clearStaffRigCache==='function')clearStaffRigCache();
       var before=castingStudioArtworkStats(), coldLegacy=0, firstFrame=null, renders=[], intervals=[], stages={},rigTimes=[];
       var coldBuildFrames=[], hits=[];
       for (var cycle=0;cycle<2;cycle++) {
@@ -762,7 +765,7 @@ async function profileCastingStudio(mode) {
           var cacheBefore=castingStudioArtworkStats(), sample=castingStudioDraw(job), cacheAfter=castingStudioArtworkStats();
           if (firstFrame===null) firstFrame=sample.renderMs;
           coldLegacy+=sample.legacyBuildMs;
-          if (cycle===0 && (sample.legacyBuildMs>0 || cacheAfter.hands.builds>cacheBefore.hands.builds || cacheAfter.missile.builds>cacheBefore.missile.builds||cacheAfter.handRig.builds>cacheBefore.handRig.builds))
+          if (cycle===0 && (sample.legacyBuildMs>0 || cacheAfter.hands.builds>cacheBefore.hands.builds || cacheAfter.missile.builds>cacheBefore.missile.builds||cacheAfter.handRig.builds>cacheBefore.handRig.builds||cacheAfter.staffRig.builds>cacheBefore.staffRig.builds))
             coldBuildFrames.push({timeMs:job.time,renderCommandsMs:sample.renderMs});
           if (cycle===1) {
             renders.push(sample.renderMs); if (previous!==null) intervals.push(ts-previous);
@@ -816,7 +819,7 @@ async function profileCastingStudio(mode) {
   var panel=document.createElement('details');panel.id='castingStudioPanel';
   panel.style.cssText='margin-top:8px;padding:6px;border:1px solid #536777;border-radius:4px;background:#17222b';
   var summary=document.createElement('summary');summary.textContent='Casting studio';panel.appendChild(summary);
-  var note=document.createElement('p');note.textContent='Handle grip is the default upright resting pose; Play previews your personal Casting Style at ¼ speed. All styles are available; your selection is remembered in this browser when storage is available. Resting grip templates stay independent and show shape only: no item is equipped, no spell is cast. The rejected flat study is archived in the mode selector.';
+  var note=document.createElement('p');note.textContent='Handle grip is the default upright resting pose; Play previews your personal Casting Style at ¼ speed. All styles are available; your selection is remembered in this browser when storage is available. Resting grip templates stay independent and show shape only: no item is equipped, no spell is cast. Staff casting is a separate rig: the hand holds a 3D staff, then reaches and points it forward (preview only; nothing is equipped). The rejected flat study is archived in the mode selector.';
   note.style.cssText='margin:6px 0;max-width:720px';panel.appendChild(note);
   function select(id,label,options,fn){
     var wrap=document.createElement('label');wrap.style.margin='2px 8px 2px 0';wrap.textContent=label+' ';
@@ -829,7 +832,7 @@ async function profileCastingStudio(mode) {
   select('castingStudioScene','Gallery scene',galleryScenes.map(function(scene){return[scene.id,scene.label];}),setCastingStudioScene);
   var styleOptions=typeof getCastingStyleOptions==='function'?getCastingStyleOptions():[{id:'arcane',label:'Arcane (default)'}];
   select('castingStudioStyle','Casting Style',styleOptions.map(function(style){return[style.id,style.label];}),setCastingStudioStyle);
-  select('castingStudioGrip','Resting pose',[['reach','Reach'],['handle','Handle grip'],['cradle','Cradle']],setCastingStudioHandGrip);
+  select('castingStudioGrip','Resting pose',[['reach','Reach'],['handle','Handle grip'],['cradle','Cradle'],['staff','Staff casting (held staff)']],setCastingStudioHandGrip);
   select('castingStudioHandView','Hand inspection view',[['0','Player view'],['palm','Palm study'],['-0.8','Left side'],['0.8','Right side'],[String(Math.PI),'Back']],setCastingStudioHandView);
   select('castingStudioPhase','Hand pose',[['0','Ready'],['780','Gather'],['1220','Release'],['1560','Follow-through'],['2110','Recovery']],scrubCastingStudio);
   var scrubLabel=document.createElement('label');scrubLabel.textContent='Pose time ';scrubLabel.style.marginRight='8px';
