@@ -13,8 +13,12 @@ class CastingStudioTests(unittest.TestCase):
         # 89 after S2b; S3 added "studio cycles replay the same New ambient
         # field" (each cycle's fresh pool primes its own field and embers).
         # 91 with the held-staff merge: "staff casting rig is a selectable
-        # preview, not an equipped item".
-        self.assertIn("CASTING_STUDIO_RESULT PASS 91", result.stdout.splitlines())
+        # preview, not an equipped item". 93 after the merge fix that made the
+        # spell HUD's spell-change time studio state: "casting study spell HUD
+        # is idle before the practice cast and shown after it, on studio state
+        # only" and "gallery HUD names the scene spell for the whole loop,
+        # independent of the live spell-change time".
+        self.assertIn("CASTING_STUDIO_RESULT PASS 93", result.stdout.splitlines())
 
     def _assert_mutation_fails(self, flag: str, check: str, cause: str = "") -> None:
         result = run_js(Path(__file__).with_name("casting_studio.js"), [flag], timeout=120)
@@ -65,6 +69,21 @@ class CastingStudioTests(unittest.TestCase):
         self._assert_mutation_fails("--thin-ignores-pin",
                                     "a studio frame draws the studio pool through the fx stages and the governor never thins it",
                                     '"considered":14,"thinned":12,')   # S5 re-pin: see the test above
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_studio_hud_reading_the_live_spell_change_time(self) -> None:
+        # Merge fix: without the studio key the reset value leaks into the
+        # live game and later frames read the live value.
+        self._assert_mutation_fails("--studio-hud-unscoped",
+                                    "casting study spell HUD is idle before the practice cast and shown after it, on studio state only",
+                                    '"live":false')
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_gallery_label_hidden_by_the_idle_fade(self) -> None:
+        # Merge fix: the held-staff fade hid the gallery's spell label on every frame.
+        self._assert_mutation_fails("--gallery-hud-idle",
+                                    "gallery HUD names the scene spell for the whole loop, independent of the live spell-change time",
+                                    '"start":[],"end":[]')
 
 
 if __name__ == "__main__":

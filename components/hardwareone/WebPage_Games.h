@@ -38357,7 +38357,7 @@ var _castingStudioScene = 'bolt:missile';
 var CASTING_STUDIO_REQUEST_MS = 600;
 var CASTING_STUDIO_STEP_MS = 1000 / 120;
 var _castingStudioKeys = (
-  'pos cam vel settings equipment spells stats health mana currentSpellIdx lastShotMs castAnimUntil ' +
+  'pos cam vel settings equipment spells stats health mana currentSpellIdx lastShotMs lastSpellChangeMs castAnimUntil ' +
   '_castingPoseState walkBobPhase running gameOverState menuOpen shopOpen settingsOpen inventoryOpen forgeOpen ' +
   'overviewActive calibrating MODE3D CAM_FOLLOW CONTROL_MODE USE_MOUSE USE_GAMEPAD gpLast ' +
   '_mouseHeld _attackHeld flameStreamActive flameStreamLastTick flameStreamStartMs flameStreamAng flameStreamRange ' +
@@ -38513,6 +38513,11 @@ function castingStudioResetCycle(job) {
   if (typeof effectRegistryStudioReset === 'function') effectRegistryStudioReset(job.live, job);
   job.live.stats = {totalDamageDone:0, totalDamageTaken:0, totalManaConsumed:0, totalEnemiesKilled:0};
   job.live.mana = MANA_MAX; job.live.lastShotMs = -1e12; job.live.castAnimUntil = 0;
+  // The spell HUD fades on the studio clock (2e12 + t), so its activity time
+  // is studio state. The gallery labels its scene's spell for the whole loop
+  // (shorter than SPELL_HUD_HOLD_MS); hand and casting studies start idle, as
+  // in play, so the corner stays clear until the practice cast.
+  job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;
   job.live._castingPoseState = {castAt:-1e12, spellId:'missile', cooldown:450, lastNow:0, walkPhase:0};
   job.live.walkBobPhase = 0;
   job.live.enemies = job.mode==='hand'?[]:[Object.assign({}, job.target, {health:1000, maxHealth:1000,

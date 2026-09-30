@@ -12,6 +12,8 @@
   //   --governor-ignores-pinned the frame-time governor also thins pinned (studio) pools
   //   --thin-ignores-pin        thinning reads the raw governor instead of the pinned frame's
   //   --field-global-serial     the ambient field draws its columns from a session-wide serial
+  //   --studio-hud-unscoped     the spell HUD's spell-change time is not studio state
+  //   --gallery-hud-idle        the gallery starts idle, so the HUD fade hides its spell label
   var load="manifest.parts.MAIN.forEach(function (path) { (0, eval)(slurp('assets/games/' + path)); });";
   if(bootstrap.split(load).length!==2)throw Error('shipping manifest loader boundary missing');
   bootstrap=bootstrap.replace(load,"manifest.parts.MAIN.forEach(function (path) { (0, eval)(G.__studioSource(path, slurp('assets/games/' + path))); });");
@@ -20,7 +22,9 @@
     '--studio-ambient-drift':['src/02-effect-registry.js','hooks:{prime:effectAmbientLegacyPrime,studio:effectAmbientLegacyStudio}','hooks:{prime:effectAmbientLegacyPrime}'],
     '--governor-ignores-pinned':['src/14-fx-render.js','  F.g = !S || S.pinned ? 1 : G.governor;','  F.g = !S ? 1 : G.governor;'],
     '--thin-ignores-pin':['src/14-fx-render.js','(S.seedA[i] & 1023) >= F.g * 1024)','(S.seedA[i] & 1023) >= _fxRender.governor * 1024)'],
-    '--field-global-serial':['src/11-fx-engine.js','  var base = S.fieldSerial, salt = F.salt ^ S.seed,','  var base = (window._fxSessionFieldSerial = (window._fxSessionFieldSerial || 0) + 1), salt = F.salt ^ S.seed,']};
+    '--field-global-serial':['src/11-fx-engine.js','  var base = S.fieldSerial, salt = F.salt ^ S.seed,','  var base = (window._fxSessionFieldSerial = (window._fxSessionFieldSerial || 0) + 1), salt = F.salt ^ S.seed,'],
+    '--studio-hud-unscoped':['src/20-casting-preview.js','currentSpellIdx lastShotMs lastSpellChangeMs castAnimUntil','currentSpellIdx lastShotMs castAnimUntil'],
+    '--gallery-hud-idle':['src/20-casting-preview.js',"job.live.lastSpellChangeMs = job.mode === 'gallery' ? job.clockBase : -1e12;","job.live.lastSpellChangeMs = -1e12;"]};
   G.__studioSource=function(path,src){
     Object.keys(MUTATIONS).forEach(function(flag){
       var m=MUTATIONS[flag];
@@ -36,6 +40,15 @@
   G.document.fullscreenElement=G.document.webkitFullscreenElement=G.document.mozFullScreenElement=G.document.msFullscreenElement=null;
   if(typeof G.startCastingStudio!=='function')(0,eval)(slurp('assets/games/src/20-casting-preview.js'));
   function check(name,okay){if(!okay)throw Error(name);checked++;output('PASS '+name);}
+  // Spell HUD (held-staff fade): hudTexts records every text drawn during fn
+  // with the alpha it is drawn at; hudAlphas picks one text's alphas.
+  function hudTexts(fn){
+    var texts=[],oldFill=G.ctx.fillText;
+    G.ctx.fillText=function(text){texts.push({text:String(text),alpha:G.ctx.globalAlpha});return oldFill.apply(this,arguments);};
+    try{fn();}finally{G.ctx.fillText=oldFill;}
+    return texts;
+  }
+  function hudAlphas(texts,text){return texts.filter(function(t){return t.text===text;}).map(function(t){return t.alpha;});}
   // S3 migrated ambient and torch embers. The S2 studio checks keep their
   // fixture (the live legacy motes copied into the studio; the 12-particle
   // burst as the studio pool's only particles) with both families held on
@@ -115,12 +128,22 @@
   try{G.castingStudioScoped(job,function(){G.mana=7;G.projectiles=[];throw Error('deliberate draw failure');});}catch(e){caught=e.message==='deliberate draw failure';}
   check('exception restores global references and clock immediately',caught&&G.mana===baseline.mana&&G.projectiles===baseline.projectiles&&Date.now===oldDate&&Math.random===oldRandom&&G.gameTimeNow===oldGameClock&&G._presentationRandomState===oldPresentationState);
   check('isolated state survives scope exit for next frame',job.live.mana===7&&job.live.stats.totalDamageDone===damage);
-  G.setCastingStudioLight('dusk');
+  // The HUD's spell-change time is studio state: a live change at the studio's
+  // own clock time must not show the panel, and the studio never writes it.
+  var liveSpellChange=G.lastSpellChangeMs;G.lastSpellChangeMs=job.clockBase;
+  var idleHud=hudTexts(function(){G.setCastingStudioLight('dusk');});
   check('dusk changes only studio lighting',job.live.dayTime===0.78&&G.dayTime===baseline.day&&G._lightGrid===baseline.light);
   check('dusk isolates exterior-light scalar while retaining same visibility bake',G._surfaceFloorLightScale===baseline.surfaceScale&&G._surfaceFloorLightBake===baseline.surfaceBake&&job.live._surfaceFloorLightBake===baseline.surfaceBake&&job.live._surfaceFloorLightScale!==baseline.surfaceScale);
   var beforeErrors=G.__studioErrors.length;
-  G.castingStudioAdvance(job,1000);G.castingStudioDraw(job);
+  G.castingStudioAdvance(job,1000);var castHud=hudTexts(function(){G.castingStudioDraw(job);});
   check('actual full render reports no swallowed stage errors',G.__studioErrors.length===beforeErrors);
+  // Decision: the casting study starts idle, as in play (not P1's always-on
+  // panel), so the practice cast at 600 ms brings the panel in.
+  var castingHud={idle:hudAlphas(idleHud,G.spells.missile.name),cast:hudAlphas(castHud,G.spells.missile.name),live:G.lastSpellChangeMs===job.clockBase};
+  if(!(castingHud.idle.length===0&&castingHud.cast.length===1&&castingHud.cast[0]===1&&castingHud.live))output('DETAIL casting HUD '+JSON.stringify(castingHud));
+  check('casting study spell HUD is idle before the practice cast and shown after it, on studio state only',
+    castingHud.idle.length===0&&castingHud.cast.length===1&&castingHud.cast[0]===1&&castingHud.live);
+  G.lastSpellChangeMs=liveSpellChange;
   check('draw restores pose settings and minimap references',G.cam===baseline.cam&&G.pos===baseline.pos&&G.settings===baseline.settings&&G.exploredCells===baseline.explored&&G.minimapCanvas===baseline.minimap&&G._castingPoseState===baseline.pose);
   caught=false;
   try{G.castingStudioScoped(job,function(){G._surfaceFloorLightScale=77;throw Error('lighting scope failure');});}catch(e){caught=e.message==='lighting scope failure';}
@@ -218,6 +241,19 @@
   var burstSeen=false;
   for(var galleryT=0;galleryT<=2400&&!burstSeen;galleryT+=20){G.castingStudioAdvance(gallery,galleryT);burstSeen=gallery.galleryPhase==='burst';}
   check('bolt arrival produces one burst record with the scene spell',burstSeen&&gallery.live.projectiles.length===0&&gallery.live.impacts.length===1&&gallery.live.impacts[0].spellId==='ice'&&galleryCombat===0);
+  // The HUD names the scene's spell (scoped spells/currentSpellIdx) for the
+  // whole loop: the idle fade reads the studio's spell-change time, not the
+  // live one (set long ago here), and the studio never writes the live value.
+  var liveGallerySpellChange=G.lastSpellChangeMs;G.lastSpellChangeMs=0;
+  G.castingStudioAdvance(gallery,120);var galleryStartHud=hudTexts(function(){G.castingStudioDraw(gallery);});
+  G.castingStudioAdvance(gallery,2400);var galleryEndHud=hudTexts(function(){G.castingStudioDraw(gallery);});
+  var galleryHud={start:hudAlphas(galleryStartHud,G.spells.ice.name),end:hudAlphas(galleryEndHud,G.spells.ice.name),
+    missile:hudAlphas(galleryStartHud.concat(galleryEndHud),G.spells.missile.name).length,live:G.lastSpellChangeMs===0};
+  if(!(galleryHud.start.length===1&&galleryHud.start[0]===1&&galleryHud.end.length===1&&galleryHud.end[0]===1&&!galleryHud.missile&&galleryHud.live))
+    output('DETAIL gallery HUD '+JSON.stringify(galleryHud));
+  check('gallery HUD names the scene spell for the whole loop, independent of the live spell-change time',
+    galleryHud.start.length===1&&galleryHud.start[0]===1&&galleryHud.end.length===1&&galleryHud.end[0]===1&&!galleryHud.missile&&galleryHud.live&&galleryCombat===0);
+  G.lastSpellChangeMs=liveGallerySpellChange;
   G.setCastingStudioArt(false);
   check('original spell drawing toggles only the scoped kill switch',gallery.live.SPELL_VISUALS_ENABLED===false&&G.SPELL_VISUALS_ENABLED===galleryBaseline.visuals&&gallery.time===0);
   G.stopCastingStudio('gallery complete');
