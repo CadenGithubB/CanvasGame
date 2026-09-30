@@ -77,9 +77,13 @@ if (__engine === "deno") {
     // works on repo sources and on fixtures a test wrote to a
     // TemporaryDirectory. Anywhere else needs run_js(read_roots=[...]); a
     // denied read raises NotCapable rather than returning empty.
+    // Bind the real logger now: harnesses replace the global console to mute
+    // game logs, and a lazy console.log lookup would then swallow every
+    // PASS line and sentinel (measured: empty stdout, exit 0).
     __argv = Array.prototype.slice.call(Deno.args);
+    var __denoLog = console.log.bind(console);
     __out = function (s) {
-        console.log(String(s));
+        __denoLog(String(s));
     };
     slurp = function (path) {
         return Deno.readTextFileSync(String(path));
@@ -177,5 +181,19 @@ if (__engine === "deno") {
         throw new Error("_bootstrap: unrecognised JS engine, no file reader");
     };
 }
+
+// Under an ES-module engine (deno) the `var` declarations above are module
+// scoped, so shipping-host code evaluated through indirect eval -- the
+// (0, eval)(slurp(...)) pattern every harness uses -- cannot see them and dies
+// with "__engine is not defined". Publishing them on the global object makes
+// the four names visible to that code on every engine; on a classic-script
+// engine they are already globals and this is a no-op.
+(function (globalObject) {
+    if (!globalObject) return;
+    globalObject.__engine = __engine;
+    globalObject.__argv = __argv;
+    globalObject.__out = __out;
+    globalObject.slurp = slurp;
+}(typeof globalThis !== "undefined" ? globalThis : (0, eval)("this")));
 
 undefined;

@@ -87,6 +87,40 @@
   G.caveProfileRestoreInputs(job);
   check('cancel after world regeneration never restores old world arrays',G.ambientParticles===newAmbient);
   check('cancel after world regeneration preserves new surface lighting',G._surfaceFloorLightBake===newSurface && G._surfaceFloorLightMesh===G.floorMesh && G._surfaceFloorLightScale===0.7);
+  // Unified effects (spec 10.4): with the engine present the profile primes a
+  // fresh pinned particle pool (stubbed here: this harness loads only the
+  // profile fragment) under the profile's seeded random, swaps it in place of
+  // the live one and restores the live one only while it is still owned.
+  var liveFx={live:true,pinned:false},legacyCalls=0,primes=[];
+  G.fxState=liveFx;G.floorMesh={id:'fx world'};G.ambientParticles=[{live:true}];
+  var fxLiveAmbient=G.ambientParticles,fxOldInit=G.initAmbientParticles;
+  G.initAmbientParticles=function(){legacyCalls++;return fxOldInit.apply(G,arguments);};
+  G.effectProfilePrime=function(job){primes.push(job.randomSeed);G.fxState={profile:true,pinned:true,seed:job.randomSeed,draws:[Math.random(),Math.random()]};};
+  G.caveProfilePrepareInputs(job);
+  var profileFx=G.fxState,firstFx=JSON.stringify(profileFx);
+  check('with the engine the profile primes its own pinned pool instead of the legacy motes',profileFx!==liveFx && profileFx.profile===true && profileFx.pinned===true &&
+    primes.length===1 && primes[0]===job.randomSeed && legacyCalls===0 && Math.random===oldRandom);
+  G.caveProfileRestoreInputs(job);
+  check('profile teardown restores the live particle pool',G.fxState===liveFx && G.ambientParticles===fxLiveAmbient);
+  G.caveProfilePrepareInputs(job);
+  check('two profile setups prime identical particle pools',JSON.stringify(G.fxState)===firstFx && G.fxState!==profileFx);
+  G.caveProfileRestoreInputs(job);
+  G.caveProfilePrepareInputs(job);var cancelledFx=G.fxState;G.floorMesh={id:'regenerated'};
+  G.caveProfileRestoreInputs(job);
+  check('cancel after world regeneration never restores the old pool and unpins the profile pool left live',G.fxState===cancelledFx && G.fxState!==liveFx && cancelledFx.pinned===false);
+  G.effectProfilePrime=undefined;G.initAmbientParticles=fxOldInit;
+  // Recorded workload inputs (spec 10.4): the Particles setting and every
+  // live particle, on a host without the engine (this harness loads only the
+  // profile fragment: the typeof fallback) and with one (a stubbed stats call).
+  G.settings.particles=40;G.ambientParticles=[{a:1},{b:2},{c:3}];
+  var plainInputs=G.caveProfileCanonicalInputs();
+  check('profile inputs record the Particles setting and the legacy motes without the engine',typeof G.getEffectStats==='undefined' &&
+    plainInputs.particleSetting===40 && plainInputs.particles===3 && plainInputs.ambientParticles===3);
+  G.getEffectStats=function(){return{live:37};};G.ambientParticles=[{legacy:true},{legacy:true}];
+  var engineInputs=G.caveProfileCanonicalInputs();
+  G.getEffectStats=undefined;
+  check('profile inputs count the engine pool and any legacy motes with the engine',engineInputs.particles===39 &&
+    engineInputs.particleSetting===40 && engineInputs.ambientParticles===2);
   __out('BROWSER_PROFILE_RESULT PASS '+checked);
 }());
 undefined;

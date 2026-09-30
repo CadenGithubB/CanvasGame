@@ -28,6 +28,10 @@
     (0,eval)(src);
   });
   G.applyRelicOnHit=function(){};
+  // Unified effects S4 (spec 11.3): the effect engine is not loaded here and
+  // producers call fxEvent only when it exists; this recorder stands in for it.
+  var fxEvents=[];G.fxEvent=function(type){fxEvents.push(type);};
+  function recorded(type){return fxEvents.filter(function(t){return t===type;}).length;}
   function check(name,ok,detail){count++;if(!ok)failed++;out((ok?'PASS ':'FAIL ')+name+(ok?'':' '+JSON.stringify(detail)));}
   function close(a,b){return Number.isFinite(a)&&Math.abs(a-b)<1e-5;}
   function mesh(roof,slope){
@@ -43,7 +47,7 @@
     G.MODE3D=mode;mesh(roof);G.grid=new Uint8Array(576);G.wallHeights=new Float64Array(576);G.wallHeights.fill(1);
     G.wallFaceBase=G.wallMaxTopZ=null;G.projectiles=[];G.enemies=[];G.enemySpawners=[];G.oreVeins=[];
     G.impacts=[];G.groundEffects=[];G.chainEffects=[];G.deathEffects=[];G.coinDrops=[];G.DEBUG_EFFECTS=false;
-    G.equipment={relic:null,robes:null};G.stats={totalDamageDone:0,totalEnemiesKilled:0};G.dmgBoostUntil=0;
+    G.equipment={relic:null,robes:null};G.stats={totalDamageDone:0,totalEnemiesKilled:0};G.dmgBoostUntil=0;fxEvents=[];
     G.spells={missile:{id:'missile',damage:3,color:'#fff',speed:240}};
     G.pos={x:30,y:150,floorZ:60};G.cam={ang:0,pitch:0};G.playerUnderground=false;
     G.spatialSimulationTick++;clock+=1000;
@@ -84,7 +88,10 @@
     shot({speed:960,hz:960,_castReleaseAt:clock-250});G.updateProjectiles(1);
     check(v+'late release cannot hit earlier target motion before shot existed',e.health===10&&G.projectiles.length===1&&close(G.projectiles[0].x,270));
     reset(mode);e=enemy(230,150);var sp={x:120,y:150,active:true,hp:3};G.enemySpawners.push(sp);shot();G.updateProjectiles(1);
-    check(v+'near spawner wins before enemy and drops rewards once',!sp.active&&sp.hp===0&&e.health===10&&G.coinDrops.length===5&&G.deathEffects.length===5);
+    // S4: death feedback is one 'spawnerDeath' effect event (bones became
+    // particles off the gameplay random stream), no deathEffects records;
+    // "drops rewards once" still means five coins and one death.
+    check(v+'near spawner wins before enemy and drops rewards once',!sp.active&&sp.hp===0&&e.health===10&&G.coinDrops.length===5&&G.deathEffects.length===0&&recorded('spawnerDeath')===1);
     reset(mode);wall(10,10);G.oreVeins=[{gx:10,gy:10,hp:2}];shot();G.updateProjectiles(1);
     check(v+'ore damage uses contacted wall not projectile center cell',G.oreVeins[0].hp===1&&close(G.impacts[0].x,142));
     reset(mode);wall(10,10);shot({isLob:true,gravZ:-1,spell:{id:'poison',damage:0.4,color:'#0f0'}});G.updateProjectiles(1);

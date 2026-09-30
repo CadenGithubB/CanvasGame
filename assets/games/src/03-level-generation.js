@@ -1580,8 +1580,7 @@ function applyRelicOnHit(dmg, enemy, isBonusProc) {
         bestE.flashUntil = gameTimeNow() + 150;
         if (bestE.health <= 0) stats.totalEnemiesKilled++;
         // Visual spark
-        impacts.push({x: bestE.x, y: bestE.y, z: 10, life: 0.3, maxLife: 0.3,
-          color: '#ffff00', size: 6, vx: 0, vy: 0, vz: 20});
+        if (typeof fxEvent === 'function') fxEvent('thunderCore', bestE);
       }
     }
   }

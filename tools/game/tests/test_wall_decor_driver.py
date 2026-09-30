@@ -56,6 +56,17 @@ must be drawn after the face: per-pixel last-painter ownership); the wrong
 heraldry family; the sconce drawing the torch's flame; and a banner cloth
 inside a farther torch flame's fold plane (0.5 out plus the 0.15 bias), which
 is why the cloth stands 0.7 out instead of the spec's 0.4.
+
+Merge with the unified effects system (codex/particle-system): its torch glow
+fades by a five-sample corona depth test at the point light, which stays 0.5
+out at flameZ, while the modelled shaft top spans 0.8-3.6 out just 1.3 below
+it. From in front and below the torch's own fixture hid the light (1-3 of 5
+samples passed, the centre never). With wallPropModels on the corona now
+tests the visible flame (2 out, 2 up of the light, where embers leave it).
+The glow section checks that point by the harness's own projection and by
+segment tests against the authored part boxes, a camera-facing occluder as a
+negative control, and that sprite torches keep the test at the light. 38 ->
+41 checks: the three glow checks.
 """
 from pathlib import Path
 import unittest
@@ -63,7 +74,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("wall_decor_driver.js")
-EXPECTED = 38
+EXPECTED = 41
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--clamp-model": ("edge", ("edge: anchor near x = -20: painted pixels are exactly",)),
@@ -86,6 +97,9 @@ MUTATIONS = {
                                   "spec: shields and banners are the sprite's own recorded layout")),
     "--sconce-torch-flame": ("phase", ("phase: each flame-bearing model draws its own sprite recipe",)),
     "--cloth-at-0.4": ("oblique", ("oblique: a nearer banner's cloth (0.7 out) hides a farther torch's folded flame",)),
+    # Merge with the unified effects system
+    "--glow-at-light": ("glow", ("glow: with wall prop models on, the unified torch glow's corona tests the visible flame",)),
+    "--glow-flame-always": ("glow", ("glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself",)),
 }
 
 
@@ -112,7 +126,7 @@ class WallDecorDriverTests(unittest.TestCase):
                        "NOTE oblique flame halves ", "NOTE oblique flame panel ",
                        "NOTE work ", "NOTE lab ", "NOTE edge -20 sconce ", "NOTE edge -20 shield ", "NOTE edge -20 banner ",
                        "NOTE spec heraldic ", "NOTE oblique banner fold ", "NOTE phase four props ", "NOTE phase recipes ",
-                       "NOTE decal "):
+                       "NOTE decal ", "NOTE glow "):
             self.assertTrue(any(line.startswith(prefix) for line in notes), (prefix, notes))
 
     def test_each_mutation_fails_its_named_check(self) -> None:

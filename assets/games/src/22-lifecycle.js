@@ -97,6 +97,7 @@ function prepareGameRun() {
   castAnimUntil = 0; manaBlinkUntil = 0; flameStreamStartMs = 0;
   dashUntil = 0; dashCooldownUntil = 0; dashFovPunch = 0;
   jumpVelZ = 0; jumpAirborne = false;
+  if (typeof effectRegistryReset === 'function') effectRegistryReset('run');
   resetSimulationFrame();
   // Stage E: build the texture catalog before the first frame (a one-time
   // cost); the first engaged frame builds it lazily otherwise.

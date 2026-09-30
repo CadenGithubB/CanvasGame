@@ -334,9 +334,7 @@ function updateFortressAllies(dt) {
     // Death check
     if (ally.health <= 0) {
       // Death effect — small explosion of particles
-      for (var pi = 0; pi < 5; pi++) {
-        impacts.push({x: ally.x, y: ally.y, t: gameTimeNow(), dur: 400, r: 8, color: '#c8a028', vx: (Math.random()-0.5)*60, vy: (Math.random()-0.5)*60});
-      }
+      if (typeof fxEvent === 'function') fxEvent('allyDeath', ally);
       var _dName = ally.name || 'Ally';
       pushToast(_dName + ' has fallen', '#cc4444', 4000);
       fortressAllies.splice(ai, 1);
@@ -485,12 +483,7 @@ function updateArcaneTomes() {
     {collectRadius: 30, vacuumRadius: 100, vacuumPull: 4.0},
     function(tome) {
       applyArcaneTome();
-      for (var pi = 0; pi < 15; pi++) {
-        var ang = (pi / 15) * Math.PI * 2;
-        impacts.push({x: tome.x, y: tome.y, z: getEntityRenderFloorZ(tome) + 10,
-          vx: Math.cos(ang) * 50, vy: Math.sin(ang) * 50, vz: 20 + Math.random() * 30,
-          spawnMs: gameTimeNow(), lifeMs: 1000, color: '#bb66ff', size: 5});
-      }
+      if (typeof fxEvent === 'function') fxEvent('pickup', tome, 'tome', '#bb66ff');
     });
 }
 
@@ -515,12 +508,7 @@ function updateStatPickups() {
       }
       goalMessage = msg;
       goalMessageUntil = gameTimeNow() + 4000;
-      for (var pi = 0; pi < 12; pi++) {
-        var ang = (pi / 12) * Math.PI * 2;
-        impacts.push({x: sp.x, y: sp.y, z: getEntityRenderFloorZ(sp) + 8,
-          vx: Math.cos(ang) * 45, vy: Math.sin(ang) * 45, vz: 15 + Math.random() * 25,
-          spawnMs: gameTimeNow(), lifeMs: 800, color: pColor, size: 4});
-      }
+      if (typeof fxEvent === 'function') fxEvent('pickup', sp, 'stat', pColor);
       console.log('[STAT] Collected ' + sp.type + ' at (' + sp.wx.toFixed(0) + ',' + sp.wy.toFixed(0) + ')');
     });
 }

@@ -10,12 +10,19 @@
     rect:function(x,y,w,h){runs.push({x:x,y:y,w:w,h:h});},
     clip:function(){clips++;lastRuns=runs.slice();},
     arc:function(x,y,r){arcs.push({x:x,y:y,r:r});},ellipse:noop,
-    fill:function(){draws++;},stroke:function(){draws++;},
+    fill:function(){draws++;},stroke:function(){draws++;},fillRect:function(){draws++;},
+    drawImage:function(){draws++;},quadraticCurveTo:noop,bezierCurveTo:noop,
     createLinearGradient:function(){return{addColorStop:noop};},
-    globalAlpha:1,shadowBlur:0,lineWidth:1};
+    createRadialGradient:function(){return{addColorStop:noop};},
+    globalAlpha:1,shadowBlur:0,lineWidth:1,globalCompositeOperation:'source-over'};
+  (0,eval)(slurp('assets/games/src/01-materials.js'));
   (0,eval)(slurp('assets/games/src/06-spatial-geometry.js'));
   (0,eval)(slurp('assets/games/src/12-scene-depth.js'));
   (0,eval)(slurp('assets/games/src/13-render-floors-ceilings.js'));
+  (0,eval)(slurp('assets/games/src/14-missile-art.js'));
+  // No document here: glow sprites take the flat-disc fallback, so this file
+  // proves geometry/depth for both the archetype layer and the legacy bodies.
+  (0,eval)(slurp('assets/games/src/14-spell-visuals.js'));
   (0,eval)(slurp('assets/games/src/14-render-entities.js'));
   var shared=slurp('assets/games/src/01-config-state.js');
   (0,eval)(shared.slice(shared.indexOf('function projToScreen('),shared.indexOf('// GENERIC 3D ENTITY RENDERER')));
@@ -48,6 +55,20 @@
     G.projectiles=[{x:100,y:100,z:20,ang:0.2,spawnMs:Date.now()-100,spell:{id:id,color:'#ffaa00'}}];
     visibleAndHidden(id+' projectile',G.drawProjectiles3D);
   });
+  G.projectiles=[{x:100,y:100,z:20,ang:0.2,spawnMs:Date.now()-100,spell:{id:'slime',color:'#44dd55',isNpc:true,isCompanion:true}}];
+  visibleAndHidden('companion slime bolt',G.drawProjectiles3D);
+  ['missile','ice','lightning','poison','arcane','fire','tower','slime'].forEach(function(id){
+    G.impacts=[{x:100,y:100,z:10,spawnMs:Date.now()-50,lifeMs:400,spellId:id}];
+    visibleAndHidden(id+' burst',G.drawImpacts3D);
+  });
+  // The review kill switch must restore the legacy bodies without leaving a
+  // record undrawn or unclipped.
+  G.SPELL_VISUALS_ENABLED=false;
+  G.projectiles=[{x:100,y:100,z:20,ang:0.2,spawnMs:Date.now()-100,spell:{id:'ice',color:'#00ffff'}}];
+  visibleAndHidden('legacy ice projectile behind the kill switch',G.drawProjectiles3D);
+  G.impacts=[{x:100,y:100,z:10,spawnMs:Date.now()-50,lifeMs:400,spellId:'ice'}];
+  visibleAndHidden('legacy ice impact behind the kill switch',G.drawImpacts3D);
+  G.SPELL_VISUALS_ENABLED=true;
   [false,true].forEach(function(companion){
     G.impacts=[{x:100,y:100,z:0,spawnMs:Date.now()-50,lifeMs:400,isCompanionProj:companion,color:'#55ffaa'}];
     visibleAndHidden(companion?'companion impact':'normal impact',G.drawImpacts3D);

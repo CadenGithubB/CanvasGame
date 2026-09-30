@@ -44,8 +44,11 @@
 //   --sconce-torch-flame  the modelled sconce draws the torch's flame recipe
 //   --cloth-at-0.4     the banner cloth at the spec's 0.4 out, inside a
 //                      farther torch flame's fold plane (0.5) plus its bias
-// --sections a,b runs only: spec, edge, oblique, phase, flame, work, variant,
-// model, decal, lab.
+//   --glow-at-light    (merge with unified effects) the torch glow's corona
+//                      tests the light again, behind the modelled shaft
+//   --glow-flame-always  the corona tests the flame point for sprite torches too
+// --sections a,b runs only: spec, edge, oblique, phase, flame, glow, work,
+// variant, model, decal, lab.
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -61,8 +64,14 @@
     if (source.split(before).length !== 2) throw Error('MUTATION_ANCHOR ' + name);
     return source.replace(before, after);
   }
-  var DECOR = 'src/07-decorations-lighting.js', MODELS = 'src/12-prop-models.js';
+  var DECOR = 'src/07-decorations-lighting.js', MODELS = 'src/12-prop-models.js', FXR = 'src/14-fx-render.js';
   var loaded = H.loadManifest(function (path, source) {
+    if (path === FXR) {
+      var GATE = "  var atFlame = !tiles && typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels');\n";
+      source = swap(source, '--glow-at-light', GATE, '  var atFlame = false;\n');
+      source = swap(source, '--glow-flame-always', GATE, '  var atFlame = !tiles;\n');
+      return source;
+    }
     if (path === MODELS) {
       source = swap(source, '--decal-first', "  return {key: WALL_PROP_MODEL_KEYS.shield[family], family: 'wallProp', parts: parts};\n",
         "  parts.push(parts.shift());\n  return {key: WALL_PROP_MODEL_KEYS.shield[family], family: 'wallProp', parts: parts};\n");
@@ -845,6 +854,92 @@
     check('flame: the sconce\'s flame anchor (bowl rim) is >= 1.5 units out and within 3 units of its point light; a wall with all four types keeps the same two point lights (torch, sconce) with models on and off',
       sOut >= 1.5 && sGap <= 3 && lightsOn4 === lightsOff4 && G.pointLights.length === 2 && sLight.y === SF.at.y && sLight.z === SF.at.flameZ &&
       Math.abs(SF.at.flameZ - SF.at.z - S / 6) < 1e-9, {out: sOut, gap: sGap, light: sLight, anchor: sAnchor, lights: G.pointLights.length});
+  }
+
+  // ── glow (merge with the unified effects system): the unified torch glow's
+  // corona against the modelled torch's own depth ──
+  // The point light stays 0.5 out at flameZ (flame section), but the modelled
+  // shaft top spans 0.8-3.6 out only 1.3 below it, so from in front and below
+  // the segment eye -> light crosses the fixture and the corona (five depth
+  // samples, 14-fx-render.js fxTorchGlows) faded the glow by its own torch.
+  // With wallPropModels on the corona tests the visible flame (2 out, 2 up of
+  // the light, where embers leave it); a real occluder still hides the glow,
+  // and sprite torches keep the test at the light. Oracles: the harness's own
+  // projection of the light and flame points, and segment tests against the
+  // authored PARTS boxes (local r, o, z), independent of the model code.
+  if (section('glow')) {
+    var glowRows = [], glowOcc = [];
+    world(); G.worldW = G.worldH = N * 12; G._lightCellSize = G._lightCellSize || 24; G.buildPointLights();
+    var GL = G.pointLights[0], FLAME_UP = AT.flameZ - AT.z;
+    var lightL = {r: 0, o: 0.5, z: FLAME_UP}, flameL = {r: 0, o: 2.5, z: FLAME_UP + 2};
+    function toLocal(x, y, z) { return {r: (x - OX) * TX + (y - OY) * TY, o: (x - OX) * NX + (y - OY) * NY, z: z - AT.z}; }
+    function hitsPart(a, b) {   // does segment a -> b (local) cross any authored part's box?
+      return PARTS.some(function (p) {
+        var rh = Math.max(p[3], p[4]), lo = [-rh, Math.min(p[5][0], p[6][0]), p[1]], hi = [rh, Math.max(p[5][1], p[6][1]), p[2]];
+        var A = [a.r, a.o, a.z], B = [b.r, b.o, b.z], t0 = 0, t1 = 1;
+        for (var k = 0; k < 3; k++) {
+          var d = B[k] - A[k];
+          if (Math.abs(d) < EPS) { if (A[k] < lo[k] || A[k] > hi[k]) return false; continue; }
+          var u0 = (lo[k] - A[k]) / d, u1 = (hi[k] - A[k]) / d;
+          t0 = Math.max(t0, Math.min(u0, u1)); t1 = Math.min(t1, Math.max(u0, u1));
+          if (t0 > t1) return false;
+        }
+        return true;
+      });
+    }
+    // Eye `below` under the flame, D in front of the light, `deg` off the
+    // normal, pitched so the light sits on the horizon row.
+    function glowPose(D, deg, below) {
+      var a = deg * Math.PI / 180, cx = GL.x + Math.sin(a) * D, cy = GL.y - Math.cos(a) * D;
+      var C = pose(cx, cy, Math.atan2(GL.y - cy, GL.x - cx), GL.z - below);
+      G.cam.pitch = (C.cameraZ - GL.z) / ((GL.x - cx) * C.cosAng + (GL.y - cy) * C.sinAng);
+      return G.getCam3D();
+    }
+    function glowFrame(C, models, occluder) {
+      G.setRenderFeatures({wallPropModels: models});
+      G.beginSceneDepthFrame(W, HT); wallPlane(C); G.drawWallDecorations('opaque');
+      if (occluder) occluder(C);
+      var calls = [], orig = G.fxCorona;
+      G.fxCorona = function (x, y, iz, q) { var v = orig(x, y, iz, q); calls.push({x: x, y: y, iz: iz, q: q, seen: v}); return v; };
+      try { G.beginEffectFrame(); G.drawTorchGlowStage3D(); } finally { G.fxCorona = orig; G.setRenderFeatures({wallPropModels: true}); }
+      return {calls: calls, drawn: G._fxStats.torchDrawn, hidden: G._fxStats.torchHidden};
+    }
+    function glowAt(p, C) { var q = project(local(p.r, p.o, p.z), C); return {x: Math.floor(q.x), y: Math.floor(q.y), iz: 1 / q.depth}; }
+    function sameCall(c, p) { return !!c && c.x === p.x && c.y === p.y && Math.abs(c.iz - p.iz) <= 1e-9; }
+    var mode = G.effectFamilyMode('torchGlow'), bad = [];
+    [[40, 35], [60, 45], [90, 70]].forEach(function (dv) {
+      [-25, 0, 25].forEach(function (deg) {
+        var C = glowPose(dv[0], deg, dv[1]), eye = toLocal(G.cam.x, G.cam.y, C.cameraZ);
+        var on = glowFrame(C, true), c = on.calls[0], fp = glowAt(flameL, C), lp = glowAt(lightL, C);
+        // The depth this frame's models wrote, read at the two candidate points.
+        var lightSeen = G.fxDepthNearest(lp.x, lp.y, lp.iz), flameSeen = G.fxDepthNearest(fp.x, fp.y, fp.iz);
+        var atLightOn = c ? G.fxCorona(lp.x, lp.y, lp.iz, c.q) : null;   // the pre-merge-fix test on the same depth
+        var off = glowFrame(C, false), co = off.calls[0], lpo = glowAt(lightL, C);
+        var row = {D: dv[0], deg: deg, below: dv[1], lightBehindFixture: hitsPart(eye, lightL), flameClear: !hitsPart(eye, flameL),
+          lightSeen: lightSeen, flameSeen: flameSeen, seenOn: c ? c.seen : null, atLightOn: atLightOn, calledAtFlame: sameCall(c, fp), drawnOn: on.drawn,
+          seenOff: co ? co.seen : null, offCalledAtLight: sameCall(co, lpo), drawnOff: off.drawn};
+        glowRows.push(row);
+        // With a camera-facing occluder a third of the way to the flame.
+        var mid = {x: G.cam.x + (GL.x - G.cam.x) / 3, y: G.cam.y + (GL.y - G.cam.y) / 3}, fx = -C.sinAng, fy = C.cosAng, oz = C.cameraZ + (GL.z - C.cameraZ) / 3;
+        var occ = glowFrame(C, true, function (Cc) {
+          writeQuad([{x: mid.x - fx * 40, y: mid.y - fy * 40, z: oz - 40}, {x: mid.x + fx * 40, y: mid.y + fy * 40, z: oz - 40},
+            {x: mid.x + fx * 40, y: mid.y + fy * 40, z: oz + 40}, {x: mid.x - fx * 40, y: mid.y - fy * 40, z: oz + 40}], Cc);
+        });
+        glowOcc.push({D: dv[0], deg: deg, seen: occ.calls.length ? occ.calls[0].seen : null, drawn: occ.drawn, hidden: occ.hidden});
+        if (on.calls.length !== 1 || off.calls.length !== 1) bad.push(row);
+      });
+    });
+    // [D, deg, samples passing: at the flame with models (the fix), at the light with models (before it), at the light as a sprite]
+    out('NOTE glow ' + JSON.stringify(glowRows.map(function (r) { return [r.D, r.deg, r.seenOn, r.atLightOn, r.seenOff]; })));
+    check('glow: with wall prop models on, the unified torch glow\'s corona tests the visible flame (2 out, 2 up of its light), which its own fixture never hides: the light itself is behind the shaft from in front and below, the flame centre is clear, and the glow keeps at most one sample fewer than the sprite torch and more than a test at the light',
+      mode === 'new' && bad.length === 0 && glowRows.length === 9 && glowRows.every(function (r) {
+        return r.lightBehindFixture && r.lightSeen === 0 && r.flameClear && r.flameSeen === 1 && r.calledAtFlame &&
+          r.seenOn >= r.seenOff - 1 && r.seenOn > r.atLightOn && r.drawnOn === 1;
+      }), {mode: mode, bad: bad.length, rows: glowRows});
+    check('glow: negative control, a camera-facing occluder a third of the way to the flame hides the modelled torch\'s glow (no sample passes, not drawn)',
+      glowOcc.length === 9 && glowOcc.every(function (r) { return r.seen === 0 && r.drawn === 0 && r.hidden === 1; }), glowOcc);
+    check('glow: with wall prop models off (sprite torch, no prop depth) the corona still tests the light itself; head-on all five samples pass in front of the wall',
+      glowRows.every(function (r) { return r.offCalledAtLight && r.drawnOff === 1 && (r.deg !== 0 || r.seenOff === 5); }), glowRows);
   }
 
   // ── work: pixels tested per torch below the flat-quad baseline ──

@@ -215,6 +215,7 @@ function npcUpdateAction(actor,target,ability,now,commitFn) {
       if(!npcTargetValid(actor,recipient,ability.range,ability.melee)) {npcStats.invalidations++;return;}
       npcStats.commits++;n.commits++;actor.lastAttackMs=now;
       commitFn(actor,recipient,now);
+      if (ability.melee && typeof fxEvent === 'function') fxEvent('meleeCommit', actor, recipient);
       return;
     }
     if(!npcTargetValid(actor,target,ability.range,ability.melee))return;
@@ -226,6 +227,7 @@ function npcUpdateAction(actor,target,ability,now,commitFn) {
       n.attackTargetId=null;actor._attackTarget=null;
       npcStats.commits++;n.commits++;actor.lastAttackMs=now;
       commitFn(actor,target,now);
+      if (ability.melee && typeof fxEvent === 'function') fxEvent('meleeCommit', actor, target);
     }
   } finally {physicsStageEnd('npcActions',start);}
 }

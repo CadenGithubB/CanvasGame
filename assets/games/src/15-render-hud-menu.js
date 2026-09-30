@@ -360,7 +360,7 @@ function drawCoins2D() {
   ctx.save(); ctx.translate(-viewCam.x, -viewCam.y);
   for (var i = 0; i < coinDrops.length; i++) {
     var c = coinDrops[i];
-    var bob = Math.sin(now * 0.004 + c.bob) * 3;
+    var bob = Math.sin(now * 0.004 + (Number.isFinite(c.bob) ? c.bob : 0)) * 3;
     ctx.fillStyle = '#ffd700';
     ctx.strokeStyle = '#b8860b';
     ctx.lineWidth = 1.5;
@@ -3243,6 +3243,7 @@ function drawSettingsOverlay() {
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
   _settingsClickAreas = [];
+  if (typeof drawEffectSettingsPage === 'function' && drawEffectSettingsPage(px, py, panW, panH, S)) { ctx.restore(); return; }
   var pad = 12 * S;
   var leftX = px + pad, rightX = px + panW - pad;
   var curY = py + 8 * S;
@@ -3476,6 +3477,7 @@ function handleSettingsClick(mx, my) {
         _settingsDirtyCheck();
         return true;
       }
+      if (a.action === 'fx' && typeof handleEffectSettingsClick === 'function') return handleEffectSettingsClick(a);
     }
   }
   return false;

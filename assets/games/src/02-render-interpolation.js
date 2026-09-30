@@ -6,12 +6,19 @@ var _renderPoseFields = ['x','y','z','floorZ','feetZ','renderFloorZ','ang','faci
 var _renderPoseRecords = new WeakMap();
 var _renderPoseSerial = 0, _renderHistoryReady = false, _renderCapturePending = false;
 var _renderInterpolationActive = false;
+// Blend of the frame being drawn (1 outside a blended draw); particles
+// back-project on this timeline (unified effects, 11-fx-engine.js).
+var renderPresentationAlpha = 1;
 var _renderHistory = {};
 var _renderEndPos = [], _renderEndCam = [], _renderEndView = [];
-var _renderGroups = ['enemies','projectiles','companions','fortressAllies','impacts',
-  'deathEffects','soulOrbs','coinDrops','statPickups','arcaneTomes','ambientParticles'].map(function(name) {
+var _renderGroups = ['enemies','projectiles','companions','fortressAllies'].map(function(name) {
     return {name:name, source:null, view:[]};
   });
+// Effect families with interp:'pose' join at load (02-effect-registry.js).
+function registerRenderInterpolationGroup(name) {
+  for (var g=0;g<_renderGroups.length;g++) if (_renderGroups[g].name===name) return;
+  _renderGroups.push({name:name, source:null, view:[]});
+}
 
 function renderPoseRecord(body) {
   var record = _renderPoseRecords.get(body);
@@ -132,6 +139,7 @@ function renderInterpolatedFrame(alpha, drawFn) {
       !renderPoseUnchanged(viewCam,_renderEndView)) blend=1;
   var savedPos=pos, savedCam=cam, savedViewCam=viewCam;
   _renderInterpolationActive = true;
+  renderPresentationAlpha = blend;
   try {
     pos=renderPoseView(savedPos,blend); cam=renderPoseView(savedCam,blend); viewCam=renderPoseView(savedViewCam,blend);
     if (CAM_FOLLOW) {
@@ -157,6 +165,7 @@ function renderInterpolatedFrame(alpha, drawFn) {
       if (restore.source) window[restore.name]=restore.source;
       restore.source=null;
     }
+    renderPresentationAlpha = 1;
     _renderInterpolationActive = false;
   }
 }

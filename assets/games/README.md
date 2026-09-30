@@ -874,6 +874,331 @@ Use the header line number from the error or investigation. `where` also require
 a current generated header, validates syntax, and reports the corresponding
 source file and line.
 
+## Unified effects V1 (2026-09-28)
+
+Transient visual effects now run through one system. Before it, about ten
+effect arrays were each hand-wired into eight lifecycle lists (interpolation
+groups, the chunk-window rebase, the run/level/world resets, the studio keys and
+reset, the stage lists and the prune sites), and those lists disagreed. The
+system is cosmetic: gameplay never reads its state, and it never draws from the
+gameplay random stream. Its tick, frame and producer entry points catch, count
+and warn once (`console.warn`) instead of throwing into a tick or a frame. These
+are `updateEffects`, `fxEvent`, `fxEmit`, `fxAttach`, `fxDetach`, the
+registry's prune, rebase, reset, prime and studio calls, and the engine's render
+passes. The load-time table compilers, `registerEffectFamily` and the console
+setters do throw on bad arguments; call the setters from a `try`/`catch`, as
+the settings page does. It has three layers:
+
+- **Effect registry** (`src/02-effect-registry.js`). `EFFECT_FAMILY_SOURCE`
+  declares each transient array, global group, painter or engine once: its
+  lifetime and prune predicate, rebase rule, reset scopes (`run`, `level`,
+  `world`; a clear phase runs before a world is assembled and a prime phase
+  after the player is placed), interpolation, studio policy, owner, A/B family
+  and 2D/3D stage. `effectRegistryPrune`, `Rebase`, `Reset`, `Prime`,
+  `StudioKeys` and `StudioReset` replace the hand lists. The registry also owns
+  the switches, the live Particles budget (`effectQuality`), stateless hash
+  noise (`effectNoise`), the private legacy random scope and `getEffectStats()`.
+- **Particle engine** (`src/11-fx-recipes.js`, `src/11-fx-engine.js`). One
+  fixed-capacity pool of typed arrays (3,072 slots, 256 of them reserved for
+  gameplay feedback) with dense swap-remove, stepped once per fixed tick by
+  `updateEffects(dt)` at the old ambient-update call site and timed as the
+  physics stage `effectsSim`. Recipes in `FX_RECIPE_SOURCE` are validated at
+  load (a typo throws `Particle recipe <id>: ...`) and packed into typed columns.
+  Ground contact uses an exact per-particle cache of the supporting terrain
+  triangle. The emitters are:
+  - event bursts: a producer's `fxEvent` call is queued, and the next
+    `updateEffects` call spawns it. For producers inside `gameUpdate` that is
+    the end of the same fixed tick; calls made outside the tick (input
+    handlers, the console) wait for the next one;
+  - anchors, which are continuous emitters: torches, the dash trail and the
+    flame stream internally, or any entity or point through `fxAttach`;
+  - camera-relative fields (ambient motes, weather);
+  - movement observers (footsteps, dashes, landings);
+  - child particles (splashes, drip ripples);
+  - direct `fxEmit` bursts.
+- **Shared render primitives** (`src/14-fx-render.js`). The `_pt` stages are
+  `fxCombat3D` (after `structures3D`), `ambientFX3D` (the world layer, keeping
+  the old stage name), `torchGlow3D` (the torch glow, re-hosted), `fxOverlay`
+  (first-person eye and screen space, under the arms) and `fx2D`. Visible
+  particles are batched by style bucket. Glows and puffs come from a small
+  sprite LRU of the system's own (64 entries, 1 MB), not the spell glow cache.
+  Lighting, fog and day/night are quantized, and nothing sets `shadowBlur`. A
+  stage with nothing to draw makes no Canvas call.
+
+These now run on the engine: ambient motes, torch embers, enemy and spawner
+bones (now also drawn in 3D), flame-stream embers and the torch glow. So do the
+tome and stat pickup bursts, whose stacked rings were usually off-screen in
+first person; they now burst in front of the camera. The shrine, Phoenix,
+Thunder Core and garrison-death bursts moved here too. They used to be pruned
+on the tick they were pushed and never drew, so they have no legacy code and
+draw nothing with `fxUnified` off. The new presets are weather, impact debris
+and sparks, and footstep/dash/landing dust.
+
+Geometry painters stay with the spell visuals and are registered for lifecycle
+only: ground decals, nova, chain arcs and the flame ribbon. The lob reticle is
+drawn from its projectile's target, which now shifts with the projectile when a
+chunk is crossed. Coins, soul orbs, arcane tomes and stat pickups stay gameplay
+entities, also registered for lifecycle only.
+
+The work also fixes these bugs:
+- Chain arcs, novas and the lob reticle keep their place across chunk
+  crossings.
+- Stat pickups are no longer shifted twice when a chunk is crossed.
+- A classic level change clears leftover bones, soul orbs, arcane tomes and
+  stat pickups.
+- Soul orbs, and coins from spawners, ore and plague clouds, now appear in the
+  2D view.
+
+Two of these fixes change gameplay, and both were approved: the stat-pickup
+position fix (Q2, a lead decision) and the clearing of soul orbs, arcane tomes
+and stat pickups on a level change (Q1, the user's decision). The other fixes
+are presentation only.
+
+The gameplay `Math.random` stream also differs from `main`, in both A/B modes,
+because the cosmetic draws left it:
+- the legacy ambient motes, including their initial fill at world start;
+- the bones: 35 draws per enemy death and 25 per spawner death;
+- the upward speeds of the shrine, Phoenix, tome and stat bursts, and the
+  garrison-death burst's velocities.
+
+Legacy mode runs the kept old bodies (ambient, bones, tome and stat bursts) on
+a private stream, and the other bursts have none. So wherever a harness seeds
+`Math.random`, the gameplay draws after world assembly land on different values
+than on `main`, for example the coin angles after a kill. The distributions are
+unchanged. Re-record seeded goldens once, with that reason.
+
+### Occlusion strategies
+
+Each 3D particle chooses its depth test by its footprint in device pixels, so
+the per-pixel JavaScript cost cannot grow with canvas size. With a recipe's
+`occlusion:'auto'` the choice is:
+
+| Strategy | When it applies | Result |
+| --- | --- | --- |
+| `point` | Painted radius at most 1.5 px | One depth read; exact |
+| `footprint` | Up to 12 px, and up to 24 px while 50,000 reads per frame remain | Scans the footprint with an early exit: visible, hidden or mixed. This is the same decision the billboard mask makes |
+| `tiles` | Above 24 px, or 12-24 px once the footprint budget is spent | A lazily built 8×8 min/max tile summary (one level of hierarchical Z). Exact when a box is fully visible or fully hidden, conservative otherwise; only mixed tiles are clipped |
+| `segment` | Streaks and bones (rain, sparks) | 2-9 samples along the line; visible runs are drawn, so streaks stop at occluder edges, exact to the sample spacing |
+| `corona` | Chosen explicitly for soft additive glows (flame embers, torch glow) | Alpha × the visible share of 5 core samples, drawn unclipped. Glows fade behind terrain instead of being cut, at a constant cost |
+| `clip`, then `grid` | Mixed items | An exact clip while 60,000 mask pixels per frame remain, then a bounded 12×12 grid clip. At most 256 mixed items per frame; the rest are tested at their centre |
+| `none` | Eye/screen overlay and the 2D view | No depth test |
+
+Resting items (settled snow, chips, splash rings) are depth-tested 0.5 units
+above their support so the ground beneath them does not hide them. Sprites
+still write no scene depth, so world particles paint over nearer sprites, as
+legacy motes did. The 3D-integration models (wall props, chests, spawners,
+floor props, landmarks and structure models) do write scene depth, all inside
+`draw()` and so before every fx stage: with those switches on (Recommended)
+particles are depth-tested against them, and in Legacy they are sprites again.
+In New mode the torch glow uses `corona`. With `wallPropModels` on, its samples
+centre on the visible flame (2 units out and 2 up from the light, where embers
+leave it) rather than on the light, which the modelled shaft hides from in
+front and below; the glow is still drawn at the light. For the exact A/B, set
+`fxTorchGlowOcclusion = 'tiles'` in the console.
+
+### Switches and console controls
+
+In the settings overlay, the **Effects ›** chip on the title row opens
+**Settings → Effects** in the same panel. It works windowed and in fullscreen.
+Switches apply at once and are not saved.
+
+| Switch | Values (default) | Effect |
+| --- | --- | --- |
+| `fxWeather` | `off`, `auto`, `rain`, `snow`, `ash` (`auto`) | `auto` rolls 2-5 minute fronts by biome: rain in ground, plains, forest and cave biomes, snow on ice, ash in the expanse. Rain columns whose open sky is 1.5 H or higher fall as snow. Weather fades as the camera enters a cave, so a cave mouth still shows it outside. `auto` never starts weather in Cave Test; force a kind there |
+| `fxDebris` | on | Sparks, chips and dust from projectile contacts (wall, floor, cap, ceiling, enemy, spawner, ore, lob) and NPC melee strikes |
+| `fxFootDust` | on | Step, landing and dash puffs from the player and NPCs. In first person the player's own step and landing puffs are refused, because the feet are never in view, and a dash shows screen-corner puffs |
+| `fxUnified` | on | The A/B master. Off draws the migrated families with their pre-migration code and turns the three presets off. That code runs on a private random stream, so switching never changes gameplay draws. The registry's lifecycle fixes stay on |
+
+The console controls below are in memory only; none of them is saved.
+- `setEffectToggle(key, value)` and `effectTogglesSnapshot()` set and read the
+  switches.
+- `setEffectFamilyMode(family, 'new' | 'legacy' | null)` sets the A/B mode of
+  one family: `ambient`, `torchGlow`, `bones`, `pickupBursts` or `flameEmbers`.
+  `torchEmbers` follows `ambient`.
+- `effectWeatherForce(kind, intensity)` forces the weather. `kind` is `rain`,
+  `snow`, `ash`, `biome` (the biome's kind), `clear`, or `null` to release it.
+  Read the state with `effectWeatherState()`.
+- `setEffectPlacementOverride(recipeId, place)` changes where a recipe spawns
+  in first person, for review.
+
+When the render-feature registry (`defineRenderFeature`) is present, the
+switches register there and share its values.
+
+### The Particles setting is live
+
+`settings.particles` (Low 10, Medium 25, High 40, Ultra 60; the slider runs
+0-60) is read every tick. A change applies on the tick after **Apply**, without
+resetting the world. The budget is B = min(capacity − reserve, 48 × P): 1,200 at
+Medium, 2,816 at Ultra. Each class has a cap:
+- **Combat:** 35% of B.
+- **Locomotion:** 10% of B.
+- **Ambient:** P plus 5% of B. Ambient motes aim for P, so Medium starts with 25
+  motes; the legacy code started with 35.
+- **Weather:** whatever the others leave.
+
+Feedback bursts scale by clamp(P/25, 0.5, 1.25) and may use the 256-slot
+reserve, so gameplay acknowledgement never disappears, even at 0. When a class
+is over a lowered cap, only the excess fades out, over 0.25 s. A spawn of higher
+priority (feedback > combat > locomotion > ambient > weather) may steal a slot
+from a lower class with a bounded 64-slot scan. Per-recipe distance LOD
+(`lod:{near, far, farKeep, cull}`) thins spawns, and streaks draw as dots
+beyond `far`.
+
+### Governor
+
+The governor is presentation-only. It thins drawing and nothing else: weather,
+ambient and locomotion particles are skipped by a stable per-particle hash, and
+the glow cap shrinks with it. Spawning, budgets and the pool never depend on
+machine timing. Its input per frame is the sum of two parts:
+- **Stage time:** the previous frame's `fxCombat3D + fxOverlay + fx2D` stage
+  time, plus `ambientFX3D` and `torchGlow3D` while those families are in New
+  mode.
+- **Raster estimate:** the device pixels that the previous frame's unpinned
+  particle passes painted, at 14 ms per megapixel
+  (`EFFECT_CONFIG.governor.rasterMsPerMpx`).
+
+The input is smoothed as `ema = 0.9 ema + 0.1 input`. Above 1.0 ms the level
+drops by ×0.97 per frame, down to a floor of 0.35. Below 0.6 ms it recovers by
+×1.01. At the floor, glow halos are capped at floor(256 × 0.35) = 89 per frame
+for every class. The casting studio, the browser profile and `fxBench` (unless
+a run measures the governor) use pinned pools, which draw at 1. Most tests pin
+their pools too; the governor and raster checks run unpinned.
+
+### Stats and profiling
+
+`getEffectStats()` returns a copy. It allocates, so call it from the console,
+not every frame. Its fields:
+- **Pool:** `live`, `capacity`, `budget`, `P`, `s`, and `byClass.<class>.{live, cap}`.
+- **`tick`** (cumulative since the last level or world reset, not per tick):
+  spawned, killed, stolen, children, events in, dropped and gated, and the
+  reasons for refused spawns (`refused.toggle`, `family`, `cap`,
+  `budget`, `lod`, `spawnCap`, `offscreenSelf`, `view`, `noSupport`,
+  `childQueue`).
+- **`registry`:** pruned, rebased, cleared, primed, and `malformed` records per
+  family.
+- **`failures`:** failures per entry point. Any nonzero count is a bug; every
+  effects harness asserts zero.
+- **`frame`:** considered, gated, thinned, offscreen, subpixel and drawn counts;
+  buckets; `occ` counts per strategy; `maskPx`; `rasterPx`; glow draws and caps;
+  sprite hits and builds.
+- **Governor and world:** `governor`, `governorInput {ema, input, rasterMs}`,
+  and the `fields`, `weather` and `torches` state.
+
+The render stages appear in the Perf HUD and in Cave Test **Profile preview**.
+`physicsProfileReport()` reports `effectsSim` when `physicsProfileEnabled` is
+set.
+
+`tools/game/fx-bench.js` is the browser measurement protocol for targets T1-T10.
+It is not in the manifest and never ships in the header. `dev.py serve` serves
+it at `/fx-bench.js`, to be injected into a separate, visible, foreground test
+tab. Its header comment gives the procedure.
+
+### Adding an effect
+
+1. **An existing event, anchor or field** needs one recipe entry and no code.
+   Base it on an existing recipe with `extends`. For example, a hypothetical
+   `impact.iceShard`:
+
+   ```js
+   'impact.iceShard': {extends:'impact.chip',
+     trigger:{event:'projectileContact', where:{kind:['wall', 'floor', 'cap'], spell:['ice']}, count:4},
+     color:{material:'frostMagic', roles:['core', 'light']}, lighting:'emissive',
+     render:{primitive:'chip', size:[0.3, 0.6], alpha:[0.9, 1]}},
+   ```
+
+   The recipe inherits its class, switch, LOD, occlusion, 2D form and stats from
+   the base. `trigger` and `color` replace the base's values whole instead of
+   merging with them.
+2. **A new gameplay event** needs one guarded producer line, for example
+   `if (typeof fxEvent === 'function') fxEvent('chestOpen', ch);`.
+   - Add the name to `FX_EVENTS` in `11-fx-recipes.js`, with its A/B `family`
+     (or `null`) and its `where.kind` vocabulary.
+   - Add a reader to `FX_EVENT_READERS` in `11-fx-engine.js`. It copies position
+     and colour into the event slot and never keeps or writes the producer's
+     object. The engine checks at load that every event has a reader.
+   - Add recipes with `trigger:{event:'chestOpen', ...}`.
+3. **Something continuous on an entity** needs a recipe and one call, here
+   for a hypothetical `status.burnEmber` recipe:
+   `var h = fxAttach('status.burnEmber', enemy, {until:enemy.burnUntil, rate:12});`.
+   - The rate comes from `opts.rate` or the recipe's anchor trigger, and it
+     must be positive.
+   - A body with a numeric `health` (or any object passed with
+     `opts.follow`) is followed every tick and stops when it dies. Anything else
+     is a static point.
+   - `fxDetach(h)` ends the emitter early.
+4. **A new transient array or painter state** needs one
+   `registerEffectFamily(name, def)` call. The lifecycle lists and the studio
+   keys pick it up. `def` must name a `draw3D` and a `draw2D` decision (a stage
+   name, or `{none:'reason'}`) and use only the registry's keys and values. The
+   call throws otherwise, or when the name is already registered. Input-release
+   behaviour (for example, stopping when the
+   fire button is released) stays with the owner's input handlers.
+
+Every new effect also needs these:
+- Cosmetic code never calls `Math.random`, `presentationRandom` or
+  `shadowBlur`; use `effectNoise`.
+- World units and material roles only.
+- A class and priority that fit. Use feedback only for gameplay
+  acknowledgement.
+- A `view2D` decision.
+- A first-person `place` for events at or near the player.
+- A harness row per `TESTING.md`: a named mechanism, a fixture that reaches it,
+  an independent oracle, a control and a `--flag` mutation. Update the exact
+  PASS count.
+
+Then run `build`, the focused suite and the full gate, and check the look in a
+separate browser tab.
+
+### Measurements so far
+
+Headless suites check counts and contracts, not time. No browser figure so far
+meets the spec's protocol: a visible foreground tab, p95 over 600 or more
+frames. Every figure below comes from Chrome (version and DPR not recorded) in
+a **hidden** preview pane on a loaded machine, with frames driven by hand. The
+runs used Endless seed 424242 at noon and 240 frames, of which the first 120
+were skipped. Each figure is a mean over the 120 measured frames, not a
+percentile:
+- **Stage JS time** is the fx stages' JavaScript time.
+- **Flushed** is the fx stages plus one 1-px `getImageData` readback, which
+  makes the canvas finish its queued drawing inside the timed span.
+
+"Pinned" holds the governor at 1. That is how 3D behaved before the raster
+estimate was added, because its JS-only input stayed below the threshold.
+
+| Scene | Pinned, flushed | Governed, flushed | Stage JS time (pinned → governed) | Governor |
+| --- | --- | --- | --- | --- |
+| 3D 1920×1080, Ultra rain (3 interleaved pairs) | 2.83 / 2.92 / 3.01 ms | 1.22 / 1.23 / 1.25 ms | 0.52 → 0.28 ms | 0.35 (floor) |
+| 3D 360×240, Ultra rain | 0.816 ms | 0.802 ms | about 0.32 ms | 1 |
+| 3D 1920×1080, Medium rain | 1.31 ms | 0.93 ms | 0.25 → 0.19 ms | 0.715 |
+| 2D 1920×1080, Ultra snow | 0.76-0.81 ms | 0.83-0.84 ms | about 0.16 ms | 1 |
+| 2D 1920×1080, Ultra ash | not measured | 0.77 ms | 0.16 ms | 1 |
+| 2D 1920×1080, Ultra rain (splash rings only) | not measured | 2.21 ms | 0.18 ms | 1 |
+
+Before the raster estimate was added, the governor could not see raster cost.
+At 1920×1080 Ultra rain, the fx stages took 2.46 ms flushed while the
+governor's input, which was JS time only, read 0.43 ms.
+
+The pixel model underprices small items. A 600-item flushed microbenchmark at
+1080p measured 0.5-3.3 µs per item, against 0.06-0.32 µs modelled. This is why
+2D rain splashes cost 2.2 ms while the governor stays at 1. At Medium rain in
+1080p, the governor settles near 0.7 and never recovers, because its smoothed
+input stays between the two thresholds.
+
+### Still owed
+
+These are owed before sign-off:
+- The visible-foreground targets T1-T10.
+- Chrome allocation sampling for T10. This is the only proof that the steady
+  state allocates nothing.
+- Safari and a phone.
+- A decision on the raster calibration. A per-item cost by primitive plus a
+  per-pixel cost is proposed.
+- Each family's art review.
+
+The legacy code paths, the `fxUnified` fallbacks and the A/B scaffolding are
+removed only after the user signs off. See
+`docs/game_audit_handoff/PARTICLE_SYSTEM_2026-09-28.md`.
+
 ## Optional local game audit
 
 The existing local audit lab under `tools/webui` adds behavioral checks when it

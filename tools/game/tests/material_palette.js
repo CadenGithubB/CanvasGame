@@ -141,6 +141,13 @@
   G.BIOME_PALETTE.ground.patternBase = '#123456';
   check('pattern reads existing biome palette instead of inline copy', pattern('ground') !== expected.patterns.ground);
   G.BIOME_PALETTE.ground.patternBase = oldBase;
+  var spellRoles = ['core', 'light', 'mid', 'deep', 'rune'];
+  check('spell materials share the five missile roles', ['missileMagic', 'fireMagic', 'frostMagic', 'stormMagic',
+    'venomMagic', 'arcaneMagic', 'towerMagic', 'slimeMagic', 'haloMagic'].every(function(id) {
+    var material = G.GAME_MATERIALS[id];
+    return material && spellRoles.every(function(role) { return /^#[0-9a-f]{6}$/.test(material.hex[role]); }) &&
+      Object.keys(material.hex).length === spellRoles.length;
+  }));
   __out('MATERIAL_PALETTE_RESULT PASS ' + checks);
 }());
 undefined;

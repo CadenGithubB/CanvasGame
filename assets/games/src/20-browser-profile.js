@@ -69,7 +69,7 @@ function caveProfileRender(job, collect) {
 // world's arrays and cached canvases untouched for restoration afterward.
 function caveProfilePrepareInputs(job) {
   var saved=job.savedInputs={mesh:floorMesh,seed:WORLD_SEED,
-    ambient:ambientParticles,explored:exploredCells,minimap:minimapCanvas,dirty:minimapDirty,
+    ambient:ambientParticles,fx:typeof fxState!=='undefined'?fxState:null,explored:exploredCells,minimap:minimapCanvas,dirty:minimapDirty,
     fog:drawMinimap._fogCanvas,hadFog:Object.prototype.hasOwnProperty.call(drawMinimap,'_fogCanvas'),
     exploredUpdate:_lastExploredUpdate,light:_lightGrid,lightScale:_lightGridLastScale,
     lightX:_lightGridLastCamGX,lightY:_lightGridLastCamGY,lightFrame:_lightGridFrameCount,
@@ -82,8 +82,10 @@ function caveProfilePrepareInputs(job) {
   gameTimeNow=function(){return job.frozenTime;};
   Math.random=function(){state=(Math.imul(state,1664525)+1013904223)|0;return(state>>>0)/4294967296;};
   try{
-    initAmbientParticles();
-    updateAmbientParticles(0);
+    // A fresh pinned particle pool primed for the profile (unified effects);
+    // hosts without the engine keep the legacy ambient priming.
+    if(typeof effectProfilePrime==='function')effectProfilePrime(job);
+    else{initAmbientParticles();updateAmbientParticles(0);}
     initMinimap();
     var fog=document.createElement('canvas');fog.width=MINIMAP_W;fog.height=MINIMAP_H;
     drawMinimap._fogCanvas=fog;minimapDirty=true;_lastExploredUpdate=job.frozenTime;
@@ -95,10 +97,20 @@ function caveProfilePrepareInputs(job) {
     // smoothed rate is unrelated to this frozen, manually paced fixture.
     settings.showFPS=false;
   }finally{
-    saved.ownedAmbient=ambientParticles;saved.ownedExplored=exploredCells;
+    saved.ownedAmbient=ambientParticles;saved.ownedFx=typeof fxState!=='undefined'?fxState:null;saved.ownedExplored=exploredCells;
     saved.ownedMinimap=minimapCanvas;saved.ownedFog=drawMinimap._fogCanvas;saved.ownedLight=_lightGrid;
     Date.now=oldDate;Math.random=oldRandom;gameTimeNow=oldGameClock;
   }
+}
+
+// The profile's workload inputs. particles counts every live particle (the
+// engine's pool, when loaded, plus legacy motes) and particleSetting records
+// the Particles setting, so profiles taken under different settings compare.
+function caveProfileCanonicalInputs(){
+  return{ambientParticles:ambientParticles.length,
+    particles:(typeof getEffectStats==='function'?getEffectStats().live:0)+ambientParticles.length,
+    particleSetting:settings.particles,exploration:'radius 30 around fixture',
+    lighting:'forced frozen-time update',profilingOverlays:false};
 }
 
 function caveProfileRestoreInputs(job) {
@@ -106,6 +118,7 @@ function caveProfileRestoreInputs(job) {
   // A cancelled run must not put old arrays back over a newly generated world.
   if(floorMesh===saved.mesh && WORLD_SEED===saved.seed){
     if(ambientParticles===saved.ownedAmbient)ambientParticles=saved.ambient;
+    if(typeof fxState!=='undefined' && fxState===saved.ownedFx)fxState=saved.fx;
     if(exploredCells===saved.ownedExplored)exploredCells=saved.explored;
     if(minimapCanvas===saved.ownedMinimap)minimapCanvas=saved.minimap;
     if(drawMinimap._fogCanvas===saved.ownedFog){
@@ -122,6 +135,9 @@ function caveProfileRestoreInputs(job) {
       _surfaceFloorLightStats=saved.surfaceStats;
     }
   }
+  // After a world regeneration the profile's pool was reset for the new world
+  // and stays live; it must not keep the profile's pinned governor.
+  else if(typeof fxState!=='undefined' && fxState && fxState===saved.ownedFx && saved.ownedFx!==saved.fx)fxState.pinned=false;
   settings.showFPS=saved.showFPS;_fpsSmooth=saved.fpsSmooth;_lastFrameTimeMs=saved.lastFrameTime;
   job.savedInputs=null;
 }
@@ -201,8 +217,7 @@ async function startCaveBrowserProfile(mode) {
     result.frozenTime=job.frozenTime;result.randomSeed=job.randomSeed;
     caveProfilePrepareInputs(job);
     result.surfaceLightingBake=typeof getSurfaceFloorLightStats==='function'?getSurfaceFloorLightStats():null;
-    result.canonicalInputs={ambientParticles:ambientParticles.length,exploration:'radius 30 around fixture',
-      lighting:'forced frozen-time update',profilingOverlays:false};
+    result.canonicalInputs=caveProfileCanonicalInputs();
     var previous=null;
     for(var frame=0;frame<72;frame++){
       var ts=await caveProfileNextFrame(job);
