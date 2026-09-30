@@ -5,15 +5,14 @@ tooling fixes are implemented and tested. The rest of S9 remains: the
 visible-foreground measurements and the per-family art review. S10 (cleanup)
 waits for the user's sign-off.
 
-Everything is **uncommitted**. It is on the local branch `codex/particle-system`
-in the worktree `.claude/worktrees/particle-system`, which was created from
-`main` at `c6851a4`. The branch is built on an uncommitted **copy of
-spell-visuals slice 1**, so its diff contains both pieces of work. Section 6
-("Spell session") lists the spell-only files and the files that mix both. The
-effect recipes depend on spell slice 1's materials, so that slice must land
-first (section 6, "Hard dependency"). Nothing has been pushed, committed or
-tagged. Publishing requires the user's explicit authorization (root
-`AGENTS.md`).
+It is committed as `4fd4c69` on the local branch `codex/particle-system`, on
+top of spell-visuals slice 1 (`cdbdf0f`, branch `codex/spell-visuals`, created
+from `main` at `c6851a4`), and both are merged with the other work branches on
+`codex/merge-all`. Section 6 ("Spell session") lists the spell-only files and
+the files that mix both. The effect recipes depend on spell slice 1's
+materials (section 6, "Hard dependency"), which the commit order keeps first.
+Nothing has been pushed or tagged. Publishing requires the user's explicit
+authorization (root `AGENTS.md`).
 
 Read these first: root `AGENTS.md`, `assets/games/AGENTS.md`,
 `assets/games/TESTING.md`, and the README section "Unified effects V1

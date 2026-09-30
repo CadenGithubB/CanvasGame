@@ -1,9 +1,10 @@
 # Spell visual archetypes: handoff (2026-09-27)
 
 Status: slice 1 of 6 is implemented, tested and partly reviewed in a browser.
-Everything is **uncommitted** on the local branch `codex/spell-visuals`
-(created from `main` at `c6851a4`). No push, no commit, no tag. Publishing
-requires the user's explicit authorization (root `AGENTS.md`).
+It is committed as `cdbdf0f` on the local branch `codex/spell-visuals`
+(created from `main` at `c6851a4`) and merged with the other work branches on
+`codex/merge-all`. Nothing has been pushed or tagged. Publishing requires the
+user's explicit authorization (root `AGENTS.md`).
 
 Read first: root `AGENTS.md`, `assets/games/AGENTS.md`, `assets/games/TESTING.md`,
 `tools/webui/AGENTS.md`. Then this file, then the source files named below.
