@@ -27,6 +27,10 @@ part, so a model standing in water is tinted below the surface instead of
 painting over it, and before every billboard and sprite, which it would
 otherwise paint over. The "water" section drives the real drawWater3D on an
 authored lake with a model chest standing in it and a sprite on its shore.
+That order times sceneEntities in two _pt calls (one name) around water3D;
+the "timer" section checks, with authored stage costs on the host clock,
+that the Perf HUD's stage table still counts it as one call a frame (its
+average and max are per frame, as the ring's are), not two half-calls.
 
 Restated in stage H: the spawner has a model (spawnerModel, default ON), so
 the "calls" check that model-less families record nothing in the opaque
@@ -39,7 +43,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("pass_order.js")
-EXPECTED = 31  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks
+EXPECTED = 32  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks; merge fix: +1 timer check
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--late-landmarks": ("ruin,lintel,overlays", (
@@ -56,6 +60,8 @@ MUTATIONS = {
     "--water-after-props": ("water", (
         "water: the water3D stage runs after every family's opaque phase and before any overlay phase",
         "water: a sprite on the near shore draws after the water")),
+    "--timer-per-call": ("timer", (
+        "timer: the Perf HUD times sceneEntities' two halves (opaque 3 ms, overlay 5 ms) as one 8 ms call a frame",)),
 }
 
 
@@ -75,7 +81,7 @@ class PassOrderTests(unittest.TestCase):
         self.assertIn(f"PASS_ORDER_RESULT PASS {EXPECTED} failed 0", self.lines, self.output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in self.lines), self.output)
         self.assertNotIn("SETUP", self.output)
-        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest "):
+        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest ", "NOTE timer "):
             self.assertTrue(any(line.startswith(note) for line in self.lines), note)
 
     def test_each_mutation_fails_its_named_check(self) -> None:

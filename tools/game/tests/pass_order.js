@@ -24,8 +24,10 @@
 //   --water-before-props water3D runs before sceneEntities' opaque phase (the
 //                       water branch's slot, after walls, before every prop)
 //   --water-after-props water3D runs after sceneEntities' overlay phase
+//   --timer-per-call    _pt counts every call again, so the Perf HUD shows
+//                       sceneEntities' two halves as two calls a frame
 // --sections a,b runs only: ruin, lintel, entities, overlays, calls, legacy,
-// water, lab (render-lab/50-pass-order.js on Endless 2024).
+// water, timer, lab (render-lab/50-pass-order.js on Endless 2024).
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -41,7 +43,7 @@
     if (source.split(before).length !== 2) throw Error('MUTATION_ANCHOR ' + name);
     return source.replace(before, after);
   }
-  var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js';
+  var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js', DIAG = 'src/20-diagnostics.js';
   var LANDMARK_STAGE = "    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())\n" +
     "      _pt('landmarkOpaque3D', function(){ drawLandmarkOpaque3D(); });\n";
   var FAMILIES = ['drawFloorScatter3D', 'drawTreasureChests3D', 'drawEnemySpawners3D', 'drawOreVeins', 'drawWallDecorations'];
@@ -65,6 +67,7 @@
       source = swap(source, '--water-after-props', GOAL_STAGE, WATER_STAGE + GOAL_STAGE);
     }
     if (path === HUD) source = swap(source, '--overlay-unclipped', '  if (!clip) { draw(); return 1; }\n', '  { draw(); return 1; }\n');
+    if (path === DIAG) source = swap(source, '--timer-per-call', '  var sameFrame = bd.slot === _perfRingIdx && arr[_perfRingIdx] === bd.mark;\n', '  var sameFrame = false;\n');
     return source;
   });
   check('real manifest loads with the landmark pass and no console errors',
@@ -627,6 +630,48 @@
       sub.near > 0 && sub.far > 0 && sub.shared >= 20 && sub.over === 0 && dry >= 20, {chest: sub, dry: dry});
     check('water: a sprite on the near shore draws after the water, which overpaints 0 of its ' + shore.shared + ' shared pixels',
       shore.near >= 20 && shore.far > 0 && shore.shared >= 20 && shore.over === 0, shore);
+  }
+
+  // ── timer: the Perf HUD's stage table and sceneEntities' two halves ──
+  // sceneEntities is timed by two _pt calls (one name) around water3D. On
+  // the host's performance clock the wall-decoration family's opaque call
+  // costs 3 ms and its overlay call 5 ms, water 2 ms and walls 1 ms, over
+  // four frames whose ring slots advance as the game loop advances them. The
+  // oracle is the authored cost: sceneEntities 8 ms a frame, one call, max 8
+  // (per call it was 4 ms average and max 5), as the ring's per-frame sum
+  // says; water3D and walls3D (one call each) keep 2 and 1. The HUD's text
+  // panel (drawPerfHud) prints the same sceneEntities row.
+  if (section('timer')) {
+    world({cam: RCAM, ruins: [RUIN]});
+    var cost = {opaque: 3, overlay: 5}, tDecor = G.drawWallDecorations, tWater = G.drawWater3D, tWalls = G.drawWalls3D;
+    var ringSums = [], hudText = '', FRAMES = 4;
+    G.drawWallDecorations = function (phase) { H.clock.perf += cost[phase] || 0; return tDecor.apply(this, arguments); };
+    G.drawWater3D = function () { H.clock.perf += 2; return tWater.apply(this, arguments); };
+    G.drawWalls3D = function () { H.clock.perf += 1; return tWalls.apply(this, arguments); };
+    try {
+      G._perfBreakdown = {}; G._hudAllTimeMax = {}; G._perfBreakdownLog = Date.now();   // no 5 s dump mid-run
+      for (var tf = 0; tf < FRAMES; tf++) {
+        G._perfRingIdx = (G._perfRingIdx + 1) % G.PERF_HISTORY_LEN;
+        for (var tk in G._perfStageHistory) G._perfStageHistory[tk][G._perfRingIdx] = 0;
+        frame();
+        ringSums.push(G._perfStageHistory.sceneEntities[G._perfRingIdx]);
+      }
+      H.clock.now += 1000; G.drawPerfHud(); hudText = H.element('perfHudText').textContent;
+    } finally { G.drawWallDecorations = tDecor; G.drawWater3D = tWater; G.drawWalls3D = tWalls; }
+    function row(name) {
+      var v = G._perfBreakdown[name];
+      return v ? {count: v.count, avg: v.total / v.count, max: v.max} : null;
+    }
+    var se = row('sceneEntities'), wa = row('water3D'), wl3 = row('walls3D');
+    var ringMean = ringSums.reduce(function (a, b) { return a + b; }, 0) / FRAMES;
+    var hudRow = (hudText.split('\n').filter(function (l) { return l.indexOf('sceneEntities ') === 0; })[0] || '').trim().split(/\s+/).slice(1).map(Number);
+    var timer = {sceneEntities: se, water3D: wa, walls3D: wl3, ringSums: ringSums, hudRow: hudRow};
+    out('NOTE timer ' + JSON.stringify(timer));
+    check('timer: the Perf HUD times sceneEntities\' two halves (opaque 3 ms, overlay 5 ms) as one 8 ms call a frame, its average and max equal to the ring\'s per-frame sum; water3D (2 ms) and walls3D (1 ms) keep one call a frame',
+      !!se && se.count === FRAMES && Math.abs(se.avg - 8) < 0.2 && Math.abs(se.avg - ringMean) < 1e-3 && Math.abs(se.max - 8) < 0.2 &&
+      ringSums.every(function (v) { return Math.abs(v - 8) < 0.2; }) &&
+      !!wa && wa.count === FRAMES && Math.abs(wa.avg - 2) < 0.2 && !!wl3 && wl3.count === FRAMES && Math.abs(wl3.avg - 1) < 0.2 &&
+      hudRow.length === 2 && Math.abs(hudRow[0] - se.avg) < 0.006 && Math.abs(hudRow[1] - se.max) < 0.006, timer);
   }
 
   // ── lab: render-lab/50-pass-order.js on Endless 2024 (its nearest ruin) ──

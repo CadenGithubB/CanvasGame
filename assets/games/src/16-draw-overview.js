@@ -841,7 +841,8 @@ function draw() {
     // draws after every opaque part above (a model standing in a river is
     // tinted below the surface instead of painting over it) and before every
     // billboard and sprite (the phase below and the late stages), which it
-    // would otherwise paint over. The two halves share the sceneEntities timer.
+    // would otherwise paint over. The two halves share the sceneEntities timer;
+    // _pt (20-diagnostics.js) counts them as one call per frame.
     _pt('water3D', function(){ if (typeof drawWater3D === 'function') drawWater3D(); });
     _pt('sceneEntities', function(){
       drawFloorScatter3D('overlay');
