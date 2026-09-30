@@ -21,6 +21,13 @@ late order, or the legacy chest) that does overpaint, and a negative control
 (the same things moved aside) that shares no pixel. Headless commands and
 scene depth, not browser pixels or timing.
 
+Merge of codex/water-system: the water system's water3D stage (translucent,
+no depth writes) runs between sceneEntities' two phases: after every opaque
+part, so a model standing in water is tinted below the surface instead of
+painting over it, and before every billboard and sprite, which it would
+otherwise paint over. The "water" section drives the real drawWater3D on an
+authored lake with a model chest standing in it and a sprite on its shore.
+
 Restated in stage H: the spawner has a model (spawnerModel, default ON), so
 the "calls" check that model-less families record nothing in the opaque
 phase runs the spawner's legacy path (spawnerModel off) and is renamed; its
@@ -32,7 +39,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("pass_order.js")
-EXPECTED = 28  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate)
+EXPECTED = 31  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--late-landmarks": ("ruin,lintel,overlays", (
@@ -43,6 +50,12 @@ MUTATIONS = {
         "entities: sceneEntities draws every family's opaque phase before any overlay phase",
         "entities: opaque first, the farther torch model overpaints 0 of the nearer chest overlays")),
     "--overlay-unclipped": ("overlays", ("overlays: with landmarkOpaqueEarly, overlays behind a wall are hidden",)),
+    "--water-before-props": ("water", (
+        "water: the water3D stage runs after every family's opaque phase and before any overlay phase",
+        "water: a model chest standing in the lake writes depth before the water")),
+    "--water-after-props": ("water", (
+        "water: the water3D stage runs after every family's opaque phase and before any overlay phase",
+        "water: a sprite on the near shore draws after the water")),
 }
 
 
@@ -62,7 +75,7 @@ class PassOrderTests(unittest.TestCase):
         self.assertIn(f"PASS_ORDER_RESULT PASS {EXPECTED} failed 0", self.lines, self.output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in self.lines), self.output)
         self.assertNotIn("SETUP", self.output)
-        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early "):
+        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest "):
             self.assertTrue(any(line.startswith(note) for line in self.lines), note)
 
     def test_each_mutation_fails_its_named_check(self) -> None:

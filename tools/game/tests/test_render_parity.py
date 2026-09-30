@@ -28,6 +28,15 @@ hold, so the panel draws exactly as before plus that one reset (one more entry
 per scene). test_pre_fade_spell_panel_reproduces_the_f1_pins drops the reset in
 a copy and must reproduce the F1 pins exactly, proving the fade is the only
 Legacy change; the Stage B check drops it too, so its pins stay Stage B's.
+Re-pinned at the water-system merge for one named reason: the water system
+(06-water.js, 13-render-water.js) is world data plus a water3D pass. It solves
+lakes and rivers once per window build, carves river channels into the ground,
+recolours the ground under and beside the water, and draws the translucent
+surfaces in water3D; all three scenes are Endless windows with water in them.
+It is not a render feature, so Legacy draws it too. test_water_off_reproduces_
+the_held_staff_pins starts the same scenes with the system switched off
+(--water-off) and must reproduce the held-staff pins exactly, proving the water
+system is the only Legacy change; the F1 and Stage B checks run with it off too.
 Floating-point libm results can differ between engines, so pins are per engine;
 an engine without pins skips only the pin comparison, not the other checks.
 Commands, not pixels: this is not browser evidence.
@@ -40,9 +49,18 @@ from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("render_parity.js")
 SCENES = ("cave-12345-entrance", "endless-fortress-window", "endless-2024-market-ruin")
-# engine -> scene -> (seed, hash, entries). Re-pinned at the held-staff merge
-# (spell HUD fade's trailing globalAlpha reset; see the module docstring).
+# engine -> scene -> (seed, hash, entries). Re-pinned at the water-system
+# merge (lakes, carved rivers and the water3D pass; see the module docstring).
 PINNED = {
+    "jsc": {
+        "cave-12345-entrance": (12345, "8afd10d0b6544016", 47297),
+        "endless-fortress-window": (10, "64fa8e6fdf06080f", 38402),
+        "endless-2024-market-ruin": (2024, "e449ccdbde250d16", 41921),
+    },
+}
+# The held-staff pins (spell HUD fade's trailing globalAlpha reset): what the
+# sources draw with the water system switched off (--water-off).
+PINNED_STAFF = {
     "jsc": {
         "cave-12345-entrance": (12345, "a2846b6639f29d55", 45457),
         "endless-fortress-window": (10, "59b005323245c01d", 38400),
@@ -50,7 +68,8 @@ PINNED = {
     },
 }
 # The F1 pins, recorded 2026-09-27 (absolute-cell wall-decoration variant key):
-# what the sources draw without the spell HUD fade's trailing reset.
+# what the sources draw without the spell HUD fade's trailing reset (and with
+# the water system off).
 PINNED_F1 = {
     "jsc": {
         "cave-12345-entrance": (12345, "dcae7150a4f55ab8", 45456),
@@ -101,32 +120,46 @@ class RenderParityTests(unittest.TestCase):
                 self.assertEqual(PINNED[engine][scene], self.scenes.get(scene),
                                  f"Legacy drawing changed at {scene}. If intended, re-pin with the reason.")
 
+    def test_water_off_reproduces_the_held_staff_pins(self) -> None:
+        engine = JS_ENGINE[0]
+        if engine not in PINNED_STAFF:
+            self.skipTest(f"no held-staff pins for {engine}")
+        output, lines, dry = run("--water-off")
+        self.assertNotIn("MUTATION_ANCHOR", output)
+        self.assertTrue(any(line.startswith("RENDER_PARITY_RESULT PASS 10 failed 0") for line in lines), output)
+        for scene in SCENES:
+            with self.subTest(scene=scene):
+                self.assertEqual(PINNED_STAFF[engine][scene], dry.get(scene), output)
+                self.assertNotEqual(dry[scene][1], self.scenes[scene][1], "the water system must change this scene")
+
     def test_pre_fade_spell_panel_reproduces_the_f1_pins(self) -> None:
         engine = JS_ENGINE[0]
         if engine not in PINNED_F1:
             self.skipTest(f"no F1 pins for {engine}")
-        output, lines, pre_fade = run("--pre-fade-spell-panel")
+        # The F1 pins predate the water system too, so it is switched off.
+        output, lines, pre_fade = run("--pre-fade-spell-panel", "--water-off")
         self.assertNotIn("MUTATION_ANCHOR", output)
         self.assertTrue(any(line.startswith("RENDER_PARITY_RESULT PASS 10 failed 0") for line in lines), output)
         for scene in SCENES:
             with self.subTest(scene=scene):
                 self.assertEqual(PINNED_F1[engine][scene], pre_fade.get(scene), output)
-                self.assertNotEqual(pre_fade[scene][1], self.scenes[scene][1], "the spell HUD fade must change this scene")
+                self.assertNotEqual(pre_fade[scene][1], PINNED_STAFF[engine][scene][1], "the spell HUD fade must change this scene")
 
     def test_old_variant_key_reproduces_the_stage_b_pins(self) -> None:
         engine = JS_ENGINE[0]
         if engine not in PINNED_STAGE_B:
             self.skipTest(f"no Stage B pins for {engine}")
-        # Stage B predates the spell HUD fade, so its trailing reset is dropped too;
-        # the re-key is then compared with the F1 pins, which also lack it.
-        output, lines, old = run("--window-relative-variant", "--pre-fade-spell-panel")
+        # Stage B predates the spell HUD fade and the water system, so its
+        # trailing reset is dropped and the water system is off too; the re-key
+        # is then compared with the F1 pins, which also lack both.
+        output, lines, old = run("--window-relative-variant", "--pre-fade-spell-panel", "--water-off")
         self.assertNotIn("MUTATION_ANCHOR", output)
         self.assertTrue(any(line.startswith("RENDER_PARITY_RESULT PASS 10 failed 0") for line in lines), output)
         for scene in SCENES:
             with self.subTest(scene=scene):
                 self.assertEqual(PINNED_STAGE_B[engine][scene], old.get(scene), output)
                 self.assertNotEqual(old[scene][1], PINNED_F1[engine][scene][1], "the re-key must change this scene")
-                self.assertNotEqual(old[scene][1], self.scenes[scene][1], "the re-key must change this scene")
+                self.assertNotEqual(old[scene][1], PINNED_STAFF[engine][scene][1], "the re-key must change this scene")
 
     def test_one_changed_wall_colour_changes_every_scene_hash(self) -> None:
         output, lines, mutated = run("--wall-colour-plus-one")

@@ -2685,6 +2685,10 @@ function assembleWindow(centerCX, centerCY) {
     }
   }
 
+  // Water may carve river channels into the terrain, so it runs before
+  // anything is derived from the floor heights (wall bases, walk data).
+  if (typeof buildWindowWater === 'function') buildWindowWater();
+
   // Precompute per-wall-face base Z. Fixes visible gaps between wall bottoms
   // and adjacent floor quads caused by wall cell size (15u) being misaligned
   // with floor mesh grid (12u). Center-of-neighbor sampling misses corner

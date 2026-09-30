@@ -13,6 +13,9 @@
 //                              reset; the scenes record inside the fade's hold,
 //                              so this is the pre-fade panel's exact command
 //                              stream and must reproduce the F1 pins
+//   --water-off                starts with the water system (06-water.js)
+//                              switched off: no carving, lakes or water pass,
+//                              so it must reproduce the held-staff pins
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   function option(name) { var i = __argv.indexOf(name); return i >= 0 ? __argv[i + 1] : null; }
@@ -24,6 +27,11 @@
     out((ok ? 'PASS ' : 'FAIL ') + name + (ok ? '' : ' ' + JSON.stringify(detail === undefined ? null : detail)));
   }
   function mutate(path, source) {
+    if (__argv.indexOf('--water-off') >= 0 && path === 'src/06-water.js') {
+      var on = 'var WATER_SYSTEM_ENABLED = true;\n';
+      if (source.split(on).length !== 2) throw Error('MUTATION_ANCHOR --water-off');
+      return source.replace(on, 'var WATER_SYSTEM_ENABLED = false;\n');
+    }
     if (__argv.indexOf('--pre-fade-spell-panel') >= 0 && path === 'src/15-render-hud-menu.js') {
       var reset = '    ctx.fillRect(spellX + 1 * S, spellY + 28 * S, (spellW - 2 * S) * (canAfford ? spellReady : 1), S);\n' +
         '    ctx.globalAlpha = 1;\n  }\n';

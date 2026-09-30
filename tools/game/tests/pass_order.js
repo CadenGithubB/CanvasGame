@@ -1,5 +1,7 @@
 // Opaque-first pass order (integration stage G2): draw()'s landmarkOpaque3D
 // stage (landmarkOpaqueEarly) and sceneEntities' opaque-then-overlay phases,
+// with the water system's water3D stage between those phases (merge of
+// codex/water-system: water is translucent and writes no depth),
 // through one real renderFrame() of the MAIN manifest (render_host.js) on an
 // authored flat world. Every scene is a nearer thing in front of a farther
 // opaque part: a treasure chest (model), an enemy-style billboard (a solid
@@ -19,8 +21,11 @@
 //   --family-order      sceneEntities calls each family with no argument
 //                       (both phases per family, the pre-G2 order)
 //   --overlay-unclipped the structures3D overlays are never depth-clipped
+//   --water-before-props water3D runs before sceneEntities' opaque phase (the
+//                       water branch's slot, after walls, before every prop)
+//   --water-after-props water3D runs after sceneEntities' overlay phase
 // --sections a,b runs only: ruin, lintel, entities, overlays, calls, legacy,
-// lab (render-lab/50-pass-order.js on Endless 2024).
+// water, lab (render-lab/50-pass-order.js on Endless 2024).
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -40,13 +45,24 @@
   var LANDMARK_STAGE = "    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())\n" +
     "      _pt('landmarkOpaque3D', function(){ drawLandmarkOpaque3D(); });\n";
   var FAMILIES = ['drawFloorScatter3D', 'drawTreasureChests3D', 'drawEnemySpawners3D', 'drawOreVeins', 'drawWallDecorations'];
-  var OPAQUE_FIRST = FAMILIES.map(function (f) { return "      " + f + "('opaque');\n"; }).join('') +
-    FAMILIES.map(function (f) { return "      " + f + "('overlay');\n"; }).join('');
+  // sceneEntities runs in two halves around water3D (one timer name): the
+  // opaque phase, then water, then the overlay phase.
+  var OPAQUE_PHASE = FAMILIES.map(function (f) { return "      " + f + "('opaque');\n"; }).join('');
+  var OVERLAY_PHASE = FAMILIES.map(function (f) { return "      " + f + "('overlay');\n"; }).join('');
   var FAMILY_ORDER = FAMILIES.map(function (f) { return "      " + f + "();\n"; }).join('');
+  var SCENE_OPEN = "    _pt('sceneEntities', function(){\n";
+  var WATER_STAGE = "    _pt('water3D', function(){ if (typeof drawWater3D === 'function') drawWater3D(); });\n";
+  var GOAL_STAGE = "    _pt('goalMarker3D', function(){ drawGoalMarker3D(); });\n";
   var loaded = H.loadManifest(function (path, source) {
     if (path === DRAW) {
       source = swap(source, '--late-landmarks', LANDMARK_STAGE, '');
-      source = swap(source, '--family-order', OPAQUE_FIRST, FAMILY_ORDER);
+      // Each family draws both phases in the first half (the pre-G2 order).
+      source = swap(source, '--family-order', OPAQUE_PHASE, FAMILY_ORDER);
+      source = swap(source, '--family-order', OVERLAY_PHASE, '');
+      source = swap(source, '--water-before-props', WATER_STAGE, '');
+      source = swap(source, '--water-before-props', SCENE_OPEN + OPAQUE_PHASE, WATER_STAGE + SCENE_OPEN + OPAQUE_PHASE);
+      source = swap(source, '--water-after-props', WATER_STAGE, '');
+      source = swap(source, '--water-after-props', GOAL_STAGE, WATER_STAGE + GOAL_STAGE);
     }
     if (path === HUD) source = swap(source, '--overlay-unclipped', '  if (!clip) { draw(); return 1; }\n', '  { draw(); return 1; }\n');
     return source;
@@ -55,10 +71,20 @@
     loaded > 40 && typeof G.drawLandmarkOpaque3D === 'function' && typeof G.landmarkLatePhase === 'function' && H.errors.length === 0,
     {loaded: loaded, errors: H.errors.slice(0, 3)});
 
+  // The water section's lake: the real drawWater3D (13-render-water.js) reads
+  // the global floorMesh, which the authored world leaves null (no terrain
+  // depth); while waterMesh is set it runs with that mesh, and only it.
+  var waterMesh = null, realWater = G.drawWater3D;
+  G.drawWater3D = function () {
+    if (!waterMesh) return realWater.apply(this, arguments);
+    var savedMesh = G.floorMesh;
+    G.floorMesh = waterMesh;
+    try { return realWater.apply(this, arguments); } finally { G.floorMesh = savedMesh; }
+  };
   // ── Stage tags: each family marks its span (and phase) in the stream ──
   var TAGS = {drawRuins3D: 'ruin', drawStructures3D: 'structure', drawShrines3D: 'shrine',
     drawTreasureChests3D: 'chest', drawWallDecorations: 'wall', drawEnemySpawners3D: 'spawner',
-    drawFloorScatter3D: 'scatter', drawOreVeins: 'ore'};
+    drawFloorScatter3D: 'scatter', drawOreVeins: 'ore', drawWater3D: 'water'};
   var calls = [], curStage = '', beforeLate = {};
   Object.keys(TAGS).forEach(function (name) {
     var real = G[name];
@@ -549,6 +575,58 @@
       !!def && def.type === 'bool' && def.default === true && def.legacy === false && G.renderFeaturePreset('legacy').landmarkOpaqueEarly === false &&
       G.renderFeaturePreset('recommended').landmarkOpaqueEarly === true && !!chestDef && chestDef.default === true &&
       G.renderFeaturePreset('legacy').chestModel === false && G.renderFeaturePreset('recommended').chestModel === true, {landmark: def, chest: chestDef});
+  }
+
+  // ── water: a model chest standing in a lake, a sprite on its near shore ──
+  // A still lake (the water system's arrays on a flat mesh, ground 0) covers
+  // mesh points x 240-348, y 216-300 at 0.24 H (surface z 6). The camera at
+  // (294, 168), eye 20, looks south. The common chest (model, 11 tall) stands
+  // in the lake 92 ahead on the bed (renderFloorZ 0): its lower 6 units are
+  // under the surface, its lid above it. A wildflower sprite (no model) stands
+  // on the dry shore 28 ahead, the lake behind it. Water writes no depth, so
+  // the chest must write depth before the water (the surface then tints only
+  // its submerged part) and the sprite must draw after it.
+  if (section('water')) {
+    function lakeMesh() {
+      var N = 49, n = N * N, m = {w: N, h: N, gridSize: 12, layerCount: new Uint8Array(n).fill(1), l0Type: new Uint8Array(n).fill(1),
+        l0TopZ: new Float32Array(n), water: new Uint8Array(n), waterSurface: new Float32Array(n), waterDepth: new Float32Array(n),
+        waterSpeed: new Float32Array(n), waterFlags: new Uint8Array(n), waterBody: new Int32Array(n),
+        waterDirX: new Float32Array(n), waterDirY: new Float32Array(n)};
+      for (var gy = 18; gy <= 25; gy++) for (var gx = 20; gx <= 29; gx++) {
+        var v = gy * N + gx;
+        m.water[v] = G.WATER_KIND.still; m.waterSurface[v] = 0.24; m.waterDepth[v] = 0.24; m.waterBody[v] = 1;
+      }
+      return m;
+    }
+    var FLOWER = {x: 294, y: 196, type: 'wildflower', variant: 0, seed: 0.35};
+    function lakeScene() {
+      world({cam: [294, 168, Math.PI / 2], features: {chestModel: true, floorPropModels: true},
+        chests: [chest(294, 260, {facing: -Math.PI / 2})], scatter: [FLOWER]});
+      waterMesh = lakeMesh();
+      try { return {entries: frame(true), masks: masks, calls: calls.slice()}; } finally { waterMesh = null; }
+    }
+    var lake = lakeScene(), wl = lake.calls;
+    var isWater = function (m) { return tagOf(m.stage) === 'water'; };
+    var chestFaces = function (m) { return m.stage === 'chest:opaque' && m.opaque; };
+    var flower = function (m) { return m.stage === 'scatter:overlay' && !m.opaque; };
+    var sub = maskOverpaint(lake.masks, isWater, chestFaces), shore = maskOverpaint(lake.masks, flower, isWater);
+    var chestPx = {}, waterPx = {};
+    lake.masks.forEach(function (m) { m.px.forEach(function (i) { if (chestFaces(m)) chestPx[i] = 1; if (isWater(m)) waterPx[i] = 1; }); });
+    var dry = Object.keys(chestPx).filter(function (i) { return !waterPx[i]; }).length;
+    out('NOTE water chest ' + JSON.stringify(sub) + ' above the surface ' + dry + ' px; shore sprite ' + JSON.stringify(shore) +
+      ' calls ' + JSON.stringify(wl));
+    var wi = wl.indexOf('water:late'), firstOverlay = -1, lastOpaque = -1;
+    wl.forEach(function (c, k) {
+      if (/:opaque$/.test(c)) lastOpaque = k;
+      if (/:overlay$/.test(c) && firstOverlay < 0) firstOverlay = k;
+    });
+    check('water: the water3D stage runs after every family\'s opaque phase and before any overlay phase',
+      wi >= 0 && wl.lastIndexOf('water:late') === wi && lastOpaque >= 0 && lastOpaque < wi && firstOverlay > wi, wl);
+    check('water: a model chest standing in the lake writes depth before the water, which tints its submerged part (' + sub.shared +
+      ' px) and overpaints none of its ' + dry + ' px above the surface; the chest overpaints no water pixel',
+      sub.near > 0 && sub.far > 0 && sub.shared >= 20 && sub.over === 0 && dry >= 20, {chest: sub, dry: dry});
+    check('water: a sprite on the near shore draws after the water, which overpaints 0 of its ' + shore.shared + ' shared pixels',
+      shore.near >= 20 && shore.far > 0 && shore.shared >= 20 && shore.over === 0, shore);
   }
 
   // ── lab: render-lab/50-pass-order.js on Endless 2024 (its nearest ruin) ──

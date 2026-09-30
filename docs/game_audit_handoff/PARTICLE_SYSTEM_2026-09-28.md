@@ -375,7 +375,10 @@ Also owed:
 - **Water system (wading).** Gate footstep dust while wading with a
   `typeof`-guarded `waterAt` check in the locomotion observers
   (`fxObservePlayer`, `fxObserveNpcs` and the step reader in
-  `11-fx-engine.js`).
+  `11-fx-engine.js`). Done at the water-system merge: `fxWading` gates the
+  observers' one emitter (`fxObsEmit`) and the dash trail, and water
+  surfaces are the particles' floor (`fxWaterFloor`); see the README's
+  "Water system" section.
 - **Spell session.**
   - **Hard dependency.** Four shipping recipes use spell slice 1's materials
     from `01-materials.js`: `burst.phoenixRing` uses `fireMagic` (`core`,

@@ -736,6 +736,123 @@ fades over 0.6 s (`SPELL_HUD_HOLD_MS`, `SPELL_HUD_FADE_MS`), clearing the corner
 where the casting hand sits. It runs on game time, so pausing holds it.
 `tools/game/tests/spell_hud_fade.js` drives the production HUD on a controlled clock.
 
+## Water system (2026-09-27)
+
+One model for every spring, river, lake and pool in Endless (`06-water.js`).
+Water is solved, not simulated: a source routes downhill over the loaded
+window, fills the first basin it meets to that basin's spill point (a flat
+lake), then continues from the spill until its strength is spent, it joins
+standing water, or it leaves the window. Each river then becomes an object
+with a smooth course and is carved into the terrain (below). The solve runs
+once per window build, before wall bases and walk data are derived from the
+floor heights, and writes per-cell arrays on `floorMesh`: `water` (0 dry,
+1 still, 2 flowing), `waterSurface`, `waterDepth`, `waterDirX/Y`,
+`waterSpeed`, `waterFlags` and `waterBody`. Nothing runs per frame except
+drawing and a lookup.
+
+- **Sources.** Legacy valley pools (cells below height -3) are now lakes with
+  a flat surface at -3 and real depth. Each window chunk may hold a seeded
+  spring at its highest open cell above `WATER_SPRING_MIN_H`; chunk
+  coordinates seed it, so the same spring appears in every window.
+- **Open ground.** Plain surface terrain only: walls, cave interiors, carved
+  entrance ramps and cave caps stay dry in this version.
+- **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
+  player units and flow. Rendering, movement and enemies all read it.
+- **Rivers are carved into the land** (`buildWaterRivers`,
+  `carveWaterRivers`). Each spring's solved path becomes a river object: the
+  cell path is relaxed (`WATER_RIVER_RELAX` passes of neighbour averaging) so
+  grid zigzags become meanders, smoothed, resampled every 6 units, with a
+  surface that never rises downstream and a width (18-30 units by spring
+  strength) that opens up from the spring. Every open ground point near a
+  river is then reshaped: a parabolic channel `WATER_RIVER_BED_DEPTH` deep at
+  the centreline that meets the surface with a steady slope (so the rendered
+  shoreline follows the channel edge instead of zigzagging along grid
+  triangles), then the higher of a cut bank rising to higher ground and a
+  levee shelf just above the water that falls back to lower ground only after
+  `WATER_LEVEE_WIDTH` (so the river never sits perched above its banks).
+  Points next to walls, caves and lakes keep their height. Carved ground takes
+  the colour the generator would give its new height, with the generator's
+  slope shading. Water past a river end that opens into a lake joins that
+  lake. The walkable floor changes with the carve, so players and enemies wade
+  down into rivers. Rebuilding restores the saved heights and colours first,
+  so carving never compounds.
+- **Rendering** (`13-render-water.js`, pass `water3D` after walls, the
+  landmark pass and `sceneEntities`' opaque phase, before its overlay phase
+  and every later billboard or sprite stage: water writes no depth, so a
+  model standing in it must write depth first, and a sprite in front of it
+  must draw after it; `pass_order.js` section `water`). Lakes are drawn per
+  floor square: every square with a lake corner gets a surface at the lake
+  level, the scene depth test cuts the shoreline
+  where land rises out of the water, and a dry corner is lowered to the ground
+  if the ground is lower, so lakes never hang over a drop; squares sharing one
+  level merge into flat strips. Rivers are ribbons along their course, level
+  across and falling downstream. Each side reaches 7 units past the channel
+  edge into the bank (the depth test draws the waterline) but not out over
+  ground clearly lower than the water. On the inside of a bend tighter than
+  the ribbon it stops at the bend's centre (a fan, not a fold that paints
+  twice), and open ends get one extra section. Each frame culls, sorts far to
+  near and fills translucent through the scene-depth clip (no depth writes),
+  with depth-tinted colour, a little distance sky, lake shimmer, river streaks
+  and lake glints.
+- **Ground under water.** Valley ground is authored very dark (colour follows
+  height), which read as a void through the water. Squares fully under a lake
+  become a lit sand-and-mud lakebed that grows muddier and darker with depth;
+  a lake square that rises out of the water takes its driest corner's natural
+  colour. River beds start from the colour of their own banks (sampled just
+  outside the channel and smoothed along the river) at the waterline and grow
+  muddier toward the deep middle, so the bed shades gradually instead of
+  stepping between bank and mud at grid squares. Dry ground outside the
+  carve is never recoloured; legacy pools start from their pre-water colour
+  (`surfaceBiome`) instead of the old blue.
+- **Movement.** In the fixed tick, water above the feet slows the player
+  smoothly to 55% at knee depth (`WATER_FULL_DEPTH_Z`), and river currents add
+  a push along the flow. Enemies moving through water slow the same way. Jumping
+  clear of the surface ends both.
+- **Effects** (`11-fx-engine.js`). Particles meet a water surface as their
+  floor (`fxWaterFloor`): rain splashes on the water, and snow, ash and
+  chips settle on it and fade, instead of reaching the bed and drawing over
+  the water. A step, landing, dash or dash trail laid under a water surface
+  kicks up no ground dust (`fxWading`, counted as `observers.wading`).
+  Covered by `weather.js` and `locomotion_dust.js`.
+- **Toggles and stats.** `setWaterSystemEnabled(false)` reassembles the
+  window as if the system had never run (legacy water flags, ground heights
+  and colours); `WATER_RENDER_ENABLED` hides only the
+  surfaces. `getWaterStats()` and `getWaterRenderStats()` report counts and
+  timings.
+
+Tests: `water_system.js` checks the solver on authored terrain (a slope, a
+notched bowl whose lake must be flat at its spill height and cover exactly
+the expected cells, a weak spring, a walled gap, a flat plateau) and on real
+seeded windows (legacy lakes, no water on closed ground, surfaces never
+rising downstream along cells or river objects, carved channels measured on
+the rendered ground: the bed dips at least 0.3 below the water across every
+full-width section and dry banks never lie below it, rebuilds reproducing
+water, heights and colours, and switching off giving back a world generated
+without the system), with five mutation controls (including no carving and
+banks without the levee). `water_movement.js` runs the real player step and
+NPC locomotion: an idle player drifts downstream in a river but not on dry
+ground, the same input covers 55% of the dry distance in deep water, enemies
+wade, and switching the system off removes every effect, with two mutation
+controls. `water_render.js` checks the built tiles in two seeded windows:
+every floor square touching lake water carries a lake surface, lakes never
+hang above lower dry ground, ribbons never fold, every point of river water
+lies under a water surface, ribbon edges never hang above dry open ground, no
+bed under water is near-black, and the toggle restores every ground colour,
+with seven mutation controls (one-square-per-point coverage, unclamped lake
+edges, dark natural beds, half-width ribbons, unrelaxed courses, no bend fan,
+banks without the levee). `cave_surface_material.js` skips the river-bank
+points the water system lists in `mesh.waterCarveColors`, as it already
+accepts shoreline tint. Browser, one local run in the app's browser: a window
+solve including carving took 6-23 ms and building the tiles 1-4 ms, once per
+window build; drawing took about 1 ms per frame (at most 1.9 ms over 30
+frames) with 148 visible tiles. Known limits: the terrain is coloured per
+12-unit square, so up close a diagonal river still shows a faint staircase in
+its bed and bank colours; rivers from springs outside the window appear when
+the window moves; level (non-Endless) maps keep their legacy water for now.
+Carving and lakes leave generated objects (floor props, chests) where chunk
+generation put them, so some stand in water: models there are tinted below
+the surface, while billboards and Legacy sprites draw over it.
+
 ## Shared cave contracts
 
 `05-endless-world.js` owns seeded networks and their entrance portals. Portal

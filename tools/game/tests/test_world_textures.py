@@ -83,7 +83,20 @@ POSES = ("exterior", "near", "inside")
 # on the Stage D tree (before E1 touched 12-structure-models.js); the harness
 # reproduces them exactly with --window-relative-variant (the old key restored
 # in a copy), so the re-key is the only change.
+# Re-pinned at the water-system merge for one named reason: the water system
+# (06-water.js, 13-render-water.js; world data plus the water3D pass, not a
+# render feature) puts lakes and carved rivers in the fortress window, so
+# every flat and Legacy frame changes. PINNED_F1 holds the F1 pins; the
+# harness reproduces them exactly with --water-off (the system switched off
+# in a copy), so the water system is the only change.
 PINNED = {
+    "jsc": {
+        ("flat", "exterior"): "f0837cf9791adffc", ("legacy", "exterior"): "3249d9b1dcd78aef",
+        ("flat", "near"): "d5b3a4c482437104", ("legacy", "near"): "7e56644114e45597",
+        ("flat", "inside"): "8aec65d7dac79063", ("legacy", "inside"): "7f5733ab75e78880",
+    },
+}
+PINNED_F1 = {
     "jsc": {
         ("flat", "exterior"): "def546bebcf302a4", ("legacy", "exterior"): "6f478636fd6383a1",
         ("flat", "near"): "7b45d709f38c935b", ("legacy", "near"): "63059ca4b2d3f86b",
@@ -137,7 +150,7 @@ class WorldTextureTests(unittest.TestCase):
         for tag in POSES + ("high",):
             self.assertIn(f'"{tag}@', note)
 
-    def test_flat_model_and_legacy_recordings_match_the_stage_f1_pins(self) -> None:
+    def test_flat_model_and_legacy_recordings_match_the_water_merge_pins(self) -> None:
         engine = JS_ENGINE[0]
         hashes = {}
         for line in self.lines:
@@ -154,16 +167,29 @@ class WorldTextureTests(unittest.TestCase):
             with self.subTest(frame=key):
                 self.assertEqual(value, hashes.get(key), f"{key} drawing changed. If intended, re-pin with the reason.")
 
+    def test_water_off_reproduces_the_stage_f1_pins(self) -> None:
+        engine = JS_ENGINE[0]
+        if engine not in PINNED_F1:
+            self.skipTest(f"no F1 pins for {engine}")
+        output, lines = run("--water-off", "--sections", "load,parity")
+        self.assertNotIn("MUTATION_ANCHOR", output)
+        self.assertTrue(any(line.startswith("WORLD_TEXTURES_RESULT PASS") for line in lines), output)
+        hashes = {(m.group(1), m.group(2)): m.group(3) for m in map(HASH_LINE.match, lines) if m}
+        self.assertEqual(PINNED_F1[engine], hashes, output)
+        self.assertTrue(all(PINNED[engine][key] != value for key, value in hashes.items()),
+                        "the water system must change every pinned frame")
+
     def test_old_variant_key_reproduces_the_stage_d_pins(self) -> None:
         engine = JS_ENGINE[0]
         if engine not in PINNED_STAGE_D:
             self.skipTest(f"no Stage D pins for {engine}")
-        output, lines = run("--window-relative-variant", "--sections", "load,parity")
+        # Stage D predates the water system, so it is switched off too.
+        output, lines = run("--window-relative-variant", "--water-off", "--sections", "load,parity")
         self.assertNotIn("MUTATION_ANCHOR", output)
         self.assertTrue(any(line.startswith("WORLD_TEXTURES_RESULT PASS") for line in lines), output)
         hashes = {(m.group(1), m.group(2)): m.group(3) for m in map(HASH_LINE.match, lines) if m}
         self.assertEqual(PINNED_STAGE_D[engine], hashes, output)
-        self.assertTrue(all(PINNED[engine][key] != value for key, value in hashes.items()),
+        self.assertTrue(all(PINNED_F1[engine][key] != value for key, value in hashes.items()),
                         "the re-key must change every pinned frame")
 
     def test_each_mutation_fails_its_named_check(self) -> None:

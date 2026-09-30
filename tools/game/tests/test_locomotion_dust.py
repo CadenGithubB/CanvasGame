@@ -34,9 +34,16 @@ HARNESS = Path(__file__).with_name("locomotion_dust.js")
 # review's surviving hand mutants): an airborne dash in a real jump inside a
 # cave, an NPC teleport's stride restart, and a support reach of one step
 # with 25 u included (the dash support rule table gained five rows in its
-# existing check): 73.
-PASS_COUNT = 73
+# existing check): 73. The water system merge: no ground dust under a water
+# surface (wading) for the player's steps and landing (with a water-off
+# control), a dash's burst and trail, and an enemy's steps: 76.
+PASS_COUNT = 76
 SENTINEL = f"LOCOMOTION_DUST_RESULT PASS {PASS_COUNT}"
+
+WADE_PLAYER = ("wading: the player's steps and landing laid under a lake's surface kick up no dust (counted); "
+               "the steps either side of it do, and with the water system off so do those in the band")
+WADE_DASH = "wading: a dash into a lake lays no burst where it starts in the water and no trail puff while it runs through it"
+WADE_NPC = "wading: an enemy walking through the lake lays no dust in it and its puffs either side"
 
 # Each mutation must fail every named check; setup failures and crashes do not count.
 MUTATIONS = {
@@ -153,6 +160,9 @@ MUTATIONS = {
     "--npc-tp-keep-acc": ["an NPC teleport is no stride and its stride restarts where it lands"],
     "--dash-reach-open": ["a dash's support reach is one step, 25 u included"],
     "--step-reach-open": ["a dash's support reach is one step, 25 u included"],
+    # The water system merge (wading).
+    "--dust-while-wading": [WADE_PLAYER, WADE_DASH, WADE_NPC],
+    "--trail-while-wading": [WADE_DASH],
 }
 # The failure detail must also show the intended cause: a string applies to
 # the first named check, a dict names the check each pattern belongs to.
@@ -382,6 +392,14 @@ CAUSES = {
     "--dash-reach-open": r'"wrong":\[\{"case":"airborne: the floor 25 u below","feet":25,"want":0,"got":"none"\}\]',
     # The wall top exactly a step down refused: the step falls back to the feet.
     "--step-reach-open": r'"wrong":\[\{"case":"grounded: a wall top 25 u below","feet":45,"want":20,"got":45\}\]',
+    # The water system merge. Steps, the landing, the dash burst and the
+    # enemy's steps in the lake puff; or only the dash trail does.
+    "--dust-while-wading": {
+        WADE_PLAYER: r'"wet":\{[^}]*"puffsInside":[1-9]\d*,',
+        WADE_DASH: r'"dashPuffs":[1-9]\d*,',
+        WADE_NPC: r'"puffsInBand":[1-9]\d*\}',
+    },
+    "--trail-while-wading": r'"dashPuffs":0,"trailWet":[1-9]\d*,',
 }
 
 

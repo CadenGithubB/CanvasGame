@@ -236,7 +236,8 @@ function npcMoveToward(actor,x,y,speed,dt,radius,stopDistance) {
   if(gameTimeNow()<(actor.stunUntil||0))return false;
   var dx=x-actor.x,dy=y-actor.y,d=Math.hypot(dx,dy),stop=stopDistance||0;
   if(!Number.isFinite(d) || !Number.isFinite(speed) || !(dt>0) || d<=stop || speed<=0)return false;
-  var start=physicsStageStart(),travel=Math.min(d-stop,speed*dt),oldX=actor.x,oldY=actor.y;
+  var wade=typeof waterActorSpeedFactor==='function'?waterActorSpeedFactor(actor):1;
+  var start=physicsStageStart(),travel=Math.min(d-stop,speed*wade*dt),oldX=actor.x,oldY=actor.y;
   try {
     npcStats.moves++;
     actor.facing=Math.atan2(dy,dx);

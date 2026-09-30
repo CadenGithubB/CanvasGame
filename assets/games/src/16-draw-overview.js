@@ -836,6 +836,14 @@ function draw() {
       drawEnemySpawners3D('opaque');
       drawOreVeins('opaque');
       drawWallDecorations('opaque');
+    });
+    // Water (13-render-water.js) is translucent and writes no depth, so it
+    // draws after every opaque part above (a model standing in a river is
+    // tinted below the surface instead of painting over it) and before every
+    // billboard and sprite (the phase below and the late stages), which it
+    // would otherwise paint over. The two halves share the sceneEntities timer.
+    _pt('water3D', function(){ if (typeof drawWater3D === 'function') drawWater3D(); });
+    _pt('sceneEntities', function(){
       drawFloorScatter3D('overlay');
       drawTreasureChests3D('overlay');
       drawEnemySpawners3D('overlay');

@@ -85,7 +85,7 @@ function fxCreateStats() {
     unknownEvents:0, unknownRecipes:0, badEvents:0, palOverflow:0, anchorsRefused:0,
     refusedToggle:0, refusedFamily:0, refusedCap:0, refusedBudget:0, refusedLod:0, refusedSpawnCap:0,
     refusedOffscreenSelf:0, refusedView:0, refusedNoSupport:0, refusedChildQueue:0, contactsDropped:0,
-    obsSteps:0, obsNpcSteps:0, obsNpcCapped:0, obsDashes:0, obsLands:0, weatherSpawned:0, weatherSnowLine:0, weatherSplashes2D:0};
+    obsSteps:0, obsNpcSteps:0, obsNpcCapped:0, obsDashes:0, obsLands:0, obsWading:0, weatherSpawned:0, weatherSnowLine:0, weatherSplashes2D:0};
 }
 // Weather state (section 9.1), sim-owned: the per-kind levels (rain, snow,
 // ash), their goals, the goal each level's crossfade aims at and its rate,
@@ -1084,6 +1084,7 @@ var PARTICLE_ANCHORS = {
     ctx.x = pos.x; ctx.y = pos.y; ctx.z = fxDashZ(pos.x, pos.y, feet, !!jumpAirborne, under);
     if (v > 1e-9) { ctx.dx = vel.x / v; ctx.dy = vel.y / v; }
     ctx.flags = FX_EV_SELF | (under ? FX_EV_UNDER : 0); ctx.surf = fxSurfaceAt(S, pos.x, pos.y, under);
+    if (fxWading(pos.x, pos.y, ctx.z)) return 2;                   // wading: no trail dust this tick
     return 1;
   },
   // The flame stream (S8) while its beam is drawn (a stream tick within 180
@@ -1388,6 +1389,14 @@ function fxSurfaceAt(S, x, y, under) {
   var i = P.surfBiomes.indexOf(b);
   return i < 0 ? fxBiomeIndex(S) : i;
 }
+// Water system merge (06-water.js; the handoff's wading note): a step,
+// landing or dash laid where a water surface stands above its support is
+// wading, and kicks up no ground dust. Absent water system: never.
+function fxWading(x, y, z) {
+  if (typeof waterAt !== 'function' || !(z === z)) return false;
+  var w = waterAt(x, y);
+  return !!w && w.surface * 25 > z;
+}
 // An observer's event runs through its bindings at once (the observers run
 // after the queue's drain, inside the tick), from a private one-slot ring.
 // z NaN: no ground under the event (fxDashZ); its bindings count their
@@ -1396,6 +1405,7 @@ function fxObsEmit(S, code, x, y, z, dx, dy, scale, flags) {
   var st = S.stats, ev = S.obsEv;
   if (!fxEventOpen(S, code)) { st.eventsGated++; return; }
   if (!Number.isFinite(x + y) || z === Infinity || z === -Infinity) { st.badEvents++; return; }
+  if (fxWading(x, y, z)) { st.obsWading++; return; }             // under water: no ground dust (06-water.js)
   fxRingClear(ev, 0);
   ev.type[0] = code; ev.x[0] = x; ev.y[0] = y; ev.z[0] = z; ev.dx[0] = dx; ev.dy[0] = dy; ev.scale[0] = scale; ev.flags[0] = flags;
   ev.surf[0] = fxSurfaceAt(S, x, y, flags & FX_EV_UNDER);
@@ -1854,6 +1864,13 @@ function fxWeatherMember(S, F, st, k, r, x, y, z, pre) {
   st.lives[k]++; st.live++;
   if (sky.ci >= 0 && sky.x === S.x[i] && sky.y === S.y[i] && S.R.stratum[r] === FX_STRATUM_OPENSKY) {
     S.gcell[i] = sky.ci; S.g0[i] = sky.g[0]; S.g1[i] = sky.g[1]; S.g2[i] = sky.g[2]; S.g3[i] = sky.g[3];
+    // Water system merge: the seeded floor meets a water surface as
+    // fxFillGround's does, and a prewarmed member falls no lower than it.
+    if (floorMesh.layerCount[sky.ci] === 1 && typeof waterAt === 'function') {
+      fxWaterFloor(S, i, floorMesh, sky.ci);
+      var wz = fxGroundZ(S, i, S.x[i], S.y[i]);
+      if (wz > z) z = wz;
+    }
   }
   if (pre) {
     var u = effectNoise(S.seedA[i], 21);
@@ -2022,8 +2039,23 @@ function fxFillGround(S, i, m, ci) {
   if (!spatialLayerCornersInto(m, ci, li, _fxCorners)) {         // last row/column or stratum edge: flat
     S.g0[i] = S.g1[i] = S.g2[i] = S.g3[i] = m[SPATIAL_LAYER_TOP_KEYS[li]][ci] * 25;
   } else { S.g0[i] = _fxCorners[0] * 25; S.g1[i] = _fxCorners[1] * 25; S.g2[i] = _fxCorners[2] * 25; S.g3[i] = _fxCorners[3] * 25; }
+  if (n === 1 && typeof waterAt === 'function') fxWaterFloor(S, i, m, ci);
   S.gcell[i] = ci; S.stats.groundMiss++;
   return true;
+}
+// Water system merge (06-water.js): water is drawn translucent after the
+// opaque scene and writes no depth, so it cannot hide a particle below its
+// surface. On plain surface cells (the only ones that hold water) each ground
+// corner under a water surface is raised to it: rain splashes on the water,
+// snow, ash and chips settle on it and fade, instead of reaching the bed and
+// drawing over the water. Corners are the cell's height points (NW, NE, SW,
+// SE, as sampleSpatialSupportZ splits them), read through waterAt.
+function fxWaterFloor(S, i, m, ci) {
+  var gs = m.gridSize, gx = ci % m.w, gy = (ci - gx) / m.w, w;
+  if ((w = waterAt(gx * gs, gy * gs)) && w.surface * 25 > S.g0[i]) S.g0[i] = w.surface * 25;
+  if ((w = waterAt((gx + 1) * gs, gy * gs)) && w.surface * 25 > S.g1[i]) S.g1[i] = w.surface * 25;
+  if ((w = waterAt(gx * gs, (gy + 1) * gs)) && w.surface * 25 > S.g2[i]) S.g2[i] = w.surface * 25;
+  if ((w = waterAt((gx + 1) * gs, (gy + 1) * gs)) && w.surface * 25 > S.g3[i]) S.g3[i] = w.surface * 25;
 }
 function fxCeilingBetween(m, ci, n, lo, hi) {
   for (var k = 0; k < n; k++) if (m[SPATIAL_LAYER_TYPE_KEYS[k]][ci] === 2) {
@@ -2308,7 +2340,8 @@ function fxEngineStats(out) {
     refused:{toggle:st.refusedToggle, family:st.refusedFamily, cap:st.refusedCap, budget:st.refusedBudget, lod:st.refusedLod,
       spawnCap:st.refusedSpawnCap, offscreenSelf:st.refusedOffscreenSelf, view:st.refusedView, noSupport:st.refusedNoSupport,
       childQueue:st.refusedChildQueue},
-    observers:{steps:st.obsSteps, npcSteps:st.obsNpcSteps, npcCapped:st.obsNpcCapped, dashes:st.obsDashes, lands:st.obsLands}};
+    observers:{steps:st.obsSteps, npcSteps:st.obsNpcSteps, npcCapped:st.obsNpcCapped, dashes:st.obsDashes, lands:st.obsLands,
+      wading:st.obsWading}};
   out.registry.unknownEvents = st.unknownEvents;
 }
 

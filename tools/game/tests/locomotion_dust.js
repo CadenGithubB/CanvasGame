@@ -54,6 +54,8 @@
 // flat floor put over a wall top under the feet, a support tolerance other
 // than 1 u over the feet, and an NPC's stride kept across a teleport; every
 // authored scene starts at noon, so no check depends on earlier sections.
+// The water system merge: steps, a landing, a dash and its trail, and an
+// enemy's steps that kick up ground dust under a water surface (wading).
 // Oracles: the authored geometry (floor, ramp plane, cliff, wall tops,
 // ceiling and cap heights), the walked path measured here from the player's
 // world position after every tick (window origin added), the spec's rules
@@ -105,6 +107,8 @@
 //   --dash-support-ceiling-units --dash-support-floor-over-wall
 //   --dash-support-tol-2    --dash-support-tol-0    --dash-support-wall-tol-0
 //   --npc-tp-keep-acc       --dash-reach-open       --step-reach-open
+// Water system merge (wading: no ground dust under a water surface):
+//   --dust-while-wading     --trail-while-wading
 (function () {
   var G = (0, eval)('this'), output = (__engine === 'node' || __engine === 'deno') ? console.log.bind(console) : __out;
   var checked = 0, failed = 0, loadErrors = [], warnings = [], originalRandom = Math.random, originalNow = Date.now;
@@ -123,6 +127,10 @@
   }
   G.__dustSource = function (path, source) {
     if (path === 'src/11-fx-engine.js') {
+      // Water system merge: steps, landings and dash starts under water puff anyway.
+      source = mutate(source, '--dust-while-wading', '  if (fxWading(x, y, z)) { st.obsWading++; return; }             // under water: no ground dust (06-water.js)\n', '');
+      // ... and the dash trail keeps puffing while it runs through water.
+      source = mutate(source, '--trail-while-wading', '    if (fxWading(pos.x, pos.y, ctx.z)) return 2;                   // wading: no trail dust this tick\n', '');
       // A player puff on every moving tick instead of every stride.
       source = mutate(source, '--dust-every-tick', '  while (O.acc >= FX_STEP_STRIDE) {', '  if (d > 0) {');
       // Airborne travel counted as strides.
@@ -2065,6 +2073,88 @@
     check('a dash\'s support reach is one step, 25 u included', !wrongEdge.length, {cases: edge.length, wrong: wrongEdge});
   });
 
+  // ── Wading (water system merge, 06-water.js; the particle handoff's
+  // wading note). A still lake, the water system's own arrays on the flat
+  // authored mesh, covers the height points x 192-288 of every row at 0.5 H
+  // (surface z 12.5 over ground 0, knee deep: wading slows the walk).
+  // waterAt samples a cell's north-west point, so the water stands over
+  // ground x 192-300. 2D, so the player's own puffs spawn. The player walks
+  // east from x 100 through it; jumps in place in it; dashes east from x
+  // 196 into it; a normal enemy walks the same band (npcMoveToward, which
+  // wading slows too). Oracle: the authored band, x in [192, 300): every
+  // step, landing or dash laid there spawns no dust and is counted
+  // (observers.wading); every step outside it spawns its puff. Control: the
+  // same walk with the water system switched off puffs inside the band too.
+  if (needed('wading', ['--dust-while-wading', '--trail-while-wading'])) run('wading', function () {
+    function lake() {
+      var m = G.floorMesh, n = m.w * m.h;
+      ['waterSurface', 'waterDepth', 'waterSpeed', 'waterDirX', 'waterDirY'].forEach(function (k) { m[k] = new Float32Array(n); });
+      m.water = new Uint8Array(n); m.waterFlags = new Uint8Array(n); m.waterBody = new Int32Array(n);
+      for (var i = 0; i < n; i++) {
+        var gx = i % m.w;
+        if (gx >= 16 && gx <= 24) { m.water[i] = G.WATER_KIND.still; m.waterSurface[i] = 0.5; m.waterDepth[i] = 0.5; m.waterBody[i] = 1; }
+      }
+    }
+    function inBand(x) { return x >= 192 && x < 300; }
+    function walk(waterOn) {
+      var S = authored({mode: '2d', x: 100, y: 240});
+      lake(); G.WATER_SYSTEM_ENABLED = waterOn;
+      try {
+        ticks(10);
+        var b0 = bursts.length, e0 = events.length, w0 = S.stats.obsWading;
+        var rows = ticks(420, function () { G.kbState.right = true; });
+        var steps = events.slice(e0).filter(function (e) { return e.type === 'footstep' && e.self; });
+        var puffs = burstsOf(b0, 'step.dust').filter(function (b) { return b.self && b.spawned > 0; });
+        var inside = steps.filter(function (e) { return inBand(e.x); }), outside = steps.filter(function (e) { return !inBand(e.x); });
+        return {end: r3(rows[rows.length - 1].x), steps: steps.length, inside: inside.length,
+          before: outside.filter(function (e) { return e.x < 192; }).length, after: outside.filter(function (e) { return e.x >= 300; }).length,
+          puffsInside: puffs.filter(function (b) { return inBand(b.x); }).length, puffsOutside: puffs.filter(function (b) { return !inBand(b.x); }).length,
+          outside: outside.length, wading: S.stats.obsWading - w0};
+      } finally { G.WATER_SYSTEM_ENABLED = true; }
+    }
+    var wet = walk(true), dry = walk(false);
+    if (wet.end < 320 || wet.inside < 3 || wet.before < 3 || wet.after < 1 || dry.inside < 3)
+      throw Error('SETUP the wading walk ' + JSON.stringify({wet: wet, dry: dry}));
+    // A jump in place in the lake: its landing is laid under the surface.
+    var S = authored({mode: '2d', x: 240, y: 240});
+    lake(); ticks(10);
+    var b1 = bursts.length, e1 = events.length, w1 = S.stats.obsWading;
+    ticks(120, function (k) { G.jumpPressed = k === 2; });
+    var lands = events.slice(e1).filter(function (e) { return e.type === 'land'; }), landPuffs = sum(burstsOf(b1, 'step.land'), 'spawned');
+    if (lands.length !== 1 || !inBand(lands[0].x)) throw Error('SETUP the lake landing ' + JSON.stringify(lands));
+    check('wading: the player\'s steps and landing laid under a lake\'s surface kick up no dust (counted); the steps either side of it do, and with the water system off so do those in the band',
+      wet.puffsInside === 0 && wet.puffsOutside === wet.outside && wet.wading === wet.inside + 0 && landPuffs === 0 &&
+      S.stats.obsWading - w1 === 1 && dry.puffsInside === dry.inside && dry.wading === 0,
+      {wet: wet, dry: dry, landPuffs: landPuffs, landWading: S.stats.obsWading - w1});
+    // A dash east from x 196 into the lake: its start and every trail tick
+    // inside the band lay no dust.
+    S = authored({mode: '2d', x: 196, y: 240});
+    lake(); ticks(10);
+    var b2 = bursts.length, e2 = events.length, wetTicks = 0;
+    for (var k = 0; k < 30; k++) {
+      ticks(1, function () { G.kbState.right = true; G.dashPressed = k === 2; });
+      if (G.gameTimeNow() < G.dashUntil && inBand(G.pos.x)) wetTicks++;
+    }
+    var dashes = events.slice(e2).filter(function (e) { return e.type === 'dashStart'; });
+    var dashPuffs = sum(burstsOf(b2, 'step.dash'), 'spawned'), trailWet = burstsOf(b2, 'step.dashTrail').filter(function (b) { return inBand(b.x) && b.spawned > 0; });
+    if (dashes.length !== 1 || !inBand(dashes[0].x) || wetTicks < 3) throw Error('SETUP the lake dash ' + JSON.stringify({dashes: dashes, wetTicks: wetTicks}));
+    check('wading: a dash into a lake lays no burst where it starts in the water and no trail puff while it runs through it',
+      dashPuffs === 0 && !trailWet.length, {dashPuffs: dashPuffs, trailWet: trailWet.length, wetTicks: wetTicks, start: r3(dashes[0].x)});
+    // A normal enemy walks east along y 280 from x 100 to x 340.
+    S = authored({mode: '2d', x: 60, y: 240});
+    lake();
+    var e = enemyAt('normal', 100, 280, 0);
+    observe();
+    var b3 = bursts.length, e3 = events.length;
+    for (k = 0; k < 600 && e.x < 339.9; k++) { G.npcMoveToward(e, 340, 280, 60, DT, 6, 0); observe(); }
+    var npcSteps = events.slice(e3).filter(function (q) { return q.type === 'footstep' && !q.self; });
+    var npcPuffs = burstsOf(b3, 'step.dust').filter(function (b) { return !b.self && b.spawned > 0; });
+    var npcIn = npcSteps.filter(function (q) { return inBand(q.x); }).length, npcOut = npcSteps.length - npcIn;
+    if (e.x < 339.9 || npcIn < 3 || npcOut < 3) throw Error('SETUP the wading enemy ' + JSON.stringify({x: e.x, inBand: npcIn, outside: npcOut}));
+    check('wading: an enemy walking through the lake lays no dust in it and its puffs either side',
+      !npcPuffs.some(function (b) { return inBand(b.x); }) && npcPuffs.length === npcOut,
+      {steps: npcSteps.length, inBand: npcIn, outside: npcOut, puffs: npcPuffs.length, puffsInBand: npcPuffs.filter(function (b) { return inBand(b.x); }).length});
+  });
 
   check('no effect runtime failures were counted', !failures(), {failures: G.getEffectStats().failures});
   check('no frame stage threw and no console errors from the game', !stageErrors.length && !G.__dustErrors.length,

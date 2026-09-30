@@ -29,8 +29,10 @@
 // night; weather that jumps at a chunk crossing; cosmetic draws from a
 // random stream (B1 re-run); feedback lost in a pool full of rain (B3
 // re-run); and per-particle clip or allocation regressions under Ultra rain
-// (C9 re-run). The streak drawing of the shipping rain recipe is C3's
-// second run in particle_render.js.
+// (C9 re-run); rain and snow that fall through a water surface to the bed
+// under it, where they would draw over the water (the water system merge).
+// The streak drawing of the shipping rain recipe is C3's second run in
+// particle_render.js.
 // Oracles: authored layer heights, the shared spatial helpers
 // (sampleSpatialSupportZ, spatialWallSpan, spatialLayerCorners,
 // getCaveSpaceAt) and the player's own physics (getWalkableLayerTopAt,
@@ -61,6 +63,8 @@
 //   --no-fx-rebase          --weather-math-random   --no-reserve
 //   --no-steal              --per-particle-billboard --profile-weather-unforced
 //   --studio-weather-unforced --no-dt-guard     --weather-refill-steals
+// Water system merge (06-water.js; rain and snow meet a lake's surface):
+//   --rain-through-water
 (function () {
   var G = (0, eval)('this'), output = (__engine === 'node' || __engine === 'deno') ? console.log.bind(console) : __out;
   var checked = 0, failed = 0, loadErrors = [], warnings = [], originalRandom = Math.random;
@@ -81,6 +85,8 @@
   }
   G.__weatherSource = function (path, source) {
     if (path === 'src/11-fx-engine.js') {
+      // Water system merge: water surfaces ignored, particles fall to the bed under them.
+      source = mutate(source, '--rain-through-water', "  if (n === 1 && typeof waterAt === 'function') fxWaterFloor(S, i, m, ci);\n", '');
       // The legacy support rule (getFloorHeightAt): the lowest walkable layer, for spawns and for landings.
       // (one rule for spawns, wraps, the snow line and landings: fxSkyLayer).
       source = mutate(source, '--weather-lowest-layer',
@@ -591,9 +597,22 @@
   // wall's top where higher (getWallTopZ; the surface player walks over a
   // cave's wall cells, 09-physics.js); never under a roof (getCaveSpaceAt)
   // nor below the highest walkable surface (buried). Forced rain (auto is
-  // clear in Cave Test).
-  if (needed('H1 generated', ['--weather-lowest-layer', '--cave-wall-as-wall'])) run('H1 generated', function () {
-    var all = [], bad = [], roofed = 0, caveWall = 0, overCaveWall = [];
+  // clear in Cave Test). Restated at the water system merge: where water
+  // stands over a corner of the splash's floor square (waterAt at the
+  // square's height points), rain meets the water: on a square whose four
+  // corners are one flat lake, exactly on its surface; on a shoreline or
+  // river square, between that landing and the highest water surface at its
+  // corners. Squares with no water keep the exact landing.
+  if (needed('H1 generated', ['--weather-lowest-layer', '--cave-wall-as-wall', '--rain-through-water'])) run('H1 generated', function () {
+    var all = [], bad = [], roofed = 0, caveWall = 0, overCaveWall = [], onLake = 0, onWater = 0;
+    function waterCorners(x, y) {
+      var gs = G.floorMesh.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs), list = [];
+      [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(function (o) {
+        var w = G.waterAt((gx + o[0]) * gs, (gy + o[1]) * gs);
+        if (w) list.push(w.surface * 25);
+      });
+      return list;
+    }
     function landing(x, y) {
       var fall = G.getWalkableLayerTopAt(x, y, 1e4, {stepUp: 0}), z = NaN;
       if (fall.action === 'fall') z = G.sampleSpatialSupportZ(x, y, fall.topH * 25, false);
@@ -615,13 +634,21 @@
         var gx = Math.floor(p.x / G.cell), gy = Math.floor(p.y / G.cell), wi = gy * G.gridW + gx;
         if (G.gridCave && G.grid[wi] && G.gridCave[wi]) { caveWall++; var span = G.spatialWallSpan(gx, gy); if (span) overCaveWall.push(r3(span.topZ - p.z)); }
         if (G.getCaveSpaceAt(p.x, p.y, -100).underground) roofed++;           // a roof somewhere over this column
-        if (!near(p.z, sky, 0.01) || under || p.z < top - 0.01) bad.push({view: view, x: r3(p.x), y: r3(p.y), z: r3(p.z), landing: r3(sky), under: under, buried: p.z < top - 0.01});
+        var wet = waterCorners(p.x, p.y), lake = wet.length === 4 && wet.every(function (v) { return v === wet[0]; }), onSky;
+        if (!wet.length) onSky = near(p.z, sky, 0.01);
+        else if (lake) { onLake++; onSky = near(p.z, Math.max(sky, wet[0]), 0.01); }
+        else { onWater++; onSky = p.z >= sky - 0.01 && p.z <= Math.max(sky, Math.max.apply(null, wet)) + 0.01; }
+        if (!onSky || under || p.z < top - 0.01) {
+          var miss = {view: view, x: r3(p.x), y: r3(p.y), z: r3(p.z), landing: r3(sky), under: under, buried: p.z < top - 0.01};
+          if (wet.length) miss.water = wet.map(r3);
+          bad.push(miss);
+        }
       });
     });
     check('the generated H1 fixture splashes over cave roofs and cave wall cells', all.length >= 200 && roofed >= 20 && caveWall >= 5,
       {splashes: all.length, overRoofedColumns: roofed, overCaveWallCells: caveWall});
-    check('generated rain lands on the open sky of its column, never under a roof', !bad.length,
-      {seed: 12345, splashes: all.length, bad: bad.length, first: bad.slice(0, 3), caveWallTopMinusSplash: overCaveWall.slice(0, 5), tolerance: 0.01});
+    check('generated rain lands on the open sky of its column (on the water standing over it), never under a roof', !bad.length && onLake >= 1 && onLake + onWater >= 20,
+      {seed: 12345, splashes: all.length, onLake: onLake, onWater: onWater, bad: bad.length, first: bad.slice(0, 3), caveWallTopMinusSplash: overCaveWall.slice(0, 5), tolerance: 0.01});
     restoreToggles(); G.fxState = liveState;
   });
 
@@ -1652,6 +1679,73 @@
       worst.bucketsMax <= 96 && !typed && !blur,
       {worst: worst, typedArrays: typed, blurSets: blur, gates: {clipShare: 0.02, maskPx: 60000, pathPerDrawn: 2.5, bucketsPerPass: 96}});
     G.fxState = liveState;
+  });
+
+  // ── Water (water system merge, 06-water.js): water is drawn translucent
+  // and writes no scene depth, so a drop or flake below its surface would
+  // draw over it. A still lake, the water system's arrays on the authored
+  // flat floor, stands 0.6 H (15 u) over the ground at height points x
+  // 26-36, y 22-34; the camera at (366, 250) looks +y over it. Oracle: the
+  // authored surface. Floor squares whose four corners are all wet (x
+  // 312-420, y 264-396) have their floor at 15, squares with no wet corner
+  // at 0 (mixed shoreline squares are not judged). Control: with the water
+  // system off, rain lands on the ground under the lake.
+  if (needed('water', ['--rain-through-water'])) run('water', function () {
+    function lakeScene() {
+      var m = flatMesh(61), n = 61 * 61;
+      ['waterSurface', 'waterDepth', 'waterSpeed', 'waterDirX', 'waterDirY'].forEach(function (k) { m[k] = new Float32Array(n); });
+      m.water = new Uint8Array(n); m.waterFlags = new Uint8Array(n); m.waterBody = new Int32Array(n);
+      for (var gy = 22; gy <= 34; gy++) for (var gx = 26; gx <= 36; gx++) {
+        var v = gy * 61 + gx;
+        m.water[v] = G.WATER_KIND.still; m.waterSurface[v] = 0.6; m.waterDepth[v] = 0.6; m.waterBody[v] = 1;
+      }
+      authoredScene(m, 366, 250, Math.PI / 2);
+    }
+    function square(x, y) {
+      var gx = Math.floor(x / GS), gy = Math.floor(y / GS);
+      return gx >= 26 && gx <= 35 && gy >= 22 && gy <= 33 ? 'lake' : (gx >= 37 || gx <= 24 || gy >= 35 || gy <= 20) ? 'dry' : 'shore';
+    }
+    function rain(waterOn, seed) {
+      lakeScene(); toggle('rain'); G.WATER_SYSTEM_ENABLED = waterOn;
+      var S = fresh(seed), splash = {lake: [], dry: []}, below = [], rR = S.C.ID['weather.rain'];
+      births = [];
+      try {
+        for (var k = 0; k < 400; k++) {
+          G.updateEffects(DT);
+          for (var i = 0; i < S.count; i++)
+            if (S.rec[i] === rR && square(S.x[i], S.y[i]) === 'lake' && S.z[i] < 15 - 0.01) below.push({x: r3(S.x[i]), y: r3(S.y[i]), z: r3(S.z[i]), tick: k});
+        }
+      } finally { var b = births; births = null; G.WATER_SYSTEM_ENABLED = true; }
+      b.forEach(function (p) { var sq = square(p.x, p.y); if (p.id === 'weather.splash' && sq !== 'shore') splash[sq].push({x: r3(p.x), y: r3(p.y), z: r3(p.z)}); });
+      return {lake: splash.lake, dry: splash.dry, below: below};
+    }
+    function off(list, z) { return list.filter(function (p) { return !near(p.z, z, 0.01); }); }
+    var wet = rain(true, 111), bed = rain(false, 111);
+    if (wet.lake.length < 20 || wet.dry.length < 20 || bed.lake.length < 20)
+      throw Error('SETUP the lake rain ' + JSON.stringify({lake: wet.lake.length, dry: wet.dry.length, bedLake: bed.lake.length}));
+    check('rain over a lake splashes on its surface and never falls below it; beside it, and under it with the water system off, rain lands on the ground',
+      !off(wet.lake, 15).length && !wet.below.length && !off(wet.dry, 0).length && !off(bed.lake, 0).length,
+      {seed: 111, lake: wet.lake.length, offSurface: off(wet.lake, 15).slice(0, 3), dropsBelow: wet.below.length, firstBelow: wet.below.slice(0, 2),
+        dryOff: off(wet.dry, 0).slice(0, 3), waterOffLakeOffGround: off(bed.lake, 0).slice(0, 3), surface: 15, tolerance: 0.01});
+    // Snow settles 0.3 u over the surface (then fades), and 0.3 u over the ground beside it.
+    lakeScene(); toggle('snow');
+    var S = fresh(112), rS = S.C.ID['weather.snow'], rested = {lake: {}, dry: {}}, restBad = [];
+    for (var k = 0; k < 900; k++) {
+      G.updateEffects(DT);
+      if (k % 10) continue;
+      for (var i = 0; i < S.count; i++) {
+        if (S.rec[i] !== rS || !(S.flags[i] & 1)) continue;
+        var sq = square(S.x[i], S.y[i]);
+        if (sq === 'shore') continue;
+        rested[sq][S.seedA[i]] = 1;
+        if (!near(S.z[i], (sq === 'lake' ? 15 : 0) + 0.3, 0.01)) restBad.push({x: r3(S.x[i]), y: r3(S.y[i]), z: r3(S.z[i]), square: sq});
+      }
+    }
+    var nr = {lake: Object.keys(rested.lake).length, dry: Object.keys(rested.dry).length};
+    if (nr.lake < 10 || nr.dry < 10) throw Error('SETUP the lake snow ' + JSON.stringify(nr));
+    check('snow settles on a lake\'s surface, 0.3 u over it, and on the ground beside it', !restBad.length,
+      {seed: 112, rested: nr, bad: restBad.length, first: restBad.slice(0, 3), surface: 15, tolerance: 0.01});
+    restoreToggles(); G.fxState = liveState;
   });
 
   // Settle: the live pool is back, no runtime failure was hidden.

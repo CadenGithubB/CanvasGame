@@ -20,8 +20,10 @@ HARNESS = Path(__file__).with_name("weather.js")
 # chunk crossing (1), profile and studio weather (2), the B1, B3 (2) and C9
 # (2) re-runs on shipping weather, a bad step (1), plus load, runtime
 # failures and console/stage errors: 78 at the S7 fix. S9: a refill at the
-# full budget spends no draw on a refused member (1).
-PASS_COUNT = 79
+# full budget spends no draw on a refused member (1). The water system
+# merge: rain and snow on a lake's surface (2), and the generated check
+# restated to land on water standing over a column: 81.
+PASS_COUNT = 81
 SENTINEL = f"WEATHER_RESULT PASS {PASS_COUNT}"
 
 ROOF = "rain never falls through a roof"
@@ -29,7 +31,7 @@ CAPLESS = "rain ends on a capless cave roof (floor and ceiling layers only), nev
 CLASSIC = "weather never falls into a classic cave (its capless roof ends the sky)"
 SETTLE = "snow settles on the open sky of its column: floors, caps, capless roofs and wall tops"
 SPAWN = "rain spawns 70-150 u above its own column's open sky"
-GENERATED = "generated rain lands on the open sky of its column, never under a roof"
+GENERATED = "generated rain lands on the open sky of its column (on the water standing over it), never under a roof"
 VISIBILITY = "weather population follows the cave-mouth visibility"
 DEEP = "weather is gone within a second deep underground (blend 1)"
 ROCK = "no rain seen through a cave mouth is drawn over the rock around it"
@@ -52,6 +54,9 @@ SPLASH_2D = "2D rain draws splashes across the view at T / meanLife a second"
 FADE_2D = "2D snow is fully shown over the view and fades over its margin"
 FULLSCREEN = "fullscreen 2D weather covers the view (snow and splashes by ninths)"
 TORCH = "rain near torches catches their light at night (lightGrid)"
+WATER_RAIN = ("rain over a lake splashes on its surface and never falls below it; beside it, and under it with the water "
+              "system off, rain lands on the ground")
+WATER_SNOW = "snow settles on a lake's surface, 0.3 u over it, and on the ground beside it"
 
 # Each mutation must fail every named check; setup failures and crashes do not count.
 MUTATIONS = {
@@ -110,6 +115,7 @@ MUTATIONS = {
     "--profile-weather-unforced": ["a browser profile primes clear weather unless its job names it"],
     "--studio-weather-unforced": ["a casting-studio pool stays clear under any Weather switch"],
     "--no-dt-guard": ["a step outside (0, 1] s is a counted failure and the next tick runs"],
+    "--rain-through-water": [WATER_RAIN, WATER_SNOW, GENERATED],
 }
 # The first named check's failure detail must also show the intended cause.
 CAUSES = {
@@ -186,6 +192,8 @@ CAUSES = {
     "--studio-weather-unforced": r'"live":[1-9]\d*,"spawned":[1-9]',
     # A NaN step reaches the sim time: nothing is counted and the time stays NaN.
     "--no-dt-guard": r'"counted":0,"simTimeAfterBadSteps":null,',
+    # Water surfaces ignored: splashes on the ground under the lake.
+    "--rain-through-water": r'"offSurface":\[\{"x":[\d.]+,"y":[\d.]+,"z":0\}',
 }
 
 

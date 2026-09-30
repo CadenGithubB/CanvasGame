@@ -902,6 +902,7 @@ function tickEffects(dt) {
   var BASE_SPEED = GAME_CONFIG.player.baseSpeed;
   var hatSpeedMult = (equipment.hat && equipment.hat.speedBonus) ? (1 + equipment.hat.speedBonus) : 1;
   speed = ((now < speedBoostUntil) ? BASE_SPEED * 1.25 : BASE_SPEED) * hatSpeedMult * (1 + permanentSpeedBonus);
+  if (typeof waterSpeedFactorAt === 'function') speed *= waterSpeedFactorAt(pos.x, pos.y, pos.floorZ);
 
   // Regen buff — heal 1 HP every 3 seconds
   if (now < regenBoostUntil && now - lastRegenTick > 3000) {

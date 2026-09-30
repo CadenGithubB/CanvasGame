@@ -40,6 +40,8 @@
 //   --hud-no-counters    the HUD render line drops the f/m counters
 // Reference (not a mutation): --window-relative-variant restores the pre-F1
 // wall-decoration variant key; the parity hashes must then equal the Stage D pins.
+// Reference (not a mutation): --water-off starts with the water system
+// (06-water.js) switched off; the parity hashes must then equal the F1 pins.
 // Narrowing: --sections a,b (load, mapping, parity, coverage, containment,
 // engage, budget, fade, strips, colour, failure, determinism, catalog,
 // registry, debug, hud, lab).
@@ -61,6 +63,8 @@
   }
   var TEX = 'src/12-world-textures.js', MODELS = 'src/12-structure-models.js', CONFIG = 'src/01-config-state.js';
   var loaded = H.loadManifest(function (path, source) {
+    if (path === 'src/06-water.js')
+      source = swap(source, '--water-off', 'var WATER_SYSTEM_ENABLED = true;\n', 'var WATER_SYSTEM_ENABLED = false;\n');
     if (path === 'src/07-decorations-lighting.js') {
       source = swap(source, '--window-relative-variant',
         "  if (Number.isFinite(dec.worldX) && Number.isFinite(dec.worldY) && typeof cell === 'number' && cell > 0) {\n", '  if (false) {\n');

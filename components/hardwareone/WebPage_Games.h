@@ -8151,6 +8151,10 @@ function assembleWindow(centerCX, centerCY) {
     }
   }
 
+  // Water may carve river channels into the terrain, so it runs before
+  // anything is derived from the floor heights (wall bases, walk data).
+  if (typeof buildWindowWater === 'function') buildWindowWater();
+
   // Precompute per-wall-face base Z. Fixes visible gaps between wall bottoms
   // and adjacent floor quads caused by wall cell size (15u) being misaligned
   // with floor mesh grid (12u). Center-of-neighbor sampling misses corner
@@ -9869,6 +9873,729 @@ function placeSpatialActorNear(entity,x,y,feetZ,radius) {
 function spatialPlayerBody() {
   return {x:pos.x,y:pos.y,feetZ:playerFeetSpatialZ(),radius:6,height:70,stepHeight:25,
     airborne:jumpAirborne,allowFall:true,updateFeet:false,trackFloor:tracksMeshFloor()};
+}
+// Water system: one model for every spring, river, lake and pool.
+// Water is solved, not simulated. A source routes downhill over the loaded
+// terrain, fills the first basin it meets up to that basin's spill point,
+// then continues from the spill, until its strength budget is spent, it joins
+// standing water, or it leaves the loaded window. The result is written once
+// per window into per-cell arrays that every consumer reads through
+// waterAt(): rendering, movement and the 2D map. Nothing here runs per frame.
+//
+// Heights are mesh height units (floorMesh). Surfaces are flat for lakes and
+// follow the bed for rivers. The solver is pure: it reads a field, writes the
+// field's output arrays and makes no RNG draws, so a window rebuilt from the
+// same seed produces identical water.
+var WATER_KIND = {none: 0, still: 1, flowing: 2};
+var WATER_RIVER_DEPTH = 0.35;     // river surface above its bed
+var WATER_MIN_DEPTH = 0.03;       // shallower lake cells stay dry banks
+var WATER_FALL_DROP = 0.6;        // bed drop in one step that reads as a waterfall
+var WATER_FLAG_FALLS = 1, WATER_FLAG_SOURCE = 2, WATER_FLAG_SPILL = 4;
+var _waterNeighbours = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+
+// Binary min-heap of cell indices keyed by a Float32 array; reused per solve.
+function _waterHeap(capacity) {
+  return {items: new Int32Array(Math.max(16, capacity)), keys: new Float64Array(Math.max(16, capacity)), size: 0};
+}
+function _waterHeapPush(heap, item, key) {
+  if (heap.size === heap.items.length) {
+    var items = new Int32Array(heap.size * 2), keys = new Float64Array(heap.size * 2);
+    items.set(heap.items); keys.set(heap.keys); heap.items = items; heap.keys = keys;
+  }
+  var i = heap.size++;
+  while (i > 0) {
+    var p = (i - 1) >> 1;
+    if (heap.keys[p] <= key) break;
+    heap.items[i] = heap.items[p]; heap.keys[i] = heap.keys[p]; i = p;
+  }
+  heap.items[i] = item; heap.keys[i] = key;
+}
+function _waterHeapPop(heap) {
+  var top = heap.items[0], last = --heap.size;
+  if (last > 0) {
+    var item = heap.items[last], key = heap.keys[last], i = 0;
+    for (;;) {
+      var l = i * 2 + 1, r = l + 1, m = i;
+      var mk = key;
+      if (l < last && heap.keys[l] < mk) { m = l; mk = heap.keys[l]; }
+      if (r < last && heap.keys[r] < mk) m = r;
+      if (m === i) break;
+      heap.items[i] = heap.items[m]; heap.keys[i] = heap.keys[m]; i = m;
+    }
+    heap.items[i] = item; heap.keys[i] = key;
+  }
+  return top;
+}
+
+// A field is {w, h, height, water, surface, dirX, dirY, speed, flags, body}.
+// height[i] is the walkable surface height, or NaN where water may not go
+// (walls, cave interiors, reserved ground). Output arrays may already hold
+// standing water (water[i] with a finite surface[i]); rivers join it.
+function createWaterField(w, h) {
+  var n = w * h;
+  return {w: w, h: h, height: new Float32Array(n), water: new Uint8Array(n), surface: new Float32Array(n),
+    dirX: new Float32Array(n), dirY: new Float32Array(n), speed: new Float32Array(n),
+    flags: new Uint8Array(n), body: new Int32Array(n)};
+}
+
+function _waterPassable(field, i) { return field.height[i] === field.height[i]; }
+// Ground a source has already claimed (its river cells and every basin it
+// filled, deep or not) is solid to its later steps. Otherwise a spill can
+// walk straight back into a shallow dip it just left and refill it forever.
+function _waterOpen(field, i, scratch) {
+  return field.height[i] === field.height[i] && scratch.claim[i] !== scratch.claimSerial;
+}
+function _waterJoins(field, i, bodyId) {
+  return field.water[i] === WATER_KIND.still && field.body[i] !== bodyId && field.surface[i] >= field.height[i];
+}
+
+// A river's surface never rises along its flow: it is the lower of its own
+// bed plus river depth and the surface upstream (a lake's level when the
+// river leaves one), and never below its bed. Just past a spill lip it can
+// be a very thin sheet; it deepens as the bed falls away.
+function _waterMarkRiver(field, i, bodyId, stats, upstream) {
+  if (field.water[i]) return false;
+  var surface = Math.min(field.height[i] + WATER_RIVER_DEPTH, upstream);
+  field.water[i] = WATER_KIND.flowing;
+  field.surface[i] = Math.max(surface, field.height[i]);
+  field.body[i] = bodyId;
+  stats.river++;
+  return true;
+}
+function _waterSetDir(field, from, to, drop) {
+  var w = field.w, dx = (to % w) - (from % w), dy = ((to / w) | 0) - ((from / w) | 0), len = Math.hypot(dx, dy) || 1;
+  field.dirX[from] = dx / len; field.dirY[from] = dy / len;
+  field.speed[from] = Math.min(1, 0.25 + Math.max(0, drop) * 1.5);
+}
+
+// Solve one source. `scratch` holds reusable per-window work arrays.
+function solveWaterSource(field, source, bodyId, scratch, stats) {
+  var w = field.w, h = field.h, n = w * h, H = field.height;
+  var budget = Math.max(0, source.strength | 0), ops = 0, maxOps = source.maxOps || budget * 40 + 2000;
+  var c = source.cell;
+  if (c < 0 || c >= n || !_waterPassable(field, c)) { stats.rejected++; return 'rejected'; }
+  field.flags[c] |= WATER_FLAG_SOURCE;
+  scratch.claimSerial++;
+  var upstream = Infinity;
+  for (;;) {
+    if (ops++ > maxOps) { stats.capped++; return 'capped'; }
+    // Joining other standing water ends the run; rivers merge and continue.
+    if (_waterJoins(field, c, bodyId)) { stats.joins++; return 'joined'; }
+    if (budget <= 0) { stats.exhausted++; return 'exhausted'; }
+    if (_waterMarkRiver(field, c, bodyId, stats, upstream)) budget--;
+    if (field.water[c]) upstream = Math.min(upstream, field.surface[c]);
+    scratch.claim[c] = scratch.claimSerial;
+    var cx = c % w, cy = (c / w) | 0, best = -1, bestSlope = 0, edge = false;
+    for (var k = 0; k < 8; k++) {
+      var nx = cx + _waterNeighbours[k][0], ny = cy + _waterNeighbours[k][1];
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) { edge = true; continue; }
+      var ni = ny * w + nx;
+      if (!_waterOpen(field, ni, scratch)) continue;
+      var slope = (H[c] - H[ni]) / (k < 4 ? 1 : Math.SQRT2);
+      if (slope > bestSlope) { bestSlope = slope; best = ni; }
+    }
+    if (best >= 0) {
+      var drop = H[c] - H[best];
+      _waterSetDir(field, c, best, drop);
+      if (drop > WATER_FALL_DROP) { field.flags[c] |= WATER_FLAG_FALLS; stats.falls++; }
+      c = best; continue;
+    }
+    if (edge) { stats.outflows++; return 'outflow'; }
+    // Local minimum: fill the basin by priority flood until it spills.
+    var result = _waterFillBasin(field, c, bodyId, scratch, stats, budget, maxOps - ops);
+    budget = result.budget; ops += result.ops; upstream = result.level;
+    if (result.spill < 0) return result.end;
+    c = result.spill;
+  }
+}
+
+// Priority flood from a basin floor. Cells join in order of height; the level
+// rises to each joined cell. The first frontier cell lower than the level is
+// the spill point. Cells deeper than WATER_MIN_DEPTH become lake; the
+// shallow path from the entry to the spill becomes river so a flat never
+// leaves a gap.
+function _waterFillBasin(field, start, bodyId, scratch, stats, budget, opsLeft) {
+  var w = field.w, h = field.h, H = field.height, stamp = scratch.stamp, parent = scratch.parent, heap = scratch.heap;
+  var mark = ++scratch.serial, members = scratch.members, count = 0, level = H[start], ops = 0;
+  heap.size = 0;
+  stamp[start] = mark; parent[start] = -1; members[count++] = start;
+  _waterPushNeighbours(field, start, mark, scratch);
+  var spill = -1, spillFrom = -1, end = 'exhausted', edgeHit = false;
+  while (heap.size > 0) {
+    if (ops++ > opsLeft) { end = 'capped'; stats.capped++; break; }
+    var cell = _waterHeapPop(heap), own = scratch.claim[cell] === scratch.claimSerial;
+    // A rising lake may drown this source's own upstream river or an earlier
+    // basin (they merge), but it can only spill onto unclaimed ground, so
+    // every spill makes progress and the solve always ends.
+    if (!own && H[cell] < level) { spill = cell; spillFrom = parent[cell]; break; }
+    if (_waterJoins(field, cell, bodyId)) { end = 'joined'; stats.joins++; break; }
+    if (H[cell] > level) level = H[cell];
+    members[count++] = cell;
+    if (field.water[cell] === 0 && level - H[start] > WATER_MIN_DEPTH) budget--;
+    if (budget <= 0) { end = 'exhausted'; stats.exhausted++; break; }
+    if (_waterPushNeighbours(field, cell, mark, scratch)) { edgeHit = true; spillFrom = cell; end = 'outflow'; stats.outflows++; break; }
+  }
+  if (heap.size === 0 && spill < 0 && end === 'exhausted' && budget > 0) end = 'enclosed';
+  // Lake: every member below the final level by more than the minimum depth.
+  var lake = 0;
+  for (var m = 0; m < count; m++) {
+    var ci = members[m];
+    scratch.claim[ci] = scratch.claimSerial;
+    // This source's own river and earlier lakes are drowned into the new level.
+    if (field.water[ci] && field.body[ci] !== bodyId) continue;
+    if (level - H[ci] > WATER_MIN_DEPTH) {
+      field.water[ci] = WATER_KIND.still; field.surface[ci] = level; field.body[ci] = bodyId;
+      field.dirX[ci] = 0; field.dirY[ci] = 0; field.speed[ci] = 0; lake++;
+    } else if (field.water[ci] && field.surface[ci] < level) {
+      field.surface[ci] = level;  // shallow own water rises with the merged lake
+    }
+  }
+  if (lake) stats.lakes++;
+  stats.lake += lake;
+  if (spill >= 0 || edgeHit) {
+    // Shallow members on the path from the entry to the exit (the spill, or
+    // the window edge) carry the river across; every path cell, lake or
+    // river, points on toward the exit.
+    for (var p = spillFrom, next = spill; p >= 0; next = p, p = parent[p]) {
+      if (!field.water[p]) _waterMarkRiver(field, p, bodyId, stats, level);
+      // The crossing is one sheet at the lake's level, flat to the exit.
+      if (field.body[p] === bodyId) field.surface[p] = Math.max(level, H[p]);
+      if (next >= 0) _waterSetDir(field, p, next, H[p] - H[next]);
+      if (field.water[p] === WATER_KIND.still) field.speed[p] = 0.08;
+    }
+    if (spill >= 0) field.flags[spillFrom >= 0 ? spillFrom : start] |= WATER_FLAG_SPILL;
+  }
+  return {spill: spill, budget: budget, ops: ops, end: end, level: level, edge: edgeHit};
+}
+// Pushes unvisited passable 8-neighbours (the same connectivity as the
+// downhill step, so a diagonal outlet is never missed); returns true when the
+// basin touches the window edge (water leaves the solved area there).
+function _waterPushNeighbours(field, cell, mark, scratch) {
+  var w = field.w, h = field.h, cx = cell % w, cy = (cell / w) | 0, edge = false;
+  for (var k = 0; k < 8; k++) {
+    var nx = cx + _waterNeighbours[k][0], ny = cy + _waterNeighbours[k][1];
+    if (nx < 0 || ny < 0 || nx >= w || ny >= h) { edge = true; continue; }
+    var ni = ny * w + nx;
+    if (scratch.stamp[ni] === mark || !_waterPassable(field, ni)) continue;
+    scratch.stamp[ni] = mark; scratch.parent[ni] = cell;
+    _waterHeapPush(scratch.heap, ni, field.height[ni]);
+  }
+  return edge;
+}
+
+function createWaterScratch(n) {
+  return {stamp: new Int32Array(n), parent: new Int32Array(n), members: new Int32Array(n), claim: new Int32Array(n), best: new Float32Array(n),
+    heap: _waterHeap(1024), serial: 0, claimSerial: 0};
+}
+
+// Solves sources in order (strongest first is the caller's choice); rivers
+// that reach earlier water join it. Returns per-solve stats.
+function solveWaterSources(field, sources, scratch) {
+  var stats = {sources: sources.length, river: 0, lake: 0, lakes: 0, joins: 0, outflows: 0, exhausted: 0,
+    capped: 0, rejected: 0, falls: 0, ends: {}};
+  scratch = scratch || createWaterScratch(field.w * field.h);
+  for (var s = 0; s < sources.length; s++) {
+    var end = solveWaterSource(field, sources[s], s + 1, scratch, stats);
+    stats.ends[end] = (stats.ends[end] || 0) + 1;
+    sources[s].end = end;
+  }
+  return stats;
+}
+
+// ── World integration ──
+// The toggle selects the solved system; off keeps the legacy flags exactly.
+var WATER_SYSTEM_ENABLED = true;
+var WATER_LAKE_LEVEL = -3.0;       // Endless valley pools: the legacy wet threshold, now a flat surface
+var WATER_SPRING_MIN_H = 2.5;      // a chunk's highest open ground must reach this to hold a spring
+var WATER_SPRING_CHANCE = 0.35;
+var WATER_SPRING_STRENGTH = [260, 900];
+// Rivers are objects composited into the terrain: a smoothed centreline with
+// a surface that falls downstream and is level across, a width from the
+// spring's strength, and a channel carved into the ground beneath.
+var WATER_RIVER_HALF_WIDTH = [18, 30];  // world units, weakest to strongest spring (several height points across)
+var WATER_RIVER_BED_DEPTH = 0.45;       // mesh units below the surface at the centreline
+var WATER_BANK_WIDTH = 18;              // world units over which a cut bank rises to higher ground
+var WATER_BANK_LIP = 0.25;              // mesh units a levee stands above the water
+var WATER_LEVEE_WIDTH = 20;             // world units of levee shelf beside the water (wider than the height grid)
+var WATER_LEVEE_FALL = 18;              // world units over which a levee falls back to lower ground
+var WATER_BANK_REACH = Math.max(WATER_BANK_WIDTH, WATER_LEVEE_WIDTH + WATER_LEVEE_FALL);
+var WATER_RIVER_STEP = 6;               // world units between river cross-sections
+var waterStats = {builds: 0, lastSolveMs: 0, maxSolveMs: 0, springs: 0, river: 0, lake: 0, lakes: 0,
+  standing: 0, joins: 0, outflows: 0, exhausted: 0, capped: 0, falls: 0, rivers: 0, carved: 0};
+var waterSources = [];             // current window's solved sources, window-local cells
+var waterRivers = [];              // current window's river objects (world-space centrelines)
+var _waterScratch = null, _waterField = null;
+
+// Rivers carve the terrain, so switching rebuilds the window from its chunks
+// (the carve runs during assembly, before walk data is derived from heights).
+function setWaterSystemEnabled(on) {
+  WATER_SYSTEM_ENABLED = !!on;
+  if (typeof ENDLESS_MODE !== 'undefined' && ENDLESS_MODE && floorMesh && floorMesh.water && typeof assembleWindow === 'function') {
+    var half = Math.floor(WINDOW_CHUNKS / 2);
+    assembleWindow(windowCX + half, windowCY + half);
+  }
+}
+function _waterNow() {
+  return typeof performance === 'object' && performance && performance.now ? performance.now() : Date.now();
+}
+// Open ground for water: plain surface terrain only. Walls, cave interiors,
+// carved entrance ramps and cave caps stay dry in this version.
+function _waterWindowBed(mesh, i) {
+  if (grid && grid[i]) return NaN;
+  if (!mesh.layerCount || mesh.layerCount[i] !== 1 || mesh.l0Type[i] !== 1) return NaN;
+  var top = mesh.l0TopZ[i];
+  return mesh.surfaceH && top === mesh.surfaceH[i] ? top : NaN;
+}
+// One spring per qualifying chunk at its highest open cell. Chunk coordinates
+// seed the draws, so a chunk's spring is the same in every window.
+function _waterWindowSprings(mesh, field) {
+  var springs = [], cells = CHUNK_CELLS, w = mesh.w;
+  for (var dy = 0; dy < WINDOW_CHUNKS; dy++) {
+    for (var dx = 0; dx < WINDOW_CHUNKS; dx++) {
+      var ccx = windowCX + dx, ccy = windowCY + dy, rng = chunkRng(ccx, ccy, 71);
+      if (rng() >= WATER_SPRING_CHANCE) continue;
+      var strength = Math.round(WATER_SPRING_STRENGTH[0] + rng() * (WATER_SPRING_STRENGTH[1] - WATER_SPRING_STRENGTH[0]));
+      var best = -1, bestH = -Infinity;
+      for (var y = 1; y < cells - 1; y++) {
+        for (var x = 1; x < cells - 1; x++) {
+          var i = (dy * cells + y) * w + dx * cells + x, hgt = field.height[i];
+          if (hgt === hgt && hgt > bestH && !field.water[i]) { bestH = hgt; best = i; }
+        }
+      }
+      if (best < 0 || bestH < WATER_SPRING_MIN_H) continue;
+      springs.push({cell: best, strength: strength, chunk: ccx + ',' + ccy, kind: 'spring', height: bestH});
+    }
+  }
+  // Stronger springs claim their valleys first; ties break by chunk order.
+  springs.sort(function(a, b) { return b.strength - a.strength || a.cell - b.cell; });
+  return springs;
+}
+function _waterEnsureArrays(mesh) {
+  var n = mesh.w * mesh.h;
+  if (!mesh.waterSurface || mesh.waterSurface.length !== n) {
+    mesh.waterSurface = new Float32Array(n); mesh.waterDepth = new Float32Array(n);
+    mesh.waterSpeed = new Float32Array(n); mesh.waterFlags = new Uint8Array(n); mesh.waterBody = new Int32Array(n);
+  }
+  if (!mesh.waterDirX || mesh.waterDirX.length !== n) { mesh.waterDirX = new Float32Array(n); mesh.waterDirY = new Float32Array(n); }
+  if (!mesh.waterLegacy || mesh.waterLegacy.length !== n) mesh.waterLegacy = new Uint8Array(mesh.water);
+  if (!mesh.waterShore || mesh.waterShore.length !== n) mesh.waterShore = new Int32Array(n);
+}
+// Runs once per window assembly (and on toggle). Legacy valley pools become
+// flat lakes at WATER_LAKE_LEVEL; springs then route over the window.
+function buildWindowWater() {
+  var mesh = floorMesh;
+  if (!mesh || !mesh.water || !mesh.surfaceH) return null;
+  var started = _waterNow(), n = mesh.w * mesh.h;
+  _waterEnsureArrays(mesh);
+  _waterRestoreBeds(mesh);
+  _waterRestoreCarve(mesh);
+  mesh.water.set(mesh.waterLegacy);
+  // Dry cells hold 0, never NaN: water[i] says whether a cell is wet, and
+  // finite values keep generic mesh snapshot comparisons valid.
+  mesh.waterSurface.fill(0); mesh.waterDepth.fill(0); mesh.waterSpeed.fill(0); mesh.waterFlags.fill(0);
+  mesh.waterBody.fill(0); mesh.waterDirX.fill(0); mesh.waterDirY.fill(0); mesh.waterShore.fill(-1);
+  waterSources = []; waterRivers = [];
+  if (!WATER_SYSTEM_ENABLED) { waterStats.lastSolveMs = 0; return null; }
+  if (!_waterField || _waterField.w !== mesh.w || _waterField.h !== mesh.h) {
+    _waterField = createWaterField(mesh.w, mesh.h); _waterScratch = createWaterScratch(n);
+  }
+  var field = _waterField, standing = 0;
+  // The field writes straight into the mesh's arrays; only the bed is its own.
+  field.water = mesh.water; field.surface = mesh.waterSurface; field.dirX = mesh.waterDirX; field.dirY = mesh.waterDirY;
+  field.speed = mesh.waterSpeed; field.flags = mesh.waterFlags; field.body = mesh.waterBody;
+  for (var i = 0; i < n; i++) {
+    var bed = _waterWindowBed(mesh, i);
+    field.height[i] = bed;
+    if (mesh.water[i]) {
+      if (bed === bed && bed < WATER_LAKE_LEVEL) { mesh.water[i] = WATER_KIND.still; mesh.waterSurface[i] = WATER_LAKE_LEVEL; standing++; }
+      else mesh.water[i] = 0;
+    }
+  }
+  waterSources = _waterWindowSprings(mesh, field);
+  var stats = solveWaterSources(field, waterSources, _waterScratch);
+  waterRivers = buildWaterRivers(mesh, waterSources);
+  stats.carved = carveWaterRivers(mesh, field, waterRivers);
+  for (var j = 0; j < n; j++) if (mesh.water[j]) mesh.waterDepth[j] = mesh.waterSurface[j] - field.height[j];
+  _waterTintBeds(mesh);
+  var ms = _waterNow() - started;
+  waterStats.builds++; waterStats.lastSolveMs = ms; waterStats.maxSolveMs = Math.max(waterStats.maxSolveMs, ms);
+  waterStats.springs = waterSources.length; waterStats.standing = standing;
+  ['river', 'lake', 'lakes', 'joins', 'outflows', 'exhausted', 'capped', 'falls', 'carved'].forEach(function(k) { waterStats[k] = stats[k] || 0; });
+  waterStats.rivers = waterRivers.length;
+  return stats;
+}
+function getWaterStats() { return Object.assign({}, waterStats); }
+
+// Trace each spring downstream along the solved flow directions. A river
+// ends at a confluence (ground another river already owns), at the window
+// edge or where its water stops. Runs through lakes split it: each flowing
+// run becomes one river object whose ends reach one point into the lake.
+function buildWaterRivers(mesh, sources) {
+  var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, owner = new Int32Array(n), rivers = [];
+  for (var s = 0; s < sources.length; s++) {
+    var src = sources[s], id = s + 1, c = src.cell, path = [], guard = 0;
+    if (c < 0 || !mesh.water[c]) continue;
+    while (c >= 0 && guard++ < n) {
+      if (owner[c] && owner[c] !== id) { path.push(c); break; }   // confluence
+      if (owner[c] === id) break;                                  // loop guard
+      owner[c] = id; path.push(c);
+      var dx = Math.round(mesh.waterDirX[c]), dy = Math.round(mesh.waterDirY[c]);
+      if (!dx && !dy) break;
+      var x = c % w + dx, y = ((c / w) | 0) + dy;
+      if (x < 0 || y < 0 || x >= w || y >= h || !mesh.water[y * w + x]) break;
+      c = y * w + x;
+    }
+    var t = Math.max(0, Math.min(1, (src.strength || 0) / WATER_SPRING_STRENGTH[1]));
+    var halfWidth = WATER_RIVER_HALF_WIDTH[0] + (WATER_RIVER_HALF_WIDTH[1] - WATER_RIVER_HALF_WIDTH[0]) * Math.sqrt(t);
+    var run = [];
+    for (var k = 0; k <= path.length; k++) {
+      var cell = k < path.length ? path[k] : -1, still = cell >= 0 && mesh.water[cell] === WATER_KIND.still;
+      if (cell >= 0 && !still) { if (!run.length && k > 0) run.push(path[k - 1]); run.push(cell); continue; }
+      if (cell >= 0 && run.length) run.push(cell);             // reach one point into the lake
+      if (run.length >= 3) rivers.push(_waterRiverObject(mesh, run, halfWidth, id, rivers.length, run[0] === src.cell));
+      run = [];
+    }
+  }
+  return rivers;
+}
+// Relax the cell path, smooth it (two Chaikin passes), keep the surface
+// non-increasing downstream, and resample every WATER_RIVER_STEP world units.
+// Relaxing (repeated 1-2-1 neighbour averaging, ends fixed) turns the
+// height grid's zigzags into meanders whose bends are wider than the river,
+// so the channel reads as one smooth course and the ribbon's cross-sections
+// do not fold over each other on the inside of a bend. The carve follows
+// the relaxed line, so the channel moves with it.
+var WATER_RIVER_RELAX = 10;
+function _waterRiverObject(mesh, cells, halfWidth, body, index, fromSpring) {
+  var w = mesh.w, gs = mesh.gridSize, pts = [];
+  for (var i = 0; i < cells.length; i++) pts.push([(cells[i] % w) * gs, ((cells[i] / w) | 0) * gs, mesh.waterSurface[cells[i]]]);
+  for (var relax = 0; relax < WATER_RIVER_RELAX; relax++) {
+    var before = pts.map(function(p) { return p.slice(); });
+    for (var ri = 1; ri < pts.length - 1; ri++) {
+      for (var c = 0; c < 3; c++) pts[ri][c] = (before[ri - 1][c] + 2 * before[ri][c] + before[ri + 1][c]) * 0.25;
+    }
+  }
+  for (var pass = 0; pass < 2; pass++) {
+    var out = [pts[0]];
+    for (var j = 0; j < pts.length - 1; j++) {
+      var a = pts[j], b = pts[j + 1];
+      out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25, a[2] * 0.75 + b[2] * 0.25]);
+      out.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75, a[2] * 0.25 + b[2] * 0.75]);
+    }
+    out.push(pts[pts.length - 1]); pts = out;
+  }
+  var res = [[pts[0][0], pts[0][1], pts[0][2], 0]], carry = 0, arc = 0;
+  for (var k = 0; k < pts.length - 1; k++) {
+    var p = pts[k], q = pts[k + 1], len = Math.hypot(q[0] - p[0], q[1] - p[1]), d = WATER_RIVER_STEP - carry;
+    while (d <= len) {
+      var f = d / len;
+      res.push([p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, p[2] + (q[2] - p[2]) * f, arc + d]);
+      d += WATER_RIVER_STEP;
+    }
+    carry = len - (d - WATER_RIVER_STEP); arc += len;
+  }
+  var last = pts[pts.length - 1];
+  if (Math.hypot(last[0] - res[res.length - 1][0], last[1] - res[res.length - 1][1]) > 0.5) res.push([last[0], last[1], last[2], arc]);
+  for (var m = 1; m < res.length; m++) if (res[m][2] > res[m - 1][2]) res[m][2] = res[m - 1][2];
+  // Width per point (index 4): a river that starts at its spring widens over
+  // its first few sections instead of opening at full width.
+  for (var wI = 0; wI < res.length; wI++) res[wI][4] = halfWidth * (fromSpring ? Math.min(1, 0.4 + 0.12 * wI) : 1);
+  return {id: index, body: body, halfWidth: halfWidth, depth: WATER_RIVER_BED_DEPTH, points: res};
+}
+
+// The lake point a river end sits on (its nearest height point), or -1.
+function _waterLakeAt(mesh, p) {
+  var vx = Math.round(p[0] / mesh.gridSize), vy = Math.round(p[1] / mesh.gridSize);
+  if (vx < 0 || vy < 0 || vx >= mesh.w || vy >= mesh.h) return -1;
+  var v = vy * mesh.w + vx;
+  return mesh.water[v] === WATER_KIND.still ? v : -1;
+}
+// Carving is undone before any rebuild of the same window, so building twice
+// gives the same terrain as building once (plain surface points keep
+// l0TopZ equal to surfaceH, so one saved value restores both).
+function _waterRestoreCarve(mesh) {
+  var saved = mesh.waterCarveSaved;
+  if (!saved) return;
+  for (var key in saved) { mesh.l0TopZ[key] = saved[key]; mesh.surfaceH[key] = saved[key]; }
+  var colours = mesh.waterCarveColors;
+  if (colours && mesh.l0Color) for (var c in colours) mesh.l0Color[c] = colours[c];
+  mesh.waterCarveSaved = null; mesh.waterCarveColors = null;
+}
+// The natural colour of each river's banks along its course (ground just
+// outside the channel, before any bed tint), smoothed along the river. The
+// bed under a river is painted from it (see _waterTintBeds), so the colour
+// changes gradually across the channel and along it instead of stepping
+// between bank and bed at the height grid's squares.
+function _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK) {
+  var n = mesh.w * mesh.h, gs = mesh.gridSize, sums = [];
+  for (var r = 0; r < rivers.length; r++) sums.push(new Float64Array(rivers[r].points.length * 4));
+  for (var v = 0; v < n; v++) {
+    var ri = bestR[v];
+    if (ri < 0 || !(H[v] === H[v]) || bestD[v] < bestW[v] || bestD[v] > bestW[v] + gs * 1.5) continue;
+    var nat = _waterNaturalColour(mesh, v);
+    if (!nat) continue;
+    var rgb = _waterHex(nat), acc = sums[ri], o = bestK[v] * 4;
+    acc[o] += rgb[0]; acc[o + 1] += rgb[1]; acc[o + 2] += rgb[2]; acc[o + 3]++;
+  }
+  for (var r2 = 0; r2 < rivers.length; r2++) {
+    var count = rivers[r2].points.length, a = sums[r2], shore = new Int32Array(count).fill(-1), filled = [], k;
+    for (k = 0; k < count; k++) filled.push(a[k * 4 + 3] ? [a[k * 4] / a[k * 4 + 3], a[k * 4 + 1] / a[k * 4 + 3], a[k * 4 + 2] / a[k * 4 + 3]] : null);
+    // Points without a sampled bank borrow the nearest sampled one.
+    for (k = 1; k < count; k++) if (!filled[k] && filled[k - 1]) filled[k] = filled[k - 1];
+    for (k = count - 2; k >= 0; k--) if (!filled[k] && filled[k + 1]) filled[k] = filled[k + 1];
+    for (k = 0; k < count; k++) {
+      if (!filled[k]) continue;
+      var sr = 0, sg = 0, sb = 0, sn = 0;
+      for (var j = Math.max(0, k - 3); j <= Math.min(count - 1, k + 3); j++) { sr += filled[j][0]; sg += filled[j][1]; sb += filled[j][2]; sn++; }
+      shore[k] = (Math.round(sr / sn) << 16) | (Math.round(sg / sn) << 8) | Math.round(sb / sn);
+    }
+    rivers[r2].shore = shore;
+  }
+}
+// Composite each river into the terrain. For every open ground point near a
+// river, find the closest centreline point (distance d, surface S): inside
+// the channel (d < halfWidth) the bed is a parabola reaching
+// WATER_RIVER_BED_DEPTH below S. It meets the surface at the channel edge
+// with a steady slope and the bank keeps rising at that slope, so the ground
+// is close to linear in d across the waterline and the rendered shoreline
+// (where the interpolated ground crosses S) follows the channel edge instead
+// of zigzagging along height-grid triangles. Beside the channel the bank is
+// the higher of two shapes: a cut bank that rises from S to higher natural
+// ground, and a levee shelf WATER_BANK_LIP above S that falls back to lower
+// natural ground only after WATER_LEVEE_WIDTH. The shelf is wider than the
+// height grid's spacing, so the rendered ground next to the water always
+// stands above it and the river never hangs over a falling slope. Walls, caves, lakes and points next to
+// closed ground are left unchanged. Then river water is written from the
+// channel: level across, falling downstream. Returns the points carved.
+function carveWaterRivers(mesh, field, rivers) {
+  var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, H = field.height;
+  // Rivers replace the solver's per-point river marks.
+  for (var i = 0; i < n; i++) {
+    if (mesh.water[i] !== WATER_KIND.flowing) continue;
+    mesh.water[i] = 0; mesh.waterSurface[i] = 0; mesh.waterDirX[i] = 0; mesh.waterDirY[i] = 0;
+    mesh.waterSpeed[i] = 0; mesh.waterBody[i] = 0;
+  }
+  if (!rivers.length) return 0;
+  var bestD = new Float32Array(n).fill(Infinity), bestS = new Float32Array(n), bestTX = new Float32Array(n),
+    bestTY = new Float32Array(n), bestSlope = new Float32Array(n), bestW = new Float32Array(n), bestR = new Int32Array(n).fill(-1),
+    bestK = new Int32Array(n), bestEnd = new Int8Array(n);
+  for (var r = 0; r < rivers.length; r++) {
+    var rv = rivers[r], pts = rv.points, reach = rv.halfWidth + WATER_BANK_REACH;
+    rv.mouthLake = [_waterLakeAt(mesh, pts[0]), _waterLakeAt(mesh, pts[pts.length - 1])];
+    for (var k = 0; k < pts.length - 1; k++) {
+      var a = pts[k], b = pts[k + 1], sx = b[0] - a[0], sy = b[1] - a[1], len2 = sx * sx + sy * sy, len = Math.sqrt(len2) || 1;
+      var slope = Math.max(0, (a[2] - b[2]) / len);
+      var gx0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - reach) / gs)), gx1 = Math.min(w - 1, Math.ceil((Math.max(a[0], b[0]) + reach) / gs));
+      var gy0 = Math.max(0, Math.floor((Math.min(a[1], b[1]) - reach) / gs)), gy1 = Math.min(h - 1, Math.ceil((Math.max(a[1], b[1]) + reach) / gs));
+      for (var gy = gy0; gy <= gy1; gy++) for (var gx = gx0; gx <= gx1; gx++) {
+        var v = gy * w + gx, px = gx * gs, py = gy * gs;
+        var tRaw = len2 > 0 ? ((px - a[0]) * sx + (py - a[1]) * sy) / len2 : 0, t = Math.max(0, Math.min(1, tRaw));
+        var d = Math.hypot(px - (a[0] + sx * t), py - (a[1] + sy * t));
+        if (d >= reach || d >= bestD[v]) continue;
+        bestD[v] = d; bestS[v] = a[2] + (b[2] - a[2]) * t; bestTX[v] = sx / len; bestTY[v] = sy / len;
+        bestSlope[v] = slope; bestW[v] = a[4] + (b[4] - a[4]) * t; bestR[v] = r; bestK[v] = t < 0.5 ? k : k + 1;
+        bestEnd[v] = k === pts.length - 2 && tRaw > 1 ? 1 : k === 0 && tRaw < 0 ? -1 : 0;
+      }
+    }
+  }
+  var carved = 0, saved = mesh.waterCarveSaved = {};
+  for (var q = 0; q < n; q++) {
+    var ri = bestR[q];
+    if (ri < 0 || !(H[q] === H[q]) || mesh.water[q] === WATER_KIND.still) continue;
+    var river = rivers[ri], hw = bestW[q], d2 = bestD[q], S = bestS[q];
+    if (d2 >= hw + WATER_BANK_REACH) continue;
+    var qx = q % w, qy = (q / w) | 0, open = qx > 0 && qy > 0 && qx < w - 1 && qy < h - 1;
+    // Points next to walls or caves keep their height (wall caps and cave
+    // mouths are derived from it); points beside lakes may be shaped.
+    for (var oy = -1; open && oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+      var o = q + oy * w + ox;
+      if (!(H[o] === H[o])) { open = false; break; }
+    }
+    var ground = H[q];
+    if (open) {
+      var edgeSlope = 2 * river.depth / hw;   // mesh units per world unit where the bed meets the surface
+      if (d2 < hw) { var u = d2 / hw; ground = S - river.depth * (1 - u * u); }
+      else {
+        var e = d2 - hw, T = H[q], lip = S + WATER_BANK_LIP;
+        var c0 = Math.min(1, e / WATER_BANK_WIDTH), cut = S + (T - S) * c0 * c0 * (3 - 2 * c0);
+        var levee;
+        if (e < WATER_LEVEE_WIDTH) levee = S + Math.min(WATER_BANK_LIP, edgeSlope * e);
+        else { var f0 = Math.min(1, (e - WATER_LEVEE_WIDTH) / WATER_LEVEE_FALL); levee = lip + (Math.min(T, lip) - lip) * f0 * f0 * (3 - 2 * f0); }
+        ground = Math.max(cut, levee);
+      }
+      if (ground !== H[q]) {
+        saved[q] = mesh.l0TopZ[q];
+        H[q] = ground; mesh.l0TopZ[q] = ground; mesh.surfaceH[q] = ground; carved++;
+      }
+    }
+    // Past an end that opens into a lake the channel is part of that lake.
+    var mouth = bestEnd[q] ? river.mouthLake[bestEnd[q] > 0 ? 1 : 0] : -1;
+    if (d2 < hw && S - ground > 0.001 && mouth >= 0) {
+      mesh.water[q] = WATER_KIND.still; mesh.waterSurface[q] = mesh.waterSurface[mouth]; mesh.waterBody[q] = mesh.waterBody[mouth];
+    } else if (d2 < hw && S - ground > 0.001) {
+      mesh.water[q] = WATER_KIND.flowing; mesh.waterSurface[q] = S; mesh.waterBody[q] = river.body;
+      mesh.waterDirX[q] = bestTX[q]; mesh.waterDirY[q] = bestTY[q];
+      mesh.waterSpeed[q] = Math.max(0.25, Math.min(1, 0.25 + bestSlope[q] * 30));
+    }
+  }
+  _waterRecolourCarved(mesh, H);
+  _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK);
+  for (var s2 = 0; s2 < n; s2++) {
+    if (mesh.water[s2] === WATER_KIND.flowing && bestR[s2] >= 0) mesh.waterShore[s2] = rivers[bestR[s2]].shore[bestK[s2]];
+  }
+  return carved;
+}
+// Ground colour follows height in this world, with slope shading baked in
+// at generation. Carved ground takes the colour the generator would give it
+// at its new height, shaded from its new neighbours, so a levee raised out of
+// a dark valley reads as bank and the channel's sides shade like terrain.
+// Originals are kept (mesh.waterCarveColors) and restored with the heights.
+function _waterRecolourCarved(mesh, H) {
+  var saved = mesh.waterCarveSaved, colours = mesh.waterCarveColors = {};
+  if (!saved || !mesh.l0Color || typeof getFloorColorBlended !== 'function') return;
+  var w = mesh.w, gs = mesh.gridSize;
+  for (var key in saved) {
+    var v = +key, x = v % w, y = (v / w) | 0, hc = H[v];
+    if (mesh.waterLegacy[v] || typeof mesh.l0Color[v] !== 'string' || mesh.l0Color[v].charAt(0) !== '#') continue;
+    var hN = H[v - w], hS = H[v + w], hE = H[v + 1], hW = H[v - 1];
+    var base = _waterHex(getFloorColorBlended(x * gs + windowOriginX, y * gs + windowOriginY, hc));
+    // The generator's slope shading (05-endless-world.js, chunk floor mesh).
+    var slope = (hN + hS + hE + hW) * 0.25 - hc, sunDot = (-(hE - hW) * 0.5 - (hS - hN) * 0.5) * 0.5, shade = 0;
+    if (slope > 0.15) shade -= Math.min(0.12, slope * 0.10);
+    else if (slope < -0.15) shade += Math.min(0.10, -slope * 0.08);
+    if (sunDot > 0.1) shade += Math.min(0.14, sunDot * 0.12);
+    else if (sunDot < -0.1) shade -= Math.min(0.10, -sunDot * 0.08);
+    var mult = shade < -0.02 || shade > 0.02 ? 1 + shade : 1;
+    colours[v] = mesh.l0Color[v];
+    mesh.l0Color[v] = _waterHexOut(Math.floor(base[0] * mult), Math.floor(base[1] * mult), Math.floor(base[2] * mult));
+  }
+}
+
+// The ground under and around water is painted deliberately. Low valley
+// ground is authored very dark (colour follows height), which reads as a void
+// through translucent water, so squares fully under water become a wet
+// sand-and-mud lakebed that grows muddier and darker with depth (so a
+// channel's bed shades smoothly from its banks) but never turns black,
+// and a square the shoreline crosses takes the natural colour of its highest
+// (driest) corner, so a bank rising out of the water reads as land. A floor
+// square takes its colour from its first corner, so only squares whose first
+// corner is under water are recoloured; dry ground is never touched. Legacy
+// pools were painted solid blue at generation; their natural pre-water
+// colour (the window's surfaceBiome) is the starting point instead.
+// Originals are kept so switching the system off restores them exactly.
+var WATER_BED_TONE = [96, 84, 62];
+var WATER_BED_MUD = [0.4, 0.75];   // share of bed tone in shallow and in deep water (grades the shoreline)
+function _waterHex(c) { var n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function _waterHexOut(r, g, b) {
+  return '#' + ((1 << 24) | (Math.round(Math.max(0, Math.min(255, r))) << 16) |
+    (Math.round(Math.max(0, Math.min(255, g))) << 8) | Math.round(Math.max(0, Math.min(255, b)))).toString(16).slice(1);
+}
+function _waterNaturalColour(mesh, v) {
+  if (mesh.waterLegacy && mesh.waterLegacy[v] && mesh.surfaceBiome && typeof mesh.surfaceBiome[v] === 'string') return mesh.surfaceBiome[v];
+  var c = mesh.l0Color[v];
+  return typeof c === 'string' && c.charAt(0) === '#' ? c : null;
+}
+function _waterTintBeds(mesh) {
+  if (!mesh.l0Color) return;
+  var saved = {}, w = mesh.w, h = mesh.h;
+  for (var y = 0; y < h - 1; y++) {
+    for (var x = 0; x < w - 1; x++) {
+      var i = y * w + x, a = mesh.water[i], b = mesh.water[i + 1], c = mesh.water[i + w], d = mesh.water[i + w + 1];
+      if (!a) continue;
+      var original = mesh.l0Color[i];
+      if (typeof original !== 'string' || original.charAt(0) !== '#') continue;
+      var colour, shore = a === WATER_KIND.flowing && mesh.waterShore ? mesh.waterShore[i] : -1;
+      if (shore >= 0) {
+        // River bed: its own banks' colour at the waterline (so the squares
+        // the shoreline crosses match the bank), muddier and darker toward
+        // the deep middle of the channel.
+        var t = Math.min(1, mesh.waterDepth[i] / WATER_RIVER_BED_DEPTH);
+        var rMud = WATER_BED_MUD[1] * t * t, rKeep = 1 - rMud, dim = 1 - 0.15 * t;
+        colour = _waterHexOut((((shore >> 16) & 255) * rKeep + WATER_BED_TONE[0] * rMud) * dim,
+          (((shore >> 8) & 255) * rKeep + WATER_BED_TONE[1] * rMud) * dim, ((shore & 255) * rKeep + WATER_BED_TONE[2] * rMud) * dim);
+      } else if (a && b && c && d) {
+        var nat = _waterNaturalColour(mesh, i) || original, rgb = _waterHex(nat);
+        var depth = mesh.waterDepth[i], dark = 1 - Math.min(0.3, depth * 0.18);
+        var mud = WATER_BED_MUD[0] + (WATER_BED_MUD[1] - WATER_BED_MUD[0]) * Math.min(1, depth / 0.6), keep = 1 - mud;
+        colour = _waterHexOut((rgb[0] * keep + WATER_BED_TONE[0] * mud) * dark,
+          (rgb[1] * keep + WATER_BED_TONE[1] * mud) * dark, (rgb[2] * keep + WATER_BED_TONE[2] * mud) * dark);
+      } else {
+        // The driest corner's natural colour: the bank is land.
+        var corners = [i, i + 1, i + w, i + w + 1], best = -1, bestZ = -Infinity;
+        for (var k = 0; k < 4; k++) {
+          var z = typeof _waterTerrainZ === 'function' ? _waterTerrainZ(mesh, corners[k]) : mesh.l0TopZ[corners[k]];
+          if (z === z && z > bestZ && _waterNaturalColour(mesh, corners[k])) { bestZ = z; best = corners[k]; }
+        }
+        colour = best >= 0 ? _waterNaturalColour(mesh, best) : original;
+      }
+      saved[i] = original;
+      mesh.l0Color[i] = colour;
+    }
+  }
+  mesh.waterBedColors = saved;
+}
+function _waterRestoreBeds(mesh) {
+  var saved = mesh.waterBedColors;
+  if (!saved || !mesh.l0Color) return;
+  for (var key in saved) mesh.l0Color[key] = saved[key];
+  mesh.waterBedColors = null;
+}
+
+// The one query every consumer uses. Window-local world coordinates, like
+// getFloorHeightAt. Returns a shared record (copy it to keep it) or null.
+// Heights are mesh units; surfaceZ is player units (h*40+60).
+var _waterSample = {kind: 0, surface: 0, depth: 0, surfaceZ: 0, flowX: 0, flowY: 0, speed: 0, flags: 0, body: 0};
+function waterAt(x, y) {
+  var mesh = floorMesh;
+  if (!WATER_SYSTEM_ENABLED || !mesh || !mesh.water || !mesh.waterSurface) return null;
+  var gx = Math.floor(x / mesh.gridSize), gy = Math.floor(y / mesh.gridSize);
+  if (gx < 0 || gy < 0 || gx >= mesh.w || gy >= mesh.h) return null;
+  var i = gy * mesh.w + gx, kind = mesh.water[i], surface = mesh.waterSurface[i];
+  if (!kind || !(surface === surface)) return null;
+  var s = _waterSample;
+  s.kind = kind; s.surface = surface; s.depth = mesh.waterDepth[i]; s.surfaceZ = surface * 40 + 60;
+  s.flowX = mesh.waterDirX[i] * mesh.waterSpeed[i]; s.flowY = mesh.waterDirY[i] * mesh.waterSpeed[i];
+  s.speed = mesh.waterSpeed[i]; s.flags = mesh.waterFlags[i]; s.body = mesh.waterBody[i];
+  return s;
+}
+
+// ── Movement in water ──
+// Wading slows a body; deeper water slows it more; river currents carry it
+// along the flow. Everything reads waterAt at the body's feet in the fixed
+// simulation tick, never from rendering. Jumping clear of the surface ends
+// the effect. Lakes have no current (their speed is zero).
+var WATER_WADE_SLOW = 0.45;        // speed lost at full depth
+var WATER_FULL_DEPTH_Z = 24;       // player units (0.6 mesh units, about knee deep) for the full effect
+var WATER_CURRENT_SPEED = 55;      // world units per second at full river speed and depth
+var _waterCurrentScratch = {x: 0, y: 0};
+
+// Water above the feet, in player units (0 when dry or clear of the surface).
+function waterImmersionAt(x, y, feetZ) {
+  var w = waterAt(x, y);
+  if (!w) return 0;
+  var depth = w.surfaceZ - feetZ;
+  return depth > 0 ? depth : 0;
+}
+function waterSpeedFactorAt(x, y, feetZ) {
+  var depth = waterImmersionAt(x, y, feetZ);
+  return depth > 0 ? 1 - WATER_WADE_SLOW * Math.min(1, depth / WATER_FULL_DEPTH_Z) : 1;
+}
+// Current velocity (world units per second) felt by feet at feetZ.
+function waterCurrentAt(x, y, feetZ, out) {
+  out = out || _waterCurrentScratch;
+  out.x = 0; out.y = 0;
+  var w = waterAt(x, y);
+  if (!w) return out;
+  var depth = w.surfaceZ - feetZ;
+  if (!(depth > 0)) return out;
+  var k = WATER_CURRENT_SPEED * Math.min(1, depth / WATER_FULL_DEPTH_Z);
+  out.x = w.flowX * k; out.y = w.flowY * k;
+  return out;
+}
+// NPCs stand on the bed: their immersion is the cell's water depth.
+function waterActorSpeedFactor(actor) {
+  var w = actor ? waterAt(actor.x, actor.y) : null;
+  return w ? 1 - WATER_WADE_SLOW * Math.min(1, w.depth * 40 / WATER_FULL_DEPTH_Z) : 1;
 }
 // =============================================
 // SECTION 5: WALL DECORATIONS
@@ -13421,7 +14148,10 @@ function step(dt) {
   if (NOCLIP) { pos.x+=vel.x*dt; pos.y+=vel.y*dt; }
   else {
     var movementBody=spatialPlayerBody();
-    var movement=spatialMoveBody(movementBody,vel.x*dt,vel.y*dt);
+    // A river current carries the body; it joins this step's displacement
+    // after damping, so it neither decays nor bounces off walls as velocity.
+    var current=typeof waterCurrentAt==='function'?waterCurrentAt(pos.x,pos.y,pos.floorZ):null;
+    var movement=spatialMoveBody(movementBody,vel.x*dt+(current?current.x*dt:0),vel.y*dt+(current?current.y*dt:0));
     pos.x=movementBody.x; pos.y=movementBody.y;
     _hitWallX=movement.hitX; _hitWallY=movement.hitY;
     if (_hitWallX) vel.x*=-bounce;
@@ -14011,7 +14741,8 @@ function npcMoveToward(actor,x,y,speed,dt,radius,stopDistance) {
   if(gameTimeNow()<(actor.stunUntil||0))return false;
   var dx=x-actor.x,dy=y-actor.y,d=Math.hypot(dx,dy),stop=stopDistance||0;
   if(!Number.isFinite(d) || !Number.isFinite(speed) || !(dt>0) || d<=stop || speed<=0)return false;
-  var start=physicsStageStart(),travel=Math.min(d-stop,speed*dt),oldX=actor.x,oldY=actor.y;
+  var wade=typeof waterActorSpeedFactor==='function'?waterActorSpeedFactor(actor):1;
+  var start=physicsStageStart(),travel=Math.min(d-stop,speed*wade*dt),oldX=actor.x,oldY=actor.y;
   try {
     npcStats.moves++;
     actor.facing=Math.atan2(dy,dx);
@@ -15107,6 +15838,7 @@ function tickEffects(dt) {
   var BASE_SPEED = GAME_CONFIG.player.baseSpeed;
   var hatSpeedMult = (equipment.hat && equipment.hat.speedBonus) ? (1 + equipment.hat.speedBonus) : 1;
   speed = ((now < speedBoostUntil) ? BASE_SPEED * 1.25 : BASE_SPEED) * hatSpeedMult * (1 + permanentSpeedBonus);
+  if (typeof waterSpeedFactorAt === 'function') speed *= waterSpeedFactorAt(pos.x, pos.y, pos.floorZ);
 
   // Regen buff — heal 1 HP every 3 seconds
   if (now < regenBoostUntil && now - lastRegenTick > 3000) {
@@ -16271,7 +17003,7 @@ function fxCreateStats() {
     unknownEvents:0, unknownRecipes:0, badEvents:0, palOverflow:0, anchorsRefused:0,
     refusedToggle:0, refusedFamily:0, refusedCap:0, refusedBudget:0, refusedLod:0, refusedSpawnCap:0,
     refusedOffscreenSelf:0, refusedView:0, refusedNoSupport:0, refusedChildQueue:0, contactsDropped:0,
-    obsSteps:0, obsNpcSteps:0, obsNpcCapped:0, obsDashes:0, obsLands:0, weatherSpawned:0, weatherSnowLine:0, weatherSplashes2D:0};
+    obsSteps:0, obsNpcSteps:0, obsNpcCapped:0, obsDashes:0, obsLands:0, obsWading:0, weatherSpawned:0, weatherSnowLine:0, weatherSplashes2D:0};
 }
 // Weather state (section 9.1), sim-owned: the per-kind levels (rain, snow,
 // ash), their goals, the goal each level's crossfade aims at and its rate,
@@ -17270,6 +18002,7 @@ var PARTICLE_ANCHORS = {
     ctx.x = pos.x; ctx.y = pos.y; ctx.z = fxDashZ(pos.x, pos.y, feet, !!jumpAirborne, under);
     if (v > 1e-9) { ctx.dx = vel.x / v; ctx.dy = vel.y / v; }
     ctx.flags = FX_EV_SELF | (under ? FX_EV_UNDER : 0); ctx.surf = fxSurfaceAt(S, pos.x, pos.y, under);
+    if (fxWading(pos.x, pos.y, ctx.z)) return 2;                   // wading: no trail dust this tick
     return 1;
   },
   // The flame stream (S8) while its beam is drawn (a stream tick within 180
@@ -17574,6 +18307,14 @@ function fxSurfaceAt(S, x, y, under) {
   var i = P.surfBiomes.indexOf(b);
   return i < 0 ? fxBiomeIndex(S) : i;
 }
+// Water system merge (06-water.js; the handoff's wading note): a step,
+// landing or dash laid where a water surface stands above its support is
+// wading, and kicks up no ground dust. Absent water system: never.
+function fxWading(x, y, z) {
+  if (typeof waterAt !== 'function' || !(z === z)) return false;
+  var w = waterAt(x, y);
+  return !!w && w.surface * 25 > z;
+}
 // An observer's event runs through its bindings at once (the observers run
 // after the queue's drain, inside the tick), from a private one-slot ring.
 // z NaN: no ground under the event (fxDashZ); its bindings count their
@@ -17582,6 +18323,7 @@ function fxObsEmit(S, code, x, y, z, dx, dy, scale, flags) {
   var st = S.stats, ev = S.obsEv;
   if (!fxEventOpen(S, code)) { st.eventsGated++; return; }
   if (!Number.isFinite(x + y) || z === Infinity || z === -Infinity) { st.badEvents++; return; }
+  if (fxWading(x, y, z)) { st.obsWading++; return; }             // under water: no ground dust (06-water.js)
   fxRingClear(ev, 0);
   ev.type[0] = code; ev.x[0] = x; ev.y[0] = y; ev.z[0] = z; ev.dx[0] = dx; ev.dy[0] = dy; ev.scale[0] = scale; ev.flags[0] = flags;
   ev.surf[0] = fxSurfaceAt(S, x, y, flags & FX_EV_UNDER);
@@ -18040,6 +18782,13 @@ function fxWeatherMember(S, F, st, k, r, x, y, z, pre) {
   st.lives[k]++; st.live++;
   if (sky.ci >= 0 && sky.x === S.x[i] && sky.y === S.y[i] && S.R.stratum[r] === FX_STRATUM_OPENSKY) {
     S.gcell[i] = sky.ci; S.g0[i] = sky.g[0]; S.g1[i] = sky.g[1]; S.g2[i] = sky.g[2]; S.g3[i] = sky.g[3];
+    // Water system merge: the seeded floor meets a water surface as
+    // fxFillGround's does, and a prewarmed member falls no lower than it.
+    if (floorMesh.layerCount[sky.ci] === 1 && typeof waterAt === 'function') {
+      fxWaterFloor(S, i, floorMesh, sky.ci);
+      var wz = fxGroundZ(S, i, S.x[i], S.y[i]);
+      if (wz > z) z = wz;
+    }
   }
   if (pre) {
     var u = effectNoise(S.seedA[i], 21);
@@ -18208,8 +18957,23 @@ function fxFillGround(S, i, m, ci) {
   if (!spatialLayerCornersInto(m, ci, li, _fxCorners)) {         // last row/column or stratum edge: flat
     S.g0[i] = S.g1[i] = S.g2[i] = S.g3[i] = m[SPATIAL_LAYER_TOP_KEYS[li]][ci] * 25;
   } else { S.g0[i] = _fxCorners[0] * 25; S.g1[i] = _fxCorners[1] * 25; S.g2[i] = _fxCorners[2] * 25; S.g3[i] = _fxCorners[3] * 25; }
+  if (n === 1 && typeof waterAt === 'function') fxWaterFloor(S, i, m, ci);
   S.gcell[i] = ci; S.stats.groundMiss++;
   return true;
+}
+// Water system merge (06-water.js): water is drawn translucent after the
+// opaque scene and writes no depth, so it cannot hide a particle below its
+// surface. On plain surface cells (the only ones that hold water) each ground
+// corner under a water surface is raised to it: rain splashes on the water,
+// snow, ash and chips settle on it and fade, instead of reaching the bed and
+// drawing over the water. Corners are the cell's height points (NW, NE, SW,
+// SE, as sampleSpatialSupportZ splits them), read through waterAt.
+function fxWaterFloor(S, i, m, ci) {
+  var gs = m.gridSize, gx = ci % m.w, gy = (ci - gx) / m.w, w;
+  if ((w = waterAt(gx * gs, gy * gs)) && w.surface * 25 > S.g0[i]) S.g0[i] = w.surface * 25;
+  if ((w = waterAt((gx + 1) * gs, gy * gs)) && w.surface * 25 > S.g1[i]) S.g1[i] = w.surface * 25;
+  if ((w = waterAt(gx * gs, (gy + 1) * gs)) && w.surface * 25 > S.g2[i]) S.g2[i] = w.surface * 25;
+  if ((w = waterAt((gx + 1) * gs, (gy + 1) * gs)) && w.surface * 25 > S.g3[i]) S.g3[i] = w.surface * 25;
 }
 function fxCeilingBetween(m, ci, n, lo, hi) {
   for (var k = 0; k < n; k++) if (m[SPATIAL_LAYER_TYPE_KEYS[k]][ci] === 2) {
@@ -18494,7 +19258,8 @@ function fxEngineStats(out) {
     refused:{toggle:st.refusedToggle, family:st.refusedFamily, cap:st.refusedCap, budget:st.refusedBudget, lod:st.refusedLod,
       spawnCap:st.refusedSpawnCap, offscreenSelf:st.refusedOffscreenSelf, view:st.refusedView, noSupport:st.refusedNoSupport,
       childQueue:st.refusedChildQueue},
-    observers:{steps:st.obsSteps, npcSteps:st.obsNpcSteps, npcCapped:st.obsNpcCapped, dashes:st.obsDashes, lands:st.obsLands}};
+    observers:{steps:st.obsSteps, npcSteps:st.obsNpcSteps, npcCapped:st.obsNpcCapped, dashes:st.obsDashes, lands:st.obsLands,
+      wading:st.obsWading}};
   out.registry.unknownEvents = st.unknownEvents;
 }
 
@@ -24758,6 +25523,278 @@ function drawLayersCeiling3D() {
   ctx.globalAlpha = 1.0;
   ctx.restore();
 }
+// Water surfaces for the water system (06-water.js). Lakes are drawn per
+// floor square (the floor spans four height points): every square with a
+// lake corner gets a surface at the lake level, and the scene depth test (the
+// floor is already drawn and writes depth) cuts the shoreline exactly where
+// land rises out of the water. A dry corner is lowered to the ground there if
+// the ground is lower, so water never hangs over a drop; squares sharing one
+// level merge into flat strips. Rivers are ribbons along their carved
+// channels: level across, falling downstream, with edges that reach into the
+// banks so the depth test draws a smooth waterline (but not out over lower
+// ground, and not past the centre of a tight bend). Built once per solve;
+// each frame only culls, sorts, projects and fills translucent through the
+// scene-depth clip, after floors, walls and every opaque model part and
+// before billboards and sprites (draw()'s water3D stage). Presentation
+// only: no depth writes, no gameplay state, no RNG.
+var WATER_RENDER_ENABLED = true;
+var WATER_RIBBON_OVERLAP = 7;      // world units a river ribbon reaches past the waterline into its banks
+var _waterTiles = [], _waterTilesMesh = null, _waterTilesBuild = -1, _waterVisible = [];
+var waterRenderStats = {tiles: 0, lakeTiles: 0, riverTiles: 0, sheets: 0, drawn: 0, culled: 0, lastMs: 0};
+
+// Walkable surface height at a terrain point, or NaN.
+function _waterTerrainZ(mesh, v) {
+  if (!mesh.layerCount || mesh.layerCount[v] < 1) return NaN;
+  var t = mesh.l0Type[v];
+  return t === 1 || t === 3 || t === 4 ? mesh.l0TopZ[v] : NaN;
+}
+// Rendered height of plain surface ground at a world point (the floor's own
+// triangle split), or NaN where any corner is not plain surface.
+function _waterGroundAt(mesh, x, y) {
+  var gs = mesh.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs), w = mesh.w;
+  if (gx < 0 || gy < 0 || gx >= w - 1 || gy >= mesh.h - 1) return NaN;
+  var i = gy * w + gx, z0 = _waterWindowBed(mesh, i), z1 = _waterWindowBed(mesh, i + 1),
+    z2 = _waterWindowBed(mesh, i + w), z3 = _waterWindowBed(mesh, i + w + 1), u = x / gs - gx, v = y / gs - gy;
+  return u >= v ? z0 + (z1 - z0) * u + (z3 - z1) * v : z0 + (z3 - z2) * u + (z2 - z0) * v;
+}
+// How far one side of a river ribbon reaches: past the channel edge into the
+// bank by WATER_RIBBON_OVERLAP, but not out over ground clearly lower than
+// the water (a neighbouring channel, the river's own next bend, a perched
+// bank), where the strip would float.
+function _waterRibbonReach(mesh, x, y, nx, ny, hw, surface) {
+  for (var e = 0; e <= WATER_RIBBON_OVERLAP; e += 1.75) {
+    var g = _waterGroundAt(mesh, x + nx * (hw + e), y + ny * (hw + e));
+    if (g === g && g < surface - 0.08) return hw + Math.max(0, e - 1.75);
+  }
+  return hw + WATER_RIBBON_OVERLAP;
+}
+// A river's open end (its spring, a confluence, the window edge) gets one
+// more section straight on, covering the rounded end of its carved channel.
+// An end inside a lake needs none: the lake's own surface covers it.
+function _waterRibbonCap(mesh, pts, q) {
+  var p = pts[q], o = pts[q === 0 ? 1 : q - 1];
+  if (!o || _waterLakeAt(mesh, p) >= 0) return null;
+  var dx = p[0] - o[0], dy = p[1] - o[1], len = Math.hypot(dx, dy), reach = p[4];
+  if (!(len > 0) || !(reach > 0)) return null;
+  return [p[0] + dx / len * reach, p[1] + dy / len * reach, p[2], q === 0 ? p[3] - reach : p[3] + reach, reach];
+}
+// Signed curvature of a river centreline at point q (1 / radius; positive
+// when the river turns toward its left, the ribbon's first side).
+function _waterBend(pts, q) {
+  if (q <= 0 || q >= pts.length - 1) return 0;
+  var a = pts[q - 1], b = pts[q], c = pts[q + 1];
+  var abx = b[0] - a[0], aby = b[1] - a[1], bcx = c[0] - b[0], bcy = c[1] - b[1], acx = c[0] - a[0], acy = c[1] - a[1];
+  var denom = Math.hypot(abx, aby) * Math.hypot(bcx, bcy) * Math.hypot(acx, acy);
+  return denom > 0 ? 2 * (abx * bcy - aby * bcx) / denom : 0;
+}
+function buildWaterTiles(mesh) {
+  var tiles = [], gs = mesh.gridSize, w = mesh.w, h = mesh.h, lakes = 0, rivers = 0, sheets = 0;
+  var v = [0, 0, 0, 0], cz = [0, 0, 0, 0];
+  for (var y = 0; y < h - 1; y++) {
+    var run = null;
+    for (var x = 0; x < w - 1; x++) {
+      // Corners in draw order: NW, NE, SE, SW (the floor's own corners).
+      var i0 = y * w + x;
+      v[0] = i0; v[1] = i0 + 1; v[2] = i0 + w + 1; v[3] = i0 + w;
+      var wet = 0, sum = 0, level = null, flat = true, depth = 0, flowCell = -1, lakeCell = -1, k;
+      for (k = 0; k < 4; k++) {
+        var vi = v[k];
+        if (mesh.water[vi] !== WATER_KIND.still) continue;   // rivers draw as ribbons
+        var surf = mesh.waterSurface[vi];
+        wet++; sum += surf; depth = Math.max(depth, mesh.waterDepth[vi]);
+        if (level === null) level = surf; else if (surf !== level) flat = false;
+        if (lakeCell < 0) lakeCell = vi;
+      }
+      if (!wet) { run = null; continue; }
+      var avg = sum / wet;
+      for (k = 0; k < 4; k++) {
+        var vk = v[k];
+        if (mesh.water[vk] === WATER_KIND.still) { cz[k] = mesh.waterSurface[vk]; continue; }
+        var ground = _waterTerrainZ(mesh, vk);
+        cz[k] = ground === ground ? Math.min(avg, ground) : avg;
+        if (cz[k] < avg - 1e-6) flat = false;
+      }
+      if (flat && level !== null) {
+        if (run && run.level === level && run.x1 === x * gs) {
+          run.x1 = (x + 1) * gs; run.cx = (run.x0 + run.x1) * 0.5; run.depth = Math.max(run.depth, depth);
+          continue;
+        }
+        var z = level * 25;
+        run = {kind: 1, x0: x * gs, y0: y * gs, x1: (x + 1) * gs, y1: (y + 1) * gs, z: [z, z, z, z],
+          cx: (x + 0.5) * gs, cy: (y + 0.5) * gs, depth: depth, flowX: 0, flowY: 0, speed: 0,
+          cell: lakeCell, body: mesh.waterBody[lakeCell], level: level};
+        tiles.push(run); lakes++; continue;
+      }
+      run = null;
+      tiles.push({kind: 1, x0: x * gs, y0: y * gs, x1: (x + 1) * gs, y1: (y + 1) * gs,
+        z: [cz[0] * 25, cz[1] * 25, cz[2] * 25, cz[3] * 25], cx: (x + 0.5) * gs, cy: (y + 0.5) * gs,
+        depth: depth, flowX: 0, flowY: 0, speed: 0, cell: lakeCell, body: mesh.waterBody[lakeCell]});
+      lakes++;
+    }
+  }
+  // River ribbons: a cross-section at every centreline point, oriented by
+  // the averaged direction of its neighbouring segments so bends share edges.
+  var rivers_ = typeof waterRivers !== 'undefined' ? waterRivers : [];
+  for (var r = 0; r < rivers_.length; r++) {
+    var rv = rivers_[r], pts = rv.points, half = 0, sections = [];
+    var capA = _waterRibbonCap(mesh, pts, 0), capB = _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
+    if (capA || capB) { pts = pts.slice(); if (capA) pts.unshift(capA); if (capB) pts.push(capB); }
+    for (var b0 = 0; b0 < pts.length; b0++) bend.push(_waterBend(pts, b0));
+    for (var q = 0; q < pts.length; q++) {
+      var prev = pts[Math.max(0, q - 1)], next = pts[Math.min(pts.length - 1, q + 1)];
+      var tx = next[0] - prev[0], ty = next[1] - prev[1], tl = Math.hypot(tx, ty) || 1;
+      var nx = -ty / tl, ny = tx / tl, z = pts[q][2] * 25, hwq = pts[q][4] || rv.halfWidth;
+      var left = _waterRibbonReach(mesh, pts[q][0], pts[q][1], nx, ny, hwq, pts[q][2]);
+      var right = _waterRibbonReach(mesh, pts[q][0], pts[q][1], -nx, -ny, hwq, pts[q][2]);
+      // On the inside of a bend tighter than the ribbon, sections reaching
+      // past the bend's centre would cross their neighbours; stopping at the
+      // centre makes that side a fan instead of a fold.
+      for (var bq = Math.max(0, q - 1); bq <= Math.min(pts.length - 1, q + 1); bq++) {
+        if (bend[bq] > 0) left = Math.min(left, 1 / bend[bq]);
+        else if (bend[bq] < 0) right = Math.min(right, -1 / bend[bq]);
+      }
+      half = Math.max(half, left, right);
+      sections.push([[pts[q][0] + nx * left, pts[q][1] + ny * left, z], [pts[q][0] - nx * right, pts[q][1] - ny * right, z], tx / tl, ty / tl]);
+    }
+    for (var e = 0; e < sections.length - 1; e++) {
+      var A = sections[e], B = sections[e + 1], a = pts[e], b = pts[e + 1];
+      var slope = Math.max(0, (a[2] - b[2]) / (Math.hypot(b[0] - a[0], b[1] - a[1]) || 1));
+      tiles.push({kind: 2, ribbon: true, quad: [A[0], B[0], B[1], A[1]], cx: (a[0] + b[0]) * 0.5, cy: (a[1] + b[1]) * 0.5,
+        half: WATER_RIVER_STEP + half, depth: rv.depth * 0.8, flowX: (A[2] + B[2]) * 0.5, flowY: (A[3] + B[3]) * 0.5,
+        speed: Math.max(0.25, Math.min(1, 0.25 + slope * 30)), arc0: a[3], arc1: b[3], body: rv.body, cell: rv.id * 4096 + e});
+      rivers++;
+    }
+  }
+  waterRenderStats.tiles = tiles.length; waterRenderStats.lakeTiles = lakes;
+  waterRenderStats.riverTiles = rivers; waterRenderStats.sheets = sheets;
+  return tiles;
+}
+
+// Colour: deep water is dark teal and nearly opaque; shallows show the bed.
+// Distance adds a little sky (a cheap Fresnel). A lake shimmers as one body so
+// its strips never show a grid; rivers shimmer along their flow. The scene's
+// ambient and nearby point light apply as they do on floors.
+function _waterTileStyle(tile, dist, now, ambient, pointLight) {
+  var deep = Math.min(1, tile.depth / 1.2), reflect = 0.08 + 0.3 * Math.min(1, dist / (viewDist || 900));
+  var r = 14 + (1 - deep) * 36, g = 70 + (1 - deep) * 52, b = 104 + (1 - deep) * 22;
+  var shimmer;
+  // Lakes shimmer as one body; rivers with a slow wave that is continuous
+  // across neighbouring squares (their motion comes from the streaks).
+  if (tile.kind === 1) shimmer = 0.035 * Math.sin(now * 0.0011 + tile.body * 1.7);
+  else shimmer = 0.035 * Math.sin(now * 0.0025 - (tile.arc0 + tile.arc1) * 0.02);
+  r += (128 - r) * reflect; g += (170 - g) * reflect; b += (198 - b) * reflect;
+  var light = Math.min(1.15, ambient + pointLight) * (1 + shimmer);
+  var foam = tile.kind === 3 ? 0.55 : tile.kind === 2 ? Math.max(0, tile.speed - 0.7) * 0.8 : 0;
+  r = (r + (235 - r) * foam) * light; g = (g + (242 - g) * foam) * light; b = (b + (245 - b) * foam) * light;
+  return {color: rgbQ(Math.min(255, r), Math.min(255, g), Math.min(255, b)),
+    alpha: tile.kind === 3 ? 0.72 : 0.64 + 0.3 * deep, light: light};
+}
+// Surface detail drawn inside a tile's own clipped callback, positioned by
+// bilinear interpolation of its projected corners so it stays inside the
+// quad and foreshortens with it. Rivers carry streaks downstream; lakes get
+// sparse glints that flicker. Deterministic per cell; animated by game time.
+function _waterHash(i) { var x = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b); x ^= x >>> 13; return ((Math.imul(x, 0xc2b2ae35) >>> 0) % 10007) / 10007; }
+function _waterLerpPoint(p, u, v) {
+  var ax = p[0].x + (p[1].x - p[0].x) * u, ay = p[0].y + (p[1].y - p[0].y) * u;
+  var bx = p[3].x + (p[2].x - p[3].x) * u, by = p[3].y + (p[2].y - p[3].y) * u;
+  return [ax + (bx - ax) * v, ay + (by - ay) * v];
+}
+function _waterDetail(tile, p, now, light) {
+  var h = _waterHash(tile.cell), a, b, alpha;
+  if (tile.ribbon) {
+    // Two lanes of dashes sliding downstream at the river's pace. Positions
+    // come from arc length, so dashes run continuously across pieces.
+    var len = tile.arc1 - tile.arc0;
+    if (!(len > 0)) return;
+    var travel = now * 0.018 * (0.6 + tile.speed), drew = false;
+    ctx.strokeStyle = '#e8f6ff'; ctx.lineWidth = Math.max(1, 700 / Math.max(60, tile.dist));
+    ctx.beginPath();
+    for (var lane = 0; lane < 2; lane++) {
+      var v = lane ? 0.68 : 0.32, period = lane ? 34 : 27, dash = 7;
+      var start = Math.floor((tile.arc0 + travel - period) / period) * period - travel + lane * 11;
+      for (var s0 = start; s0 < tile.arc1; s0 += period) {
+        var u0 = Math.max(0, (s0 - tile.arc0) / len), u1 = Math.min(1, (s0 + dash - tile.arc0) / len);
+        if (u1 <= u0) continue;
+        var pa = _waterLerpPoint(p, u0, v), pb = _waterLerpPoint(p, u1, v);
+        ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); drew = true;
+      }
+    }
+    if (drew) { ctx.globalAlpha = Math.min(0.35, 0.22 * Math.min(1, light)); ctx.stroke(); }
+    return;
+  }
+  if (tile.kind === 2) {
+    var t = (now * 0.00045 * (0.6 + tile.speed) + h) % 1, cu = 0.5 + tile.flowX * (t - 0.5) * 0.8, cv = 0.5 + tile.flowY * (t - 0.5) * 0.8;
+    var off = (h - 0.5) * 0.5, px = -tile.flowY * off, py = tile.flowX * off;
+    a = _waterLerpPoint(p, Math.max(0.05, Math.min(0.95, cu + px - tile.flowX * 0.18)), Math.max(0.05, Math.min(0.95, cv + py - tile.flowY * 0.18)));
+    b = _waterLerpPoint(p, Math.max(0.05, Math.min(0.95, cu + px + tile.flowX * 0.18)), Math.max(0.05, Math.min(0.95, cv + py + tile.flowY * 0.18)));
+    alpha = 0.22 * Math.sin(t * Math.PI);
+  } else {
+    var flick = Math.sin(now * 0.0021 + h * 40);
+    if (flick < 0.55) return;
+    var span = Math.min(0.4, 7 / Math.max(1, tile.x1 - tile.x0)), u = 0.1 + h * 0.8, v = 0.25 + ((h * 7.3) % 1) * 0.5;
+    a = _waterLerpPoint(p, Math.max(0.02, u - span), v); b = _waterLerpPoint(p, Math.min(0.98, u + span), v);
+    alpha = (flick - 0.55) * 0.9;
+  }
+  ctx.globalAlpha = Math.min(0.5, alpha * Math.min(1, light));
+  ctx.strokeStyle = '#e8f6ff'; ctx.lineWidth = Math.max(1, 900 / Math.max(60, tile.dist));
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+}
+
+function drawWater3D() {
+  if (!WATER_RENDER_ENABLED || typeof WATER_SYSTEM_ENABLED === 'undefined' || !WATER_SYSTEM_ENABLED) return;
+  var mesh = floorMesh;
+  if (!mesh || !mesh.water || !mesh.waterSurface) return;
+  var started = typeof performance === 'object' && performance.now ? performance.now() : 0;
+  if (_waterTilesMesh !== mesh || _waterTilesBuild !== waterStats.builds) {
+    _waterTiles = buildWaterTiles(mesh); _waterTilesMesh = mesh; _waterTilesBuild = waterStats.builds;
+  }
+  if (!_waterTiles.length) return;
+  var C = getCam3D(), tanHalf = 1 / C.invTanHalf, fovCut = tanHalf * 2.2 + 0.2;
+  var reach = viewDist + mesh.gridSize * 4, reachSq = reach * reach, visible = _waterVisible;
+  visible.length = 0;
+  var culled = 0;
+  for (var t = 0; t < _waterTiles.length; t++) {
+    var tile = _waterTiles[t], dx = tile.cx - cam.x, dy = tile.cy - cam.y, dsq = dx * dx + dy * dy;
+    if (dsq > reachSq) { culled++; continue; }
+    // Tile half-extent keeps long lake strips that cross the view edge.
+    var half = tile.ribbon ? tile.half : tile.kind === 1 ? (tile.x1 - tile.x0) * 0.5 + mesh.gridSize : mesh.gridSize;
+    var fwd = dx * C.cosAng + dy * C.sinAng, side = -dx * C.sinAng + dy * C.cosAng;
+    if (fwd < -half || Math.abs(side) > (Math.max(0, fwd) + half) * fovCut + half) { culled++; continue; }
+    tile.dist = Math.sqrt(dsq); visible.push(tile);
+  }
+  // Far to near so overlapping translucent sheets blend in order.
+  visible.sort(function(a, b) { return b.dist - a.dist; });
+  var now = gameTimeNow(), ambient = typeof renderSurfaceAmbient !== 'undefined' ? renderSurfaceAmbient : ambientLight;
+  var fadeStart = viewDist * 0.72, fadeRange = viewDist - fadeStart, drawn = 0;
+  ctx.save();
+  try {
+    for (var v = 0; v < visible.length; v++) {
+      var tl = visible[v], verts;
+      if (tl.ribbon) verts = tl.quad.map(function(p) { return {x: p[0], y: p[1], z: p[2]}; });
+      else verts = [{x: tl.x0, y: tl.y0, z: tl.z[0]}, {x: tl.x1, y: tl.y0, z: tl.z[1]},
+        {x: tl.x1, y: tl.y1, z: tl.z[2]}, {x: tl.x0, y: tl.y1, z: tl.z[3]}];
+      var points = projectSceneWorldPolygon(verts, C);
+      if (points.length < 3) continue;
+      var pointLight = 0;
+      if (_lightGrid) {
+        var lgx = Math.floor(tl.cx / _lightCellSize), lgy = Math.floor(tl.cy / _lightCellSize);
+        if (lgx >= 0 && lgx < _lightGridW && lgy >= 0 && lgy < _lightGridH) pointLight = _lightGrid[lgy * _lightGridW + lgx];
+      }
+      var style = _waterTileStyle(tl, tl.dist, now, ambient, pointLight);
+      var fade = tl.dist > fadeStart ? Math.max(0, 1 - (tl.dist - fadeStart) / fadeRange) : 1;
+      var tileAlpha = style.alpha * fade * fade, detail = points.length === 4 && tl.kind !== 3 && tl.dist < viewDist * 0.55;
+      ctx.globalAlpha = tileAlpha;
+      ctx.fillStyle = style.color;
+      drawn += withSceneDepthClip(points, function() {
+        traceSceneDepthPolygon(points); ctx.fill();
+        if (detail) { _waterDetail(tl, points, now, style.light * fade); ctx.globalAlpha = tileAlpha; }
+      }) ? 1 : 0;
+    }
+  } finally { ctx.restore(); }
+  waterRenderStats.drawn = drawn; waterRenderStats.culled = culled;
+  waterRenderStats.lastMs = started ? performance.now() - started : 0;
+}
+function getWaterRenderStats() { return Object.assign({}, waterRenderStats); }
 // Magic Missile presentation: silver-blue aether held in a fine ivory spine.
 // This is paint only. Projectile motion, homing, hit volumes and effect life
 // remain owned by combat. No random numbers, gameplay writes or image cache.
@@ -34015,6 +35052,14 @@ function draw() {
       drawEnemySpawners3D('opaque');
       drawOreVeins('opaque');
       drawWallDecorations('opaque');
+    });
+    // Water (13-render-water.js) is translucent and writes no depth, so it
+    // draws after every opaque part above (a model standing in a river is
+    // tinted below the surface instead of painting over it) and before every
+    // billboard and sprite (the phase below and the late stages), which it
+    // would otherwise paint over. The two halves share the sceneEntities timer.
+    _pt('water3D', function(){ if (typeof drawWater3D === 'function') drawWater3D(); });
+    _pt('sceneEntities', function(){
       drawFloorScatter3D('overlay');
       drawTreasureChests3D('overlay');
       drawEnemySpawners3D('overlay');

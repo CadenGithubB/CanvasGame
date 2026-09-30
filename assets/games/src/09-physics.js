@@ -280,7 +280,10 @@ function step(dt) {
   if (NOCLIP) { pos.x+=vel.x*dt; pos.y+=vel.y*dt; }
   else {
     var movementBody=spatialPlayerBody();
-    var movement=spatialMoveBody(movementBody,vel.x*dt,vel.y*dt);
+    // A river current carries the body; it joins this step's displacement
+    // after damping, so it neither decays nor bounces off walls as velocity.
+    var current=typeof waterCurrentAt==='function'?waterCurrentAt(pos.x,pos.y,pos.floorZ):null;
+    var movement=spatialMoveBody(movementBody,vel.x*dt+(current?current.x*dt:0),vel.y*dt+(current?current.y*dt:0));
     pos.x=movementBody.x; pos.y=movementBody.y;
     _hitWallX=movement.hitX; _hitWallY=movement.hitY;
     if (_hitWallX) vel.x*=-bounce;
