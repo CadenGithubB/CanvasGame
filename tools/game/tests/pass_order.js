@@ -26,8 +26,10 @@
 //   --water-after-props water3D runs after sceneEntities' overlay phase
 //   --timer-per-call    _pt counts every call again, so the Perf HUD shows
 //                       sceneEntities' two halves as two calls a frame
+//   --fx-before-late-landmarks  fxCombat3D runs before marketStalls3D (the
+//                       late landmark stages then write depth after it)
 // --sections a,b runs only: ruin, lintel, entities, overlays, calls, legacy,
-// water, timer, lab (render-lab/50-pass-order.js on Endless 2024).
+// water, timer, depth, lab (render-lab/50-pass-order.js on Endless 2024).
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -43,7 +45,9 @@
     if (source.split(before).length !== 2) throw Error('MUTATION_ANCHOR ' + name);
     return source.replace(before, after);
   }
-  var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js', DIAG = 'src/20-diagnostics.js';
+  var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js', DIAG = 'src/20-diagnostics.js', LOOP = 'src/21-frame-loop.js';
+  var FX_COMBAT_STAGE = "    _pt('fxCombat3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(1); });\n";
+  var STALLS_STAGE = "    _pt('marketStalls3D', function(){ drawMarketStalls3D(); });\n";
   var LANDMARK_STAGE = "    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())\n" +
     "      _pt('landmarkOpaque3D', function(){ drawLandmarkOpaque3D(); });\n";
   var FAMILIES = ['drawFloorScatter3D', 'drawTreasureChests3D', 'drawEnemySpawners3D', 'drawOreVeins', 'drawWallDecorations'];
@@ -67,6 +71,10 @@
       source = swap(source, '--water-after-props', GOAL_STAGE, WATER_STAGE + GOAL_STAGE);
     }
     if (path === HUD) source = swap(source, '--overlay-unclipped', '  if (!clip) { draw(); return 1; }\n', '  { draw(); return 1; }\n');
+    if (path === LOOP) {
+      source = swap(source, '--fx-before-late-landmarks', FX_COMBAT_STAGE, '');
+      source = swap(source, '--fx-before-late-landmarks', STALLS_STAGE, FX_COMBAT_STAGE + STALLS_STAGE);
+    }
     if (path === DIAG) source = swap(source, '--timer-per-call', '  var sameFrame = bd.slot === _perfRingIdx && arr[_perfRingIdx] === bd.mark;\n', '  var sameFrame = false;\n');
     return source;
   });
@@ -672,6 +680,62 @@
       ringSums.every(function (v) { return Math.abs(v - 8) < 0.2; }) &&
       !!wa && wa.count === FRAMES && Math.abs(wa.avg - 2) < 0.2 && !!wl3 && wl3.count === FRAMES && Math.abs(wl3.avg - 1) < 0.2 &&
       hudRow.length === 2 && Math.abs(hudRow[0] - se.avg) < 0.006 && Math.abs(hudRow[1] - se.max) < 0.006, timer);
+  }
+
+  // ── depth: every depth-writing pass runs before the unified fx stages ──
+  // The fx stages (fxCombat3D, torchGlow3D, ambientFX3D, fxOverlay) depth-test
+  // particles against scene depth, so every pass that writes depth must run
+  // before them. That is draw() in Recommended; with landmarkOpaqueEarly off
+  // (a Custom combination, landmarkModels on) and in Legacy the late
+  // marketStalls3D, shrines3D, ruins3D and structures3D stages write it after
+  // draw(). One frame per preset of the ruin scene (a hut and a shrine; the
+  // shrine model with landmarkModels) and of the lintel scene (a fortress
+  // shell), counting the scene-depth pixels each top-level stage changes
+  // (stages inside draw() count with it).
+  if (section('depth')) {
+    var DFORT = {type: 'fortress', x: 1200, y: 1200, scale: 1, numBuildings: 2, rotation: 0, regionX: 7, regionY: 7};
+    var dInset = G.CHUNK_SIZE * 1.7 - G.cell * 1.5;
+    var DEPTH_CONFIGS = {recommended: null, custom: {landmarkOpaqueEarly: false}, legacy: null};
+    var FX_STAGES = ['fxCombat3D', 'torchGlow3D', 'ambientFX3D', 'fxOverlay'];
+    function depthFrame(scene, config) {
+      if (scene === 'ruin') world({cam: RCAM, ruins: [RUIN], shrines: [{x: 245, y: RY + 26, buffType: 'damage', used: false}]});
+      else world({n: 200, cam: [1200, 1200 - dInset - 150, Math.PI / 2], eye: 170, structures: [DFORT]});
+      G.applyRenderPreset(config === 'legacy' ? 'legacy' : 'recommended');
+      if (DEPTH_CONFIGS[config]) G.setRenderFeatures(DEPTH_CONFIGS[config]);
+      var real = G._pt, list = [], level = 0;
+      G._pt = function (name, fn) {
+        if (level > 0) return real(name, fn);
+        var before = Array.prototype.slice.call(G._sceneDepthInv, 0, W * HT);
+        level++;
+        try { return real(name, fn); } finally {
+          level--;
+          var after = G._sceneDepthInv, n = 0;
+          for (var i = 0; i < W * HT; i++) if (after.length === before.length ? after[i] !== before[i] : after[i] > 0) n++;
+          list.push([name, n]);
+        }
+      };
+      try { frame(); } finally { G._pt = real; }
+      return list;
+    }
+    var depthRows = {}, depthBad = [];
+    ['ruin', 'lintel'].forEach(function (scene) {
+      Object.keys(DEPTH_CONFIGS).forEach(function (config) {
+        var list = depthFrame(scene, config), names = list.map(function (e) { return e[0]; }), fx = names.indexOf('fxCombat3D'), dr = names.indexOf('draw()');
+        var writers = list.filter(function (e) { return e[1] > 0; }).map(function (e) { return e[0] + ':' + e[1]; });
+        var row = {writers: writers, fxAfterStructures: fx > names.indexOf('structures3D') && FX_STAGES.every(function (n) { return names.indexOf(n) >= fx; }),
+          afterFx: list.slice(fx).filter(function (e) { return e[1] > 0; }).length, afterDraw: list.slice(dr + 1).filter(function (e) { return e[1] > 0; }).map(function (e) { return e[0]; })};
+        depthRows[scene + ':' + config] = row;
+        if (fx < 0 || dr < 0 || !row.fxAfterStructures || row.afterFx) depthBad.push(scene + ':' + config);
+      });
+    });
+    out('NOTE depth ' + JSON.stringify(depthRows));
+    var dr = depthRows;
+    check('depth: every depth-writing pass runs before fxCombat3D (the first unified fx stage, after structures3D): inside draw() in Recommended; with landmarkOpaqueEarly off (Custom) the late shrines3D, ruins3D and structures3D stages write depth after draw(), and in Legacy ruins3D and structures3D do, still before it',
+      depthBad.length === 0 && dr['ruin:recommended'].afterDraw.length === 0 && dr['lintel:recommended'].afterDraw.length === 0 &&
+      dr['ruin:custom'].afterDraw.indexOf('shrines3D') >= 0 && dr['ruin:custom'].afterDraw.indexOf('ruins3D') >= 0 &&
+      dr['lintel:custom'].afterDraw.indexOf('structures3D') >= 0 &&
+      dr['ruin:legacy'].afterDraw.indexOf('ruins3D') >= 0 && dr['lintel:legacy'].afterDraw.indexOf('structures3D') >= 0,
+      {bad: depthBad, rows: depthRows});
   }
 
   // ── lab: render-lab/50-pass-order.js on Endless 2024 (its nearest ruin) ──

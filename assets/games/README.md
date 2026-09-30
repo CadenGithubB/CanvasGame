@@ -1157,9 +1157,17 @@ Resting items (settled snow, chips, splash rings) are depth-tested 0.5 units
 above their support so the ground beneath them does not hide them. Sprites
 still write no scene depth, so world particles paint over nearer sprites, as
 legacy motes did. The 3D-integration models (wall props, chests, spawners,
-floor props, landmarks and structure models) do write scene depth, all inside
-`draw()` and so before every fx stage: with those switches on (Recommended)
-particles are depth-tested against them, and in Legacy they are sprites again.
+floor props, landmarks and structure models) do write scene depth: with those
+switches on (Recommended) particles are depth-tested against them, and in
+Legacy they are sprites again. In Recommended every depth-writing pass runs
+inside `draw()`. With `landmarkOpaqueEarly` off (a Custom combination) the
+ruin faces and structure shells, and with `landmarkModels` on the stall, guard
+tower, shrine and keep-prop models, are written by the late `marketStalls3D`,
+`shrines3D`, `ruins3D` and `structures3D` stages instead, as Legacy's ruin
+faces and structure shells are. Those stages run before the unified fx stages
+(`fxCombat3D`, `torchGlow3D`, `ambientFX3D`, `fxOverlay`), so keep every fx
+stage after `structures3D` (`tools/game/tests/pass_order.js`, section
+"depth").
 In New mode the torch glow uses `corona`. With `wallPropModels` on, its samples
 centre on the visible flame rather than on the light, which the modelled shaft
 or bowl hides from in front and below: for a torch 2 units out and 2 up from

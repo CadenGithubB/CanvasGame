@@ -32,6 +32,13 @@ the "timer" section checks, with authored stage costs on the host clock,
 that the Perf HUD's stage table still counts it as one call a frame (its
 average and max are per frame, as the ring's are), not two half-calls.
 
+Merge fix (depth before fx): the unified fx stages depth-test particles
+against scene depth, so every pass that writes it must run before them. The
+"depth" section counts the scene-depth pixels each top-level stage changes in
+Recommended, Legacy and a Custom combination (landmarkOpaqueEarly off): only
+draw() writes in Recommended, the late landmark stages also write in the
+other two, and no stage from fxCombat3D on writes in any of them.
+
 Restated in stage H: the spawner has a model (spawnerModel, default ON), so
 the "calls" check that model-less families record nothing in the opaque
 phase runs the spawner's legacy path (spawnerModel off) and is renamed; its
@@ -43,7 +50,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("pass_order.js")
-EXPECTED = 32  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks; merge fix: +1 timer check
+EXPECTED = 33  # Restated in Stage J2: +1 ruin check with the J2 defaults (landmark models, bounds gate); water merge: +3 water checks; merge fixes: +1 timer, +1 depth check
 # flag -> (sections to run, check-name prefixes that must FAIL)
 MUTATIONS = {
     "--late-landmarks": ("ruin,lintel,overlays", (
@@ -62,6 +69,8 @@ MUTATIONS = {
         "water: a sprite on the near shore draws after the water")),
     "--timer-per-call": ("timer", (
         "timer: the Perf HUD times sceneEntities' two halves (opaque 3 ms, overlay 5 ms) as one 8 ms call a frame",)),
+    "--fx-before-late-landmarks": ("depth", (
+        "depth: every depth-writing pass runs before fxCombat3D",)),
 }
 
 
@@ -81,7 +90,7 @@ class PassOrderTests(unittest.TestCase):
         self.assertIn(f"PASS_ORDER_RESULT PASS {EXPECTED} failed 0", self.lines, self.output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in self.lines), self.output)
         self.assertNotIn("SETUP", self.output)
-        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest ", "NOTE timer "):
+        for note in ("NOTE ruin early ", "NOTE lintel early ", "NOTE entities flame: ", "NOTE overlays early ", "NOTE water chest ", "NOTE timer ", "NOTE depth "):
             self.assertTrue(any(line.startswith(note) for line in self.lines), note)
 
     def test_each_mutation_fails_its_named_check(self) -> None:
