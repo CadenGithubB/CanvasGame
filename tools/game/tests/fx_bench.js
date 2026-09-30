@@ -466,6 +466,8 @@ LAB.init(__out, slurp, __engine, __argv);
       ['userAgent', 'devicePixelRatio', 'canvas', 'visibilityState', 'timerResolution', 'crossOriginIsolated'].forEach(function (k) { if (!(k in e)) missing.push('env.' + k); });
       if (!e.canvas || e.canvas.width !== 360 || e.canvas.height !== 240) missing.push('env.canvas size');
       if (!e.timerResolution || !('minMs' in e.timerResolution) || !('medianMs' in e.timerResolution)) missing.push('env.timerResolution');
+      if (!e.game || !e.game.render || typeof e.game.render.preset !== 'string' || !e.game.render.features ||
+          e.game.render.features.wallPropModels !== G.renderFeatureSnapshot().wallPropModels) missing.push('env.game.render');
       var runProblems = [];
       runs.forEach(function (r, i) {
         var p = [];

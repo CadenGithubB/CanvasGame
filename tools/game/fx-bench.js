@@ -242,7 +242,11 @@ var fxBench = (function (G, prev) {
       crossOriginIsolated: typeof crossOriginIsolated === 'boolean' ? crossOriginIsolated : null,
       game: {seed: typeof G.WORLD_SEED === 'number' ? G.WORLD_SEED : null, endless: !!G.ENDLESS_MODE, caveTest: !!G.CAVE_TEST_MODE,
         mode3D: !!G.MODE3D, camFollow: !!G.CAM_FOLLOW, particles: G.settings ? G.settings.particles : null,
-        toggles: typeof G.effectTogglesSnapshot === 'function' ? G.effectTogglesSnapshot() : null}
+        toggles: typeof G.effectTogglesSnapshot === 'function' ? G.effectTogglesSnapshot() : null,
+        // The render preset and switches (3D integration): model and texture
+        // passes change what particles are depth-tested against, so reports
+        // taken under different switches must be told apart.
+        render: typeof G.renderFeatureSnapshot === 'function' ? {preset: G.renderPresetName(), features: G.renderFeatureSnapshot()} : null}
     };
   }
 

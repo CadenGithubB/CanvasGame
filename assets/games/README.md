@@ -1272,7 +1272,11 @@ set.
 `tools/game/fx-bench.js` is the browser measurement protocol for targets T1-T10.
 It is not in the manifest and never ships in the header. `dev.py serve` serves
 it at `/fx-bench.js`, to be injected into a separate, visible, foreground test
-tab. Its header comment gives the procedure.
+tab. Its header comment gives the procedure. Its report's `env.game` records
+the effect switches and the render preset and switches (`render`), as the
+cave browser profile's `canonicalInputs` does: models and textures change what
+particles are depth-tested against and the frame's work, so runs taken under
+different switches can be told apart.
 
 ### Adding an effect
 

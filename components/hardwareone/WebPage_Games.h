@@ -38173,10 +38173,14 @@ function caveProfilePrepareInputs(job) {
 // engine's pool, when loaded, plus legacy motes) and particleSetting records
 // the Particles setting, so profiles taken under different settings compare.
 function caveProfileCanonicalInputs(){
+  // The render preset and switches (models, textures, effects) change the
+  // frame's work, so profiles taken under different switches record them.
   return{ambientParticles:ambientParticles.length,
     particles:(typeof getEffectStats==='function'?getEffectStats().live:0)+ambientParticles.length,
     particleSetting:settings.particles,exploration:'radius 30 around fixture',
-    lighting:'forced frozen-time update',profilingOverlays:false};
+    lighting:'forced frozen-time update',profilingOverlays:false,
+    renderPreset:typeof renderPresetName==='function'?renderPresetName():null,
+    renderFeatures:typeof renderFeatureSnapshot==='function'?renderFeatureSnapshot():null};
 }
 
 function caveProfileRestoreInputs(job) {

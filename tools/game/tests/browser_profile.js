@@ -121,6 +121,14 @@
   G.getEffectStats=undefined;
   check('profile inputs count the engine pool and any legacy motes with the engine',engineInputs.particles===39 &&
     engineInputs.particleSetting===40 && engineInputs.ambientParticles===2);
+  // Render preset and switches (3D integration): recorded when the registry
+  // is present (stubbed here), null without it.
+  var features={wallPropModels:true,worldTextures:'hybrid'};
+  G.renderPresetName=function(){return 'custom';};G.renderFeatureSnapshot=function(){return Object.assign({},features);};
+  var renderInputs=G.caveProfileCanonicalInputs();
+  G.renderPresetName=G.renderFeatureSnapshot=undefined;
+  check('profile inputs record the render preset and switches with the registry, null without it',plainInputs.renderPreset===null &&
+    plainInputs.renderFeatures===null && renderInputs.renderPreset==='custom' && JSON.stringify(renderInputs.renderFeatures)===JSON.stringify(features));
   __out('BROWSER_PROFILE_RESULT PASS '+checked);
 }());
 undefined;

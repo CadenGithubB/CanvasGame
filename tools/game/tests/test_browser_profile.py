@@ -5,7 +5,7 @@ import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-PASS_COUNT = 38
+PASS_COUNT = 39
 
 
 class BrowserProfileTests(unittest.TestCase):
@@ -18,7 +18,8 @@ class BrowserProfileTests(unittest.TestCase):
         # engine path primes and restores its own pinned pool, deterministic
         # priming, cancel after regeneration) and 2 canonical-input checks
         # (the Particles setting and live particle count, with and without
-        # the engine).
+        # the engine). 39 with the merge fix that records the render preset
+        # and switches in the canonical inputs.
         self.assertIn(f"BROWSER_PROFILE_RESULT PASS {PASS_COUNT}", lines, result.stdout + result.stderr)
         self.assertEqual(PASS_COUNT, sum(line.startswith("PASS ") for line in lines))
 
