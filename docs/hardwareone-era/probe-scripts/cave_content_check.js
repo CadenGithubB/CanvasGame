@@ -1,0 +1,15 @@
+(0, eval)(slurp('tools/webui/harness/_game_env.js'));
+LAB.init(__out, slurp, __engine, __argv);
+var mf=JSON.parse(slurp('assets/games/manifest.json'));
+(0,eval)(mf.parts.MAIN.map(function(f){return slurp('assets/games/'+f);}).join('\n'));
+window._caveTestKindOverride='descending';
+LAB.startCaveTest(12345,{caveEnemies:true,caveChests:true});
+var caveEn=enemies.filter(function(e){return !!e.caveSpawnId;});
+var caveCh=treasureChests.filter(function(e){return !!e.caveSpawnId;});
+LAB.note('CONTENT '+JSON.stringify({enemies:caveEn.map(function(e){return{id:e.caveSpawnId,x:e.x+windowOriginX,y:e.y+windowOriginY};}),chests:caveCh.map(function(c){return{id:c.caveSpawnId,x:c.x+windowOriginX,y:c.y+windowOriginY,owner:c._chunkKey};})}));
+LAB.check('one chamber reward exists exactly once',caveCh.length===1);
+LAB.check('chamber enemies exist without duplicate ownership',caveEn.length>=2&&caveEn.length<=3&&new Set(caveEn.map(function(e){return e.caveSpawnId;})).size===caveEn.length);
+var valid=true;
+caveEn.concat(caveCh).forEach(function(e){if(grid[Math.floor(e.y/cell)*gridW+Math.floor(e.x/cell)])valid=false;});
+LAB.check('content positions in open cells',valid);
+undefined;

@@ -1,0 +1,270 @@
+{
+  "baseline": {
+    "status": "complete",
+    "mode": "fullscreen",
+    "warmups": 12,
+    "requestedSamples": 60,
+    "width": 1280,
+    "height": 720,
+    "nativeFullscreen": true,
+    "devicePixelRatio": 1,
+    "seed": 12345,
+    "view": "back",
+    "fixtureObjects": [
+      "skeleton",
+      "chest",
+      "fire orb"
+    ],
+    "frozenTime": 2000000000000,
+    "randomSeed": 1234567,
+    "canonicalInputs": {
+      "ambientParticles": 35,
+      "exploration": "radius 30 around fixture",
+      "lighting": "forced frozen-time update",
+      "profilingOverlays": false
+    },
+    "renderCommands": {
+      "samples": 60,
+      "medianMs": 29.600000001490116,
+      "p95Ms": 33.80000000447035
+    },
+    "animationFrameIntervals": {
+      "samples": 60,
+      "medianMs": 33.30000000000018,
+      "p95Ms": 33.90000000000009
+    },
+    "topInclusiveStages": [
+      {
+        "samples": 60,
+        "medianMs": 27.350000001490116,
+        "p95Ms": 31.5,
+        "name": "draw()"
+      },
+      {
+        "samples": 60,
+        "medianMs": 8.800000004470348,
+        "p95Ms": 10.799999997019768,
+        "name": "walls3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 8.099999994039536,
+        "p95Ms": 9.100000001490116,
+        "name": "platforms3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 5.5,
+        "p95Ms": 6.200000002980232,
+        "name": "caveEntrance3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 3.100000001490116,
+        "p95Ms": 3.5,
+        "name": "sceneEntities"
+      },
+      {
+        "samples": 60,
+        "medianMs": 2.050000000745058,
+        "p95Ms": 2.2999999970197678,
+        "name": "torchGlow3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 1.7999999970197678,
+        "p95Ms": 1.8999999985098839,
+        "name": "ceiling3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0.09999999403953552,
+        "p95Ms": 0.10000000149011612,
+        "name": "skybox3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0.10000000149011612,
+        "name": "lightGrid"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "goalMarker3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "groundFX3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "coneFX3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "proj3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "chainFX3D"
+      }
+    ],
+    "errors": {},
+    "contentSignature": {
+      "skipped": true,
+      "reason": "Pixel verification disabled; avoids readback changing later Canvas performance."
+    },
+    "notes": [
+      "Render-command timing excludes final image readback and may exclude deferred GPU work.",
+      "Animation-frame intervals measure browser cadence, not 1000 / JavaScript time.",
+      "Stage times are inclusive; do not add parent draw() to its children.",
+      "Ambient particles, exploration and lighting are canonical temporary inputs; real-world references are restored afterward.",
+      "Pixel verification is disabled; no main-canvas readback is performed.",
+      "No resolution or quality reduction was applied."
+    ]
+  },
+  "repaired": {
+    "status": "complete",
+    "mode": "fullscreen",
+    "warmups": 12,
+    "requestedSamples": 60,
+    "width": 1280,
+    "height": 720,
+    "nativeFullscreen": true,
+    "devicePixelRatio": 1,
+    "seed": 12345,
+    "view": "back",
+    "fixtureObjects": [
+      "skeleton",
+      "chest",
+      "fire orb"
+    ],
+    "frozenTime": 2000000000000,
+    "randomSeed": 1234567,
+    "canonicalInputs": {
+      "ambientParticles": 35,
+      "exploration": "radius 30 around fixture",
+      "lighting": "forced frozen-time update",
+      "profilingOverlays": false
+    },
+    "renderCommands": {
+      "samples": 60,
+      "medianMs": 32.099999994039536,
+      "p95Ms": 33.30000000447035
+    },
+    "animationFrameIntervals": {
+      "samples": 60,
+      "medianMs": 33.30000000000018,
+      "p95Ms": 33.40000000000009
+    },
+    "topInclusiveStages": [
+      {
+        "samples": 60,
+        "medianMs": 29.899999998509884,
+        "p95Ms": 31.100000001490116,
+        "name": "draw()"
+      },
+      {
+        "samples": 60,
+        "medianMs": 11.799999997019768,
+        "p95Ms": 12.5,
+        "name": "platforms3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 7.5,
+        "p95Ms": 8.299999997019768,
+        "name": "walls3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 5.5,
+        "p95Ms": 5.9000000059604645,
+        "name": "caveEntrance3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 3,
+        "p95Ms": 3.5,
+        "name": "sceneEntities"
+      },
+      {
+        "samples": 60,
+        "medianMs": 2,
+        "p95Ms": 2.2000000029802322,
+        "name": "torchGlow3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 1.7000000029802322,
+        "p95Ms": 2,
+        "name": "ceiling3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0.10000000149011612,
+        "p95Ms": 0.20000000298023224,
+        "name": "skybox3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0.09999999403953552,
+        "p95Ms": 0.10000000149011612,
+        "name": "hudOverlay"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0.10000000149011612,
+        "name": "lightGrid"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "goalMarker3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "groundFX3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "coneFX3D"
+      },
+      {
+        "samples": 60,
+        "medianMs": 0,
+        "p95Ms": 0,
+        "name": "proj3D"
+      }
+    ],
+    "errors": {},
+    "contentSignature": {
+      "skipped": true,
+      "reason": "Pixel verification disabled; avoids readback changing later Canvas performance."
+    },
+    "notes": [
+      "Render-command timing excludes final image readback and may exclude deferred GPU work.",
+      "Animation-frame intervals measure browser cadence, not 1000 / JavaScript time.",
+      "Stage times are inclusive; do not add parent draw() to its children.",
+      "Ambient particles, exploration and lighting are canonical temporary inputs; real-world references are restored afterward.",
+      "Pixel verification is disabled; no main-canvas readback is performed.",
+      "No resolution or quality reduction was applied."
+    ]
+  }
+}

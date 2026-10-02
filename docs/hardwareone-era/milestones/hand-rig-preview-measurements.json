@@ -1,0 +1,1218 @@
+{
+  "daylight": {
+    "status": "complete",
+    "mode": "preview",
+    "study": "hand",
+    "light": "daylight",
+    "seed": 12345,
+    "view": "mouth",
+    "target": "One neutral articulated right hand; anatomy proof only, no actual cast or projectile",
+    "targetDistance": null,
+    "versions": [
+      {
+        "art": "Original baseline",
+        "firstFrameRenderCommandsMs": 34,
+        "firstUseArtworkGenerationMs": {
+          "legacyHands": 6.799999997019768,
+          "hands": 0,
+          "missile": 0,
+          "handRig": 0
+        },
+        "coldBuildFrames": [
+          {
+            "timeMs": 0,
+            "renderCommandsMs": 34
+          }
+        ],
+        "handRigColdReset": true,
+        "handRig": {
+          "vertices": 0,
+          "triangles": 0,
+          "visibleFaces": 0,
+          "buildMs": 0,
+          "builds": 0,
+          "lastRenderMs": 0,
+          "topologyBytes": 0
+        },
+        "handRigRenderCommands": {
+          "samples": 0,
+          "medianMs": null,
+          "p95Ms": null
+        },
+        "retainedArtwork": {
+          "hands": {
+            "builds": 0,
+            "buildMs": 0,
+            "lastBuildMs": 0,
+            "bytes": 0,
+            "entries": 0,
+            "maxBytes": 8388608,
+            "fallbacks": 0
+          },
+          "missile": {
+            "builds": 0,
+            "buildMs": 0,
+            "bytes": 0
+          },
+          "handRig": {
+            "vertices": 0,
+            "triangles": 0,
+            "visibleFaces": 0,
+            "buildMs": 0,
+            "builds": 0,
+            "lastRenderMs": 0,
+            "topologyBytes": 0
+          }
+        },
+        "steadyRenderCommands": {
+          "samples": 144,
+          "medianMs": 10.600000001490116,
+          "p95Ms": 10.899999998509884
+        },
+        "animationFrameIntervals": {
+          "samples": 143,
+          "medianMs": 16.699999999999818,
+          "p95Ms": 16.800000000000182
+        },
+        "inclusiveStages": [
+          {
+            "name": "draw()",
+            "samples": 144,
+            "medianMs": 10.100000001490116,
+            "p95Ms": 10.400000005960464
+          },
+          {
+            "name": "platforms3D",
+            "samples": 144,
+            "medianMs": 3.6999999955296516,
+            "p95Ms": 3.8000000044703484
+          },
+          {
+            "name": "walls3D",
+            "samples": 144,
+            "medianMs": 2.8000000044703484,
+            "p95Ms": 2.9000000059604645
+          },
+          {
+            "name": "sceneEntities",
+            "samples": 144,
+            "medianMs": 1.7999999970197678,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "ceiling3D",
+            "samples": 144,
+            "medianMs": 1.7000000029802322,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "torchGlow3D",
+            "samples": 144,
+            "medianMs": 0.29999999701976776,
+            "p95Ms": 0.3999999985098839
+          },
+          {
+            "name": "skybox3D",
+            "samples": 144,
+            "medianMs": 0.10000000149011612,
+            "p95Ms": 0.19999999552965164
+          },
+          {
+            "name": "lightGrid",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "caveEntrance3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "goalMarker3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "groundFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coneFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "proj3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "chainFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "novaFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "impacts3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "enemies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "soulOrbs3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arcaneTomes3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "statPickups3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "companions3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "fortressAllies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "marketStalls3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "shrines3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ruins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "structures3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ambientFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "fpsArms",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "arenaAltarPrompt",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arenaHUD",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "forgeOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "crosshair3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "hudOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "shopOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "menuOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "settingsOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          }
+        ],
+        "actualHits": []
+      },
+      {
+        "art": "Articulated hand",
+        "firstFrameRenderCommandsMs": 14.399999998509884,
+        "firstUseArtworkGenerationMs": {
+          "legacyHands": 0,
+          "hands": 0,
+          "missile": 0,
+          "handRig": 0.5
+        },
+        "coldBuildFrames": [
+          {
+            "timeMs": 0,
+            "renderCommandsMs": 14.399999998509884
+          }
+        ],
+        "handRigColdReset": true,
+        "handRig": {
+          "vertices": 924,
+          "triangles": 1704,
+          "visibleFaces": 669,
+          "buildMs": 0.5,
+          "builds": 1,
+          "lastRenderMs": 0.9000000059604645,
+          "topologyBytes": 87552
+        },
+        "handRigRenderCommands": {
+          "samples": 144,
+          "medianMs": 1,
+          "p95Ms": 1.1000000014901161
+        },
+        "retainedArtwork": {
+          "hands": {
+            "builds": 0,
+            "buildMs": 0,
+            "lastBuildMs": 0,
+            "bytes": 0,
+            "entries": 0,
+            "maxBytes": 8388608,
+            "fallbacks": 0
+          },
+          "missile": {
+            "builds": 0,
+            "buildMs": 0,
+            "bytes": 0
+          },
+          "handRig": {
+            "vertices": 924,
+            "triangles": 1704,
+            "visibleFaces": 669,
+            "buildMs": 0.5,
+            "builds": 1,
+            "lastRenderMs": 0.9000000059604645,
+            "topologyBytes": 87552
+          }
+        },
+        "steadyRenderCommands": {
+          "samples": 144,
+          "medianMs": 11.600000001490116,
+          "p95Ms": 13.200000002980232
+        },
+        "animationFrameIntervals": {
+          "samples": 143,
+          "medianMs": 16.69999999999891,
+          "p95Ms": 16.899999999999636
+        },
+        "inclusiveStages": [
+          {
+            "name": "draw()",
+            "samples": 144,
+            "medianMs": 10.100000001490116,
+            "p95Ms": 11.700000002980232
+          },
+          {
+            "name": "platforms3D",
+            "samples": 144,
+            "medianMs": 3.7000000029802322,
+            "p95Ms": 4.100000001490116
+          },
+          {
+            "name": "walls3D",
+            "samples": 144,
+            "medianMs": 2.899999998509884,
+            "p95Ms": 4.100000001490116
+          },
+          {
+            "name": "sceneEntities",
+            "samples": 144,
+            "medianMs": 1.7999999970197678,
+            "p95Ms": 1.9000000059604645
+          },
+          {
+            "name": "ceiling3D",
+            "samples": 144,
+            "medianMs": 1.7000000029802322,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "fpsArms",
+            "samples": 144,
+            "medianMs": 1,
+            "p95Ms": 1.1000000014901161
+          },
+          {
+            "name": "torchGlow3D",
+            "samples": 144,
+            "medianMs": 0.29999999701976776,
+            "p95Ms": 0.3999999985098839
+          },
+          {
+            "name": "skybox3D",
+            "samples": 144,
+            "medianMs": 0.10000000149011612,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "hudOverlay",
+            "samples": 144,
+            "medianMs": 0.10000000149011612,
+            "p95Ms": 0.19999999552965164
+          },
+          {
+            "name": "lightGrid",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "caveEntrance3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "goalMarker3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "groundFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coneFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "proj3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "chainFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "novaFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "impacts3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "enemies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "soulOrbs3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arcaneTomes3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "statPickups3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "companions3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "fortressAllies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "marketStalls3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "shrines3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ruins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "structures3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ambientFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "arenaAltarPrompt",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arenaHUD",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "forgeOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "crosshair3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "shopOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "menuOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "settingsOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          }
+        ],
+        "actualHits": []
+      }
+    ],
+    "propCachePilot": false,
+    "width": 360,
+    "height": 240,
+    "nativeFullscreen": false,
+    "devicePixelRatio": 1,
+    "notes": [
+      "Same game scene, pose and light: existing original hands baseline versus one articulated right-hand anatomy study. No combat is simulated.",
+      "The 2800 ms pose cycle is sampled at identical animation times; live playback is quarter speed. This is not a gameplay casting-timing change.",
+      "Each version uses one 144-frame cold/warmup cycle followed by one 144-frame steady cycle.",
+      "Artwork generation and the first full draw are separate from steady render-command timing.",
+      "Command timing may exclude deferred GPU work. Animation-frame intervals are real browser cadence.",
+      "No pixel readback or quality reduction; existing prop-cache choice is unchanged.",
+      "Fixture equipment keeps the current appearance but disables relic side effects; actual equipment, mana, stats and arrays are restored."
+    ]
+  },
+  "dusk": {
+    "status": "complete",
+    "mode": "preview",
+    "study": "hand",
+    "light": "dusk",
+    "seed": 12345,
+    "view": "mouth",
+    "target": "One neutral articulated right hand; anatomy proof only, no actual cast or projectile",
+    "targetDistance": null,
+    "versions": [
+      {
+        "art": "Original baseline",
+        "firstFrameRenderCommandsMs": 31.400000005960464,
+        "firstUseArtworkGenerationMs": {
+          "legacyHands": 6.100000001490116,
+          "hands": 0,
+          "missile": 0,
+          "handRig": 0
+        },
+        "coldBuildFrames": [
+          {
+            "timeMs": 0,
+            "renderCommandsMs": 31.400000005960464
+          }
+        ],
+        "handRigColdReset": true,
+        "handRig": {
+          "vertices": 0,
+          "triangles": 0,
+          "visibleFaces": 0,
+          "buildMs": 0,
+          "builds": 0,
+          "lastRenderMs": 0,
+          "topologyBytes": 0
+        },
+        "handRigRenderCommands": {
+          "samples": 0,
+          "medianMs": null,
+          "p95Ms": null
+        },
+        "retainedArtwork": {
+          "hands": {
+            "builds": 0,
+            "buildMs": 0,
+            "lastBuildMs": 0,
+            "bytes": 0,
+            "entries": 0,
+            "maxBytes": 8388608,
+            "fallbacks": 0
+          },
+          "missile": {
+            "builds": 0,
+            "buildMs": 0,
+            "bytes": 0
+          },
+          "handRig": {
+            "vertices": 0,
+            "triangles": 0,
+            "visibleFaces": 0,
+            "buildMs": 0,
+            "builds": 0,
+            "lastRenderMs": 0,
+            "topologyBytes": 0
+          }
+        },
+        "steadyRenderCommands": {
+          "samples": 144,
+          "medianMs": 10.600000001490116,
+          "p95Ms": 10.800000004470348
+        },
+        "animationFrameIntervals": {
+          "samples": 143,
+          "medianMs": 16.699999999999818,
+          "p95Ms": 16.800000000000182
+        },
+        "inclusiveStages": [
+          {
+            "name": "draw()",
+            "samples": 144,
+            "medianMs": 10.099999997764826,
+            "p95Ms": 10.300000004470348
+          },
+          {
+            "name": "platforms3D",
+            "samples": 144,
+            "medianMs": 3.600000001490116,
+            "p95Ms": 3.7999999970197678
+          },
+          {
+            "name": "walls3D",
+            "samples": 144,
+            "medianMs": 2.8000000044703484,
+            "p95Ms": 3
+          },
+          {
+            "name": "ceiling3D",
+            "samples": 144,
+            "medianMs": 1.7000000029802322,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "sceneEntities",
+            "samples": 144,
+            "medianMs": 1.7000000029802322,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "torchGlow3D",
+            "samples": 144,
+            "medianMs": 0.29999999701976776,
+            "p95Ms": 0.3999999985098839
+          },
+          {
+            "name": "skybox3D",
+            "samples": 144,
+            "medianMs": 0.10000000149011612,
+            "p95Ms": 0.20000000298023224
+          },
+          {
+            "name": "lightGrid",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "caveEntrance3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "goalMarker3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "groundFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coneFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "proj3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "chainFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "novaFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "impacts3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "enemies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "soulOrbs3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arcaneTomes3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "statPickups3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "companions3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "fortressAllies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "marketStalls3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "shrines3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ruins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "structures3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ambientFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "fpsArms",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "arenaAltarPrompt",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arenaHUD",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "forgeOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "crosshair3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "hudOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "shopOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "menuOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "settingsOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          }
+        ],
+        "actualHits": []
+      },
+      {
+        "art": "Articulated hand",
+        "firstFrameRenderCommandsMs": 15,
+        "firstUseArtworkGenerationMs": {
+          "legacyHands": 0,
+          "hands": 0,
+          "missile": 0,
+          "handRig": 0.6000000014901161
+        },
+        "coldBuildFrames": [
+          {
+            "timeMs": 0,
+            "renderCommandsMs": 15
+          }
+        ],
+        "handRigColdReset": true,
+        "handRig": {
+          "vertices": 924,
+          "triangles": 1704,
+          "visibleFaces": 669,
+          "buildMs": 0.6000000014901161,
+          "builds": 1,
+          "lastRenderMs": 0.9000000059604645,
+          "topologyBytes": 87552
+        },
+        "handRigRenderCommands": {
+          "samples": 144,
+          "medianMs": 0.9000000059604645,
+          "p95Ms": 1.1000000014901161
+        },
+        "retainedArtwork": {
+          "hands": {
+            "builds": 0,
+            "buildMs": 0,
+            "lastBuildMs": 0,
+            "bytes": 0,
+            "entries": 0,
+            "maxBytes": 8388608,
+            "fallbacks": 0
+          },
+          "missile": {
+            "builds": 0,
+            "buildMs": 0,
+            "bytes": 0
+          },
+          "handRig": {
+            "vertices": 924,
+            "triangles": 1704,
+            "visibleFaces": 669,
+            "buildMs": 0.6000000014901161,
+            "builds": 1,
+            "lastRenderMs": 0.9000000059604645,
+            "topologyBytes": 87552
+          }
+        },
+        "steadyRenderCommands": {
+          "samples": 144,
+          "medianMs": 11.600000001490116,
+          "p95Ms": 13.100000001490116
+        },
+        "animationFrameIntervals": {
+          "samples": 143,
+          "medianMs": 16.69999999999891,
+          "p95Ms": 16.80000000000109
+        },
+        "inclusiveStages": [
+          {
+            "name": "draw()",
+            "samples": 144,
+            "medianMs": 10.100000001490116,
+            "p95Ms": 11.5
+          },
+          {
+            "name": "platforms3D",
+            "samples": 144,
+            "medianMs": 3.6999999955296516,
+            "p95Ms": 3.899999998509884
+          },
+          {
+            "name": "walls3D",
+            "samples": 144,
+            "medianMs": 2.899999998509884,
+            "p95Ms": 4
+          },
+          {
+            "name": "sceneEntities",
+            "samples": 144,
+            "medianMs": 1.7999999970197678,
+            "p95Ms": 1.9000000059604645
+          },
+          {
+            "name": "ceiling3D",
+            "samples": 144,
+            "medianMs": 1.6999999955296516,
+            "p95Ms": 1.8999999985098839
+          },
+          {
+            "name": "fpsArms",
+            "samples": 144,
+            "medianMs": 0.9000000059604645,
+            "p95Ms": 1.1000000014901161
+          },
+          {
+            "name": "torchGlow3D",
+            "samples": 144,
+            "medianMs": 0.29999999701976776,
+            "p95Ms": 0.3999999985098839
+          },
+          {
+            "name": "skybox3D",
+            "samples": 144,
+            "medianMs": 0.09999999403953552,
+            "p95Ms": 0.19999999552965164
+          },
+          {
+            "name": "hudOverlay",
+            "samples": 144,
+            "medianMs": 0.09999999403953552,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "lightGrid",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "caveEntrance3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "goalMarker3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "groundFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coneFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "proj3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "chainFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "novaFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "impacts3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "enemies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "soulOrbs3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arcaneTomes3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "statPickups3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "companions3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "fortressAllies3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "coins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "marketStalls3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "shrines3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ruins3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "structures3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "ambientFX3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "arenaAltarPrompt",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "arenaHUD",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "forgeOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "crosshair3D",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0.10000000149011612
+          },
+          {
+            "name": "shopOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "menuOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          },
+          {
+            "name": "settingsOverlay",
+            "samples": 144,
+            "medianMs": 0,
+            "p95Ms": 0
+          }
+        ],
+        "actualHits": []
+      }
+    ],
+    "propCachePilot": false,
+    "width": 360,
+    "height": 240,
+    "nativeFullscreen": false,
+    "devicePixelRatio": 1,
+    "notes": [
+      "Same game scene, pose and light: existing original hands baseline versus one articulated right-hand anatomy study. No combat is simulated.",
+      "The 2800 ms pose cycle is sampled at identical animation times; live playback is quarter speed. This is not a gameplay casting-timing change.",
+      "Each version uses one 144-frame cold/warmup cycle followed by one 144-frame steady cycle.",
+      "Artwork generation and the first full draw are separate from steady render-command timing.",
+      "Command timing may exclude deferred GPU work. Animation-frame intervals are real browser cadence.",
+      "No pixel readback or quality reduction; existing prop-cache choice is unchanged.",
+      "Fixture equipment keeps the current appearance but disables relic side effects; actual equipment, mana, stats and arrays are restored."
+    ]
+  }
+}
