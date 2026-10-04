@@ -1194,8 +1194,9 @@ offsets: the corona's five samples spread 0.2 of the glow radius whatever the
 prop's size, and a point scaled in toward the wall with the model left the
 near side of an oblique wall and the prop's own lower parts in front of the
 test depth. On walls 0.35 and 0.25 of full height that passed 263 of 360
-samples, against 339 at the full-size point and 312 for the sprite torch
-(`tools/game/tests/wall_decor_driver.js`, glow section). Each point light
+samples, against 339 at the full-size point and 312 for the sprite props
+(156 each for the sconce and the torch; `tools/game/tests/wall_decor_driver.js`,
+glow section). Each point light
 carries its point (`glowOut`, `glowUp`); the glow is still drawn at the
 light. For the exact A/B, set
 `fxTorchGlowOcclusion = 'tiles'` in the console.
