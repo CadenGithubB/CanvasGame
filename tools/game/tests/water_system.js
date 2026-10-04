@@ -20,6 +20,9 @@
   // it, or a river running downhill no longer takes it as a drop.
   src=patch(src,'    var key = _waterPassable(field, ni) ? field.height[ni] : field.sink[ni];','    var key = _waterPassable(field, ni) ? field.height[ni] : NaN;','--no-basin-drain');
   src=patch(src,'      var nh = _waterOpen(field, ni, scratch) ? H[ni] : field.sink[ni];','      var nh = _waterOpen(field, ni, scratch) ? H[ni] : NaN;','--no-downhill-drain');
+  // A basin that drains into reserved ground keeps the level of its last
+  // joined cell instead of rising to that ground.
+  src=patch(src,'      if (field.sink[cell] > level) level = field.sink[cell];\n','','--no-drain-level');
   // No structure ground is reserved at all.
   src=patch(src,'          if (largeStructureFlatDistance(st.type, x * gs - lx, y * gs - ly) < reach) mask[y * w + x] = 1;\n','','--no-reserve');
   // The reserve read from the window's largeStructures list, which is still
@@ -138,11 +141,15 @@
     // its ground height). The notched bowl with a reserved patch on its north
     // slope fills only to the patch's lowest ground: expected lake = the
     // cells connected to the bottom below that height (a BFS on the authored
-    // heights). Control: the same patch closed like a wall (no sink) leaves
-    // the bowl filling to its notch.
+    // heights). The patch's ground lies 0.02 below the bowl's there, so it is
+    // strictly lower than every open cell the water has not yet reached
+    // (the next ring stands at 0.882, the last joined at 0.81): the level
+    // must rise to the patch's ground when the basin drains. Control: the
+    // same patch closed like a wall (no sink) leaves the bowl filling to its
+    // notch.
     function patchedBowl(drains){var f=field(bowlH);
       for(var nx4=cx+10;nx4<W;nx4++)for(var ny4=cy-1;ny4<=cy+1;ny4++)f.height[ny4*W+nx4]=notchH-(nx4-(cx+10))*0.15;
-      var cells=[];for(var py=cy-8;py<=cy-7;py++)for(var px=cx-1;px<=cx+1;px++){var pi=py*W+px;if(drains)f.sink[pi]=f.height[pi];f.height[pi]=NaN;cells.push(pi);}
+      var cells=[];for(var py=cy-8;py<=cy-7;py++)for(var px=cx-1;px<=cx+1;px++){var pi=py*W+px;if(drains)f.sink[pi]=f.height[pi]-0.02;f.height[pi]=NaN;cells.push(pi);}
       f.patch=cells;return f;}
     var drained=patchedBowl(true),closedPatch=patchedBowl(false),src9=[{cell:cy*W+3,strength:2000}],ctl9=[{cell:cy*W+3,strength:2000}];
     solve(drained,src9);solve(closedPatch,ctl9);

@@ -51,6 +51,10 @@ class WaterSystemTests(unittest.TestCase):
         self.assert_rejected("--no-basin-drain", "a basin beside reserved ground fills only to that ground and drains into it")
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_basin_drain_below_the_reserved_ground(self) -> None:
+        self.assert_rejected("--no-drain-level", "a basin beside reserved ground fills only to that ground and drains into it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_rivers_running_past_lower_reserved_ground(self) -> None:
         self.assert_rejected("--no-downhill-drain", "a river passing lower reserved ground drains into it there")
 

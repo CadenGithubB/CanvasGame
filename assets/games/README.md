@@ -863,8 +863,9 @@ drawing and a lookup.
 Tests: `water_system.js` checks the solver on authored terrain (a slope, a
 notched bowl whose lake must be flat at its spill height and cover exactly
 the expected cells, a weak spring, a walled gap, a flat plateau, the bowl
-with a reserved patch on its slope that it fills only up to, and a river
-that drains into lower reserved ground beside it) and on real seeded
+with a reserved patch on its slope, strictly below every open cell not yet
+flooded, that it fills exactly up to, and a river that drains into lower
+reserved ground beside it) and on real seeded
 windows (legacy lakes, no water on closed ground, surfaces never rising
 downstream along cells or river objects, carved channels measured on the
 rendered ground: the bed dips at least 0.3 below the water across every
@@ -880,10 +881,10 @@ get no new water, reshaped ground, spring or river surface; keep props,
 structure floors and structure models stand the same; water that drains
 into reserved ground never stands above it; both carving bounds bind and
 hold; and a point is reserved the same way in a window one region over.
-The suite has fifteen mutation controls (including no carving, banks
+The suite has 16 mutation controls (including no carving, banks
 without the levee, no reserve, a reserve read from the stale
-`largeStructures` list, no margin, no drain, no fall at a drained end and
-unbounded carving). `water_movement.js` runs the real player step and
+`largeStructures` list, no margin, no drain, a basin drain level left out,
+no fall at a drained end and unbounded carving). `water_movement.js` runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
