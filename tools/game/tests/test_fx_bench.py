@@ -20,8 +20,9 @@ LAB_FILES = (REPO_ROOT / "tools/webui/game_lab.py", REPO_ROOT / "tools/webui/har
 # A/B arithmetic, the combat scene, the 2 s governor snapshot, the T10 hold,
 # camera drift, menus and resizes mid-run, a second injection, restoration
 # after a failed run, a world reset and a chunk crossing mid-run, stage names
-# and bodies, the source scan, leaks and errors.
-PASS_COUNT = 33
+# and bodies, the source scan, leaks and errors; effect family modes in the
+# report (C33, 34).
+PASS_COUNT = 34
 SENTINEL = f"FX_BENCH_RESULT PASS {PASS_COUNT}"
 
 RESTORED = "every global the bench changes is restored after a completed run, and the live pool sat out"
@@ -47,6 +48,7 @@ HOLD = "T10 holds its scene for holdMs of measured time, not a frame count, and 
 DRIFT = "a run whose camera turned while measuring is reported invalid, with the drift; unmoved runs stay valid"
 GUARDS = "a menu opened or the canvas resized during a run ends it with a message and restores the page"
 REINJECT = "injecting the bench again while a run is active keeps the running copy, which still refuses a second run and aborts"
+FAMILIES = "the report's env.game records each effect family's mode as the run starts, which a console override sets apart from every switch"
 # Each mutation must fail its named check; setup failures and crashes do not count.
 MUTATIONS = {
     "--no-restore": RESTORED,
@@ -99,6 +101,7 @@ MUTATIONS = {
     "--no-size-guard": GUARDS,
     "--replace-active": REINJECT,
     "--flush-stage-drift": STAGES,
+    "--no-family-modes": FAMILIES,
 }
 # Checks a mutation must fail as well as its named one.
 ALSO_FAILS = {
@@ -174,6 +177,8 @@ CAUSES = {
     "--no-size-guard": r'"change":"canvas","measuring":true,"stopped":false,',
     "--replace-active": r'"kept":false,',
     "--flush-stage-drift": r'"drift":\{"coneFX3D":\{"loop":\["drawConeEffects3D\(\)","drawFlameStream3D\(\)"\],"bench":\["drawConeEffects3D\(\)"\]',
+    # The report holds no family modes; its switches alone match the override run's.
+    "--no-family-modes": r'"families":"MISSING","toggles":"\{',
 }
 
 

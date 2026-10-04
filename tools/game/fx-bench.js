@@ -246,8 +246,19 @@ var fxBench = (function (G, prev) {
         // The render preset and switches (3D integration): model and texture
         // passes change what particles are depth-tested against, so reports
         // taken under different switches must be told apart.
-        render: typeof G.renderFeatureSnapshot === 'function' ? {preset: G.renderPresetName(), features: G.renderFeatureSnapshot()} : null}
+        render: typeof G.renderFeatureSnapshot === 'function' ? {preset: G.renderPresetName(), features: G.renderFeatureSnapshot()} : null,
+        // Each migrated effect family's mode, as the cave profile's
+        // canonicalInputs records it: a console setEffectFamilyMode override
+        // sets a family apart from every switch, and the A/B flips only
+        // Unified effects, so it holds through every New run.
+        effectFamilies: effectFamilies()}
     };
+  }
+  function effectFamilies() {
+    if (typeof G.effectFamilyMode !== 'function' || !G.EFFECT_FAMILY_MIGRATED) return null;
+    var out = {};
+    Object.keys(G.EFFECT_FAMILY_MIGRATED).forEach(function (f) { out[f] = G.effectFamilyMode(f); });
+    return out;
   }
 
   // ── Touched state: saved once before its first change, restored in reverse ─

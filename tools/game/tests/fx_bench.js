@@ -33,7 +33,8 @@
 // a flipped or mixed-up delta, no ABBA order (C25, C26); frame-counted
 // "2 s" and "30 s" (C28, C29); a camera that moves mid-run left valid (C30);
 // a menu opened or the canvas resized mid-run left measuring (C31); a second
-// injection that orphans the running copy (C32).
+// injection that orphans the running copy (C32); reports that cannot tell
+// runs under a console effect family override from runs without it (C33).
 // Oracles: the global values captured here before each run; the spec's
 // target definitions restated here (pinned Particles settings, governors,
 // flush stage sets, rates); stage costs injected here on the virtual clock
@@ -60,7 +61,7 @@
 //   --delta-sign --delta-wrong-quantile --median-even-upper --no-abba
 //   --gov-2s-frames --hold-frames --no-hold-buffer-check
 //   --stress-count-smoke-exempt --drift-check-off --no-menu-guard
-//   --no-size-guard --replace-active --flush-stage-drift
+//   --no-size-guard --replace-active --flush-stage-drift --no-family-modes
 (0, eval)(slurp('tools/webui/harness/_game_env.js'));
 LAB.init(__out, slurp, __engine, __argv);
 (function () {
@@ -140,6 +141,7 @@ LAB.init(__out, slurp, __engine, __argv);
   benchSource = mutate(benchSource, '--delta-wrong-quantile', 'p95: d(N.sums[s].p95, O.sums[s].p95)', 'p95: d(N.sums[s].p50, O.sums[s].p50)');
   benchSource = mutate(benchSource, '--median-even-upper', '(a[m - 1] + a[m]) / 2', 'a[m]');
   benchSource = mutate(benchSource, '--no-abba', 'var modes = r & 1 ? o.modes.slice().reverse() : o.modes;', 'var modes = o.modes;');
+  benchSource = mutate(benchSource, '--no-family-modes', '        effectFamilies: effectFamilies()}', '        }');
   benchSource = mutate(benchSource, '--gov-2s-frames', "if (cell.governor === 'unpinned' && !job.gov.atTwoSeconds && now - job.govReset >= 2000)",
     "if (cell.governor === 'unpinned' && !job.gov.atTwoSeconds && job.m === 120)");
   benchSource = mutate(benchSource, '--hold-frames', 'if (cell.holdMs ? now - job.measureAt >= cell.holdMs : job.m >= cell.frames)', 'if (job.m >= cell.frames)');
@@ -335,6 +337,13 @@ LAB.init(__out, slurp, __engine, __argv);
     if (p && p.catch) p.catch(function () {});
     return res;
   }
+  // Each migrated effect family's mode, read from the game here when a run
+  // starts: what the report's env.game.effectFamilies must hold.
+  function familyModes() {
+    var m = {};
+    Object.keys(G.EFFECT_FAMILY_MIGRATED).forEach(function (f) { m[f] = G.effectFamilyMode(f); });
+    return m;
+  }
   function allRuns(report) {
     var runs = [];
     if (report && report.targets) Object.keys(report.targets).forEach(function (id) { runs = runs.concat(report.targets[id].runs); });
@@ -410,7 +419,7 @@ LAB.init(__out, slurp, __engine, __argv);
     '--drift-check-off'];
   var OPTS = {target: 'all', frames: 3, warmup: 2, repeats: 1, sizes: [[400, 270]], particles: [60], stress: 300, flushFrames: 2, flushBatches: 1,
     allowHidden: true, smoke: true};
-  var smokeRan = false, smokeOk = false, report = null, runs = [], smokeSteps = [], smokePost = [], smokeByRun = [], measured = {};
+  var smokeRan = false, smokeOk = false, report = null, runs = [], smokeSteps = [], smokePost = [], smokeByRun = [], measured = {}, familiesAtStart = null;
   if (needed('the smoke pass', SMOKE_FLAGS)) {
     smokeRan = true;
     var runError = null, liveBefore = live(G.fxState), liveState = G.fxState;
@@ -421,7 +430,7 @@ LAB.init(__out, slurp, __engine, __argv);
       G._perfBreakdownLog = 0;                            // the loop's 5 s dump is due on the next frame
       // Distinct raster input the bench must zero and give back.
       G._fxRender.rasterAcc = 4096; G._fxRender.rasterMs = 0.5; G._fxRender.input = 0.75;
-      snap = snapshot(); dumpAtStart = dumpCalls;
+      snap = snapshot(); dumpAtStart = dumpCalls; familiesAtStart = familyModes();
       var res = startRun(OPTS);
       logReset = false;
       pump(400, function () { if (G._perfBreakdownLog > 0) logReset = true; return res.report || res.error; });
@@ -468,6 +477,7 @@ LAB.init(__out, slurp, __engine, __argv);
       if (!e.timerResolution || !('minMs' in e.timerResolution) || !('medianMs' in e.timerResolution)) missing.push('env.timerResolution');
       if (!e.game || !e.game.render || typeof e.game.render.preset !== 'string' || !e.game.render.features ||
           e.game.render.features.wallPropModels !== G.renderFeatureSnapshot().wallPropModels) missing.push('env.game.render');
+      if (!e.game || JSON.stringify(e.game.effectFamilies) !== JSON.stringify(familiesAtStart)) missing.push('env.game.effectFamilies');
       var runProblems = [];
       runs.forEach(function (r, i) {
         var p = [];
@@ -914,6 +924,35 @@ LAB.init(__out, slurp, __engine, __argv);
     check('injecting the bench again while a run is active keeps the running copy, which still refuses a second run and aborts',
       kept && warned && refused && aborted && !!(res.error && /aborted/.test(res.error.message)) && replaced,
       {kept: kept, warned: warned, refusedSecondRun: refused, aborted: aborted, replacedWhenIdle: replaced});
+  });
+
+  // ── C33: effect family modes in the report ───────────────────────────────
+  // A console override (setEffectFamilyMode, never persisted) sets one
+  // family's mode apart from every switch, and the bench's A/B flips only
+  // Unified effects, so a run under an override draws that family in its
+  // other mode in every New run. env.game.effectFamilies records each
+  // migrated family's mode as the run starts, as the cave profile's
+  // canonicalInputs does. Oracle: the override set here (torch glow Legacy)
+  // and the game's effectFamilyMode() read here before each run. Control:
+  // the same run without the override, whose effect switches and render
+  // record are the same, so only effectFamilies tells the two apart.
+  if (needed('effect family modes', ['--no-family-modes'])) run('effect family modes', function () {
+    function familyRun(override) {
+      if (override) G.setEffectFamilyMode('torchGlow', override);
+      try {
+        var want = familyModes(), res = startRun({target: 'T2', frames: 3, warmup: 2, repeats: 1, sizes: [[400, 270]], allowHidden: true, smoke: true});
+        pump(200, function () { return res.report || res.error; });
+        var g = res.report && res.report.env && res.report.env.game;
+        return {want: want, error: res.error ? res.error.message : res.report ? null : 'no report', families: !g ? null : g.effectFamilies === undefined ? 'MISSING' : g.effectFamilies,
+          toggles: g ? JSON.stringify(g.toggles) : null, render: g ? JSON.stringify(g.render) : null};
+      } finally { if (override) G.setEffectFamilyMode('torchGlow', null); }
+    }
+    var plain = familyRun(null), over = familyRun('legacy'), after = G.effectFamilyMode('torchGlow');
+    check('the report\'s env.game records each effect family\'s mode as the run starts, which a console override sets apart from every switch',
+      !plain.error && !over.error && plain.want.torchGlow === 'new' && over.want.torchGlow === 'legacy' && over.want.ambient === 'new' &&
+      JSON.stringify(plain.families) === JSON.stringify(plain.want) && JSON.stringify(over.families) === JSON.stringify(over.want) &&
+      plain.toggles !== null && plain.toggles === over.toggles && plain.render !== null && plain.render === over.render && after === 'new',
+      {plain: plain, override: over, torchGlowAfter: after});
   });
 
   // ── C13: restoration after a failed run ──────────────────────────────────

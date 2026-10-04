@@ -1296,13 +1296,15 @@ set.
 It is not in the manifest and never ships in the header. `dev.py serve` serves
 it at `/fx-bench.js`, to be injected into a separate, visible, foreground test
 tab. Its header comment gives the procedure. Its report's `env.game` records
-the effect switches and the render preset and switches (`render`), as the
-cave browser profile's `canonicalInputs` does: models and textures change what
-particles are depth-tested against and the frame's work, so runs taken under
-different switches can be told apart. The profile's `renderFeatures` hold the
-effect switches too (they are registered as render features), and its
-`effectFamilies` record each effect family's mode, which a console
-`setEffectFamilyMode` override sets apart from every switch.
+the effect switches, the render preset and switches (`render`) and each effect
+family's mode (`effectFamilies`), as the cave browser profile's
+`canonicalInputs` does: models and textures change what particles are
+depth-tested against and the frame's work, so runs taken under different
+switches can be told apart. The profile's `renderFeatures` hold the effect
+switches too (they are registered as render features). A console
+`setEffectFamilyMode` override sets a family's mode apart from every switch,
+and the bench's A/B flips only Unified effects, so only `effectFamilies` tells
+a run under an override from one without it.
 
 ### Adding an effect
 
