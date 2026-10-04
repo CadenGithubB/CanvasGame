@@ -38123,8 +38123,9 @@ function caveProfileNextFrame(job) {
 // Profile frames stay out of the live Perf HUD: its stage table, ring and
 // per-second stacks are the job's own sinks while it draws (made once, so
 // no sampled frame allocates them), and the 5 s breakdown dump, which reads
-// the frozen clock, keeps the job's time instead of leaving the live one in
-// the future, where the live dump never ran again.
+// the frozen clock, keeps the job's time, so profiling never moves the live
+// dump (renderFrame pulls a time left ahead of the clock back to it, but only
+// by restarting the live 5 s period).
 function caveProfileRender(job, collect) {
   var oldDate=Date.now,oldRandom=Math.random,oldPt=_pt,state=job.randomSeed,stages={};
   var oldGameClock=gameTimeNow,oldPresentationRandom=_presentationRandomState;
@@ -38634,7 +38635,9 @@ function startCastingStudio() {
   // per-second stacks get studio-owned sinks (the studio reports its own
   // stage times), so no studio draw reaches the live averages or the
   // all-time max. The 5 s breakdown dump reads the studio clock (2e12 + t),
-  // so its time is studio state too, or the live dump never ran again.
+  // so its time is studio state too: a studio session never moves the live
+  // dump (renderFrame pulls a time left ahead of the clock back to it, but
+  // only by restarting the live 5 s period).
   live._perfBreakdown = {}; live._perfStageHistory = {}; live._perfSecStages = {};
   // Upper-terrain visibility is baked once and immutable. Share that buffer;
   // its daylight/flicker scalar is isolated by castingStudioScoped above.
@@ -39418,8 +39421,12 @@ function renderFrame() {
   if (DEBUG_CAVE) drawCaveDebug();
   if (caveControlMapVisible()) _pt('caveControlMap', function(){ drawCaveControlMap(); });
 
-  // Auto-dump every 5s
+  // Auto-dump every 5s. A frame drawn on a clock that ran ahead (the render
+  // lab's frozen Date.now, a studio or profile clock) or a clock set back
+  // leaves the last dump in the future, where it would never come due again
+  // in the session; the period then restarts from this frame.
   var now = Date.now();
+  if (_perfBreakdownLog > now) _perfBreakdownLog = now;
   if (now - _perfBreakdownLog > 5000 && Object.keys(_perfBreakdown).length > 0) {
     _perfBreakdownLog = now;
     dumpPerfBreakdown();

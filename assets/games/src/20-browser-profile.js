@@ -41,8 +41,9 @@ function caveProfileNextFrame(job) {
 // Profile frames stay out of the live Perf HUD: its stage table, ring and
 // per-second stacks are the job's own sinks while it draws (made once, so
 // no sampled frame allocates them), and the 5 s breakdown dump, which reads
-// the frozen clock, keeps the job's time instead of leaving the live one in
-// the future, where the live dump never ran again.
+// the frozen clock, keeps the job's time, so profiling never moves the live
+// dump (renderFrame pulls a time left ahead of the clock back to it, but only
+// by restarting the live 5 s period).
 function caveProfileRender(job, collect) {
   var oldDate=Date.now,oldRandom=Math.random,oldPt=_pt,state=job.randomSeed,stages={};
   var oldGameClock=gameTimeNow,oldPresentationRandom=_presentationRandomState;

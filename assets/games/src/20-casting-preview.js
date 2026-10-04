@@ -232,7 +232,9 @@ function startCastingStudio() {
   // per-second stacks get studio-owned sinks (the studio reports its own
   // stage times), so no studio draw reaches the live averages or the
   // all-time max. The 5 s breakdown dump reads the studio clock (2e12 + t),
-  // so its time is studio state too, or the live dump never ran again.
+  // so its time is studio state too: a studio session never moves the live
+  // dump (renderFrame pulls a time left ahead of the clock back to it, but
+  // only by restarting the live 5 s period).
   live._perfBreakdown = {}; live._perfStageHistory = {}; live._perfSecStages = {};
   // Upper-terrain visibility is baked once and immutable. Share that buffer;
   // its daylight/flicker scalar is isolated by castingStudioScoped above.

@@ -227,7 +227,10 @@ reciprocal of CPU work time. Hidden Cave Debug maps are no longer redrawn.
 The Perf HUD's stage table counts each stage once per rendered frame (its
 average and max are per frame; a frame's simulation ticks are one call). The
 profile's frames, like the casting studio's, time into their own tables and
-never reach the live Perf HUD or its 5 s breakdown reset.
+never reach the live Perf HUD or its 5 s breakdown reset. A frame drawn on a
+clock that ran ahead (the render lab's frozen clock) or a clock set back
+cannot stop that reset: renderFrame pulls a last-reset time that is ahead of
+the clock back to it, and the next reset comes 5 s later.
 
 Particle, exploration, and lighting inputs are made repeatable temporarily and
 the real world's references are restored afterward. **Verify pixels after

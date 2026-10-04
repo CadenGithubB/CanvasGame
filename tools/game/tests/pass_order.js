@@ -33,8 +33,10 @@
 //                       a frame's catch-up ticks are counted as calls apiece
 //   --fx-before-late-landmarks  fxCombat3D runs before marketStalls3D (the
 //                       late landmark stages then write depth after it)
+//   --dump-future       renderFrame keeps a last-dump time that is ahead of
+//                       the clock (a frozen clock ran ahead, or one went back)
 // --sections a,b runs only: ruin, lintel, entities, overlays, calls, legacy,
-// water, timer, depth, lab (render-lab/50-pass-order.js on Endless 2024).
+// water, timer, dump, depth, lab (render-lab/50-pass-order.js on Endless 2024).
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -52,6 +54,7 @@
   }
   var DRAW = 'src/16-draw-overview.js', HUD = 'src/15-render-hud-menu.js', DIAG = 'src/20-diagnostics.js', LOOP = 'src/21-frame-loop.js';
   var CLOCK = 'src/02-simulation-clock.js', SAME_FRAME = '  var sameFrame = bd.serial === _perfFrameSerial;\n';
+  var DUMP_REARM = '  if (_perfBreakdownLog > now) _perfBreakdownLog = now;\n';
   var FX_COMBAT_STAGE = "    _pt('fxCombat3D', function(){ if (typeof drawEffectLayer3D === 'function') drawEffectLayer3D(1); });\n";
   var STALLS_STAGE = "    _pt('marketStalls3D', function(){ drawMarketStalls3D(); });\n";
   var LANDMARK_STAGE = "    if (typeof landmarkOpaqueEarlyOn === 'function' && landmarkOpaqueEarlyOn())\n" +
@@ -78,6 +81,7 @@
     }
     if (path === HUD) source = swap(source, '--overlay-unclipped', '  if (!clip) { draw(); return 1; }\n', '  { draw(); return 1; }\n');
     if (path === LOOP) {
+      source = swap(source, '--dump-future', DUMP_REARM, '');
       source = swap(source, '--fx-before-late-landmarks', FX_COMBAT_STAGE, '');
       source = swap(source, '--fx-before-late-landmarks', STALLS_STAGE, FX_COMBAT_STAGE + STALLS_STAGE);
     }
@@ -724,6 +728,53 @@
       stopped.ringStill && !!sse && sse.count === STOPPED && Math.abs(sse.avg - 8) < 0.2 && Math.abs(sse.max - 8) < 0.2, stopped);
     check('timer: a frame\'s simulation ticks are one call a frame, two 1 ms gameUpdate ticks before each of three frames three 2 ms calls (max 2)',
       !!sgu && sgu.count === STOPPED && Math.abs(sgu.avg - 2) < 0.2 && Math.abs(sgu.max - 2) < 0.2 && !!shi && shi.count === STOPPED, stopped);
+  }
+
+  // ── dump: the Perf HUD's 5 s breakdown dump after a clock that ran ahead
+  // or went back ──
+  // renderFrame dumps the stage table (dumpPerfBreakdown replaces it) once
+  // Date.now() is more than 5 s past the last dump, and records that time. A
+  // frame drawn on a clock that runs ahead (the render lab freezes Date.now
+  // at 2e12, years past the host clock's 1.7e12) recorded a time in the
+  // future; once the clock came back, the live dump never ran again in the
+  // session and the live table was never reset. A clock set back does the
+  // same. Oracles: the host clock (H.clock.now) and the table object (a dump
+  // replaces it). Each leg starts from a live table dumped 1 s before, then
+  // draws live frames 16 ms and 5.1 s after the clock it resumes on: the
+  // control (nothing between), one frame through the render lab's own
+  // freeze/unfreeze, and a dump followed by the host clock set back 60 s.
+  // Fixture checks: the lab frame and the set-back clock leave the last dump
+  // time ahead of the clock the live frames resume on.
+  if (section('dump')) {
+    world({cam: RCAM, ruins: [RUIN]});
+    if (!G.RenderLab) (0, eval)(slurp('tools/game/render-lab/00-core.js'));
+    var dumpStart = H.clock.now;
+    function dumpLeg(name, between) {
+      var t0 = H.clock.now;
+      G._perfBreakdownLog = t0 - 1000; frame();
+      var liveRows = Object.keys(G._perfBreakdown).length, base = between(t0), lastDump = G._perfBreakdownLog;
+      H.clock.now = base + 16; frame();
+      var table = G._perfBreakdown, log16 = G._perfBreakdownLog - base;
+      H.clock.now = base + 5116; frame();
+      var leg = {leg: name, liveRows: liveRows, base: base, lastDump: lastDump, log16: log16, dumped: G._perfBreakdown !== table, logLast: G._perfBreakdownLog - base};
+      H.clock.now = Math.max(t0, base) + 10000;
+      return leg;
+    }
+    var dumpLegs = [
+      dumpLeg('control', function (t0) { return t0; }),
+      dumpLeg('render lab frame', function (t0) {
+        G.RenderLab.freeze(1);
+        try { frame(); } finally { G.RenderLab.unfreeze(); }
+        return t0;
+      }),
+      dumpLeg('clock set back 60 s', function (t0) { H.clock.now = t0 + 6000; frame(); return t0 - 60000; })
+    ];
+    H.clock.now = Math.max(H.clock.now, dumpStart + 70000);
+    out('NOTE dump ' + JSON.stringify(dumpLegs));
+    check('dump: after a frame on a clock that ran ahead (the render lab\'s frozen 2e12) or a clock set back 60 s, the live 5 s breakdown dump still runs 5.1 s later and the last dump time is never ahead of a live frame\'s clock',
+      dumpLegs.length === 3 && dumpLegs.every(function (l) { return l.liveRows > 0 && l.dumped && l.log16 <= 16 && l.logLast === 5116; }) &&
+      dumpLegs[0].lastDump === dumpLegs[0].base - 1000 && dumpLegs[1].lastDump === 2e12 && dumpLegs[1].base < 2e12 &&
+      dumpLegs[2].lastDump === dumpLegs[2].base + 66000, dumpLegs);
   }
 
   // ── depth: every depth-writing pass runs before the unified fx stages ──

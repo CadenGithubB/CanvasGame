@@ -106,8 +106,12 @@ function renderFrame() {
   if (DEBUG_CAVE) drawCaveDebug();
   if (caveControlMapVisible()) _pt('caveControlMap', function(){ drawCaveControlMap(); });
 
-  // Auto-dump every 5s
+  // Auto-dump every 5s. A frame drawn on a clock that ran ahead (the render
+  // lab's frozen Date.now, a studio or profile clock) or a clock set back
+  // leaves the last dump in the future, where it would never come due again
+  // in the session; the period then restarts from this frame.
   var now = Date.now();
+  if (_perfBreakdownLog > now) _perfBreakdownLog = now;
   if (now - _perfBreakdownLog > 5000 && Object.keys(_perfBreakdown).length > 0) {
     _perfBreakdownLog = now;
     dumpPerfBreakdown();
