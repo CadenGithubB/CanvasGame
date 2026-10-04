@@ -1043,6 +1043,24 @@ reducing detail. Mesh/dimension changes and `buildWalkCandZ()` invalidate it.
 Future in-place geometry edits must rebuild that derived data or explicitly
 delete `mesh._floorRenderStitches` before rendering again.
 
+The floor pass collects one `[distSq, x, y]` triple per surviving cell into the
+shared `_drawFloorCellBuf` (Float32), then comb-sorts far to near and draws.
+Every scanned cell writes at most one triple, so before collecting it checks
+the frame's scan rectangle and, when that exceeds capacity, grows the buffer to
+the largest rectangle its view distance and mesh allow:
+`min(ceil(2*viewDist/gridSize)+2, mesh.w-1) * min(same, mesh.h-1)` cells. It
+reallocates only when the view distance or mesh grows, never per frame, and
+never shrinks; the write loop has no bounds check. The buffer starts at 40,000
+cells. Level 4 (Expanse, 2304 u view, 360x240 mesh) grows it to 85,801 cells
+(about 1 MB); Endless grows it to 47,961 at the High preset and 91,204 at
+Ultra (9x9 window) and keeps 40,000 at Low and Medium. Before this (audit
+D25) a full buffer silently dropped the last rows scanned, which blanked the
+whole floor at steep pitch on Level 4. Hosts that load
+`13-render-floors-ceilings.js` without `01-config-state.js` must seed
+`_drawFloorCellBuf` with a typed array; the pass replaces it when too small.
+`tools/game/tests/floor_cell_buffer.js` compares real Level 4 frames with an
+unconstrained reference copy of the pass and has an opt-in `--sweep`.
+
 This is a manual game/UI preview with local substitutes for device services. It
 has no hardware backend, sensors, or device network connection, and cannot verify
 ESP32 performance or hardware integration. Its JavaScript line numbers match the

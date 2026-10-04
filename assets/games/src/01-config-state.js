@@ -740,9 +740,10 @@ function inEntranceReserve(wx, wy) {
   }
   return false;
 }
-// Pre-allocated buffer for distance-sorted floor cell render. Packs
-// [distSq, x, y] triples. Max size = (2 * viewDist/gs + 2)^2 ~ 200^2 at
-// high viewDist; 40000*3 = 120000 Float32 entries = ~480KB. One-time alloc.
+// Reused buffer for the distance-sorted floor cell render. Packs
+// [distSq, x, y] triples. Starts at 40,000 cells (~480KB); drawLayersFloor3D
+// grows it before collecting when its scan rectangle needs more (Level 4's
+// 2304 u view: up to 359x239 cells, ~1MB). It is replaced, never shrunk.
 var _drawFloorCellBuf = new Float32Array(120000);
 // Wall projection scratch buffers — reused across frames by drawWalls3D/renderFace.
 // 4 corners per quad: 0=bottom-left, 1=bottom-right, 2=top-right, 3=top-left.
