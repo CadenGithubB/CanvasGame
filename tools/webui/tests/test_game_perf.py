@@ -24,8 +24,8 @@ What this suite covers (harness: tools/webui/harness/game_perf_harness.js):
   - the first frame on a fresh page toggling the control mode (N11), gamepad
     polling without an in-flight guard (E6), the Perf HUD fps formula (G8).
 
-Not here, by ownership: whether a fixed level's floor pass completes (D24 --
-render suite), Apply duplicating enemies (D23 -- persistence), chunk-state
+Not here, by ownership: whether a fixed level's floor pass completes (D24,
+repaired -- render suite), Apply duplicating enemies (D23 -- persistence), chunk-state
 growth (H8 -- persistence). A same-size-rebuild buffer-reuse verdict (G3
 allocation) is deliberately NOT a check: caves_transition detects window shifts
 by floorMesh identity, so demanding reuse would push a fix that blinds it; the
@@ -84,8 +84,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "audit D25: _drawFloorCellBuf holds 40,000 cells (L786) and the write at L12643-12646 is unguarded; "
         "Level 4 viewDist is 2304 (L7677), so the pass wants up to 46,596 cells at (2160,480) pitch 1.4 + dash, "
         "heading 90deg -- and 43,290 already at pitch 0, so a fix aimed only at the high-pitch under-foot skirt "
-        "(L12630-12641) is not enough. Typed-array writes past the end are silently dropped. (Invisible today only "
-        "because D24 -- render suite -- makes every fixed-level floor pass throw at L12788 after buffering.)",
+        "(L12630-12641) is not enough. Typed-array writes past the end are silently dropped. (D24's fixed-level "
+        "floor crash -- render suite, now repaired -- hid this: every fixed-level floor pass threw at L12788 after "
+        "buffering. The pass now completes.)",
         r"demand \d+\+? > capacity 40000 \(over by \d+\)"),
     _JITTER: (
         "audit G3: updateChunks (L7474-7501) re-centres whenever the player's chunk differs from the window "

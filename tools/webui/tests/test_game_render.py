@@ -8,8 +8,9 @@ surface tops above the horizon are not automatically exposed undersides.
 Fixtures cover cave floors/ceilings and portals, ceiling-dependent wall
 closure, real wall-mounted ore, surface actors/chests/goals, whole-loop walks,
 and fixed-level rendering. Current known defects remain explicit below:
-enemy walk-cycle selection and fixed-level floor colors. The shop tower's
-literal-zero height defect is repaired; a BREAK probe reintroduces it.
+enemy walk-cycle selection. The shop tower's literal-zero height defect and
+the fixed-level floor crash (audit D24: classic floor meshes had no per-layer
+colours) are repaired; BREAK probes reintroduce them.
 
 Run the baseline, then its causal mutations:
     python3 -m unittest tools.webui.tests.test_game_render -v
@@ -58,17 +59,11 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "dist in (10, chaseRange) (14070), not from the enemy's own motion, so an idle enemy 60 u away walks in "
         "place (5-7 frames in 8 draws) and a walking enemy beyond chaseRange is frozen on frame 0.",
         r"idle@60u frames=[2-9].*walking@\d+u frames=1 "),
-    _LV_ERR: (
-        "audit D24: a fixed level's floorMesh has no l0Color, so drawLayersFloor3D throws a TypeError at 12788 "
-        "on its first quad every frame (caught by _pt, 20576-20585): 30 errors in 30 frames, all in platforms3D.",
-        r"l0Color=MISSING .*renderErrors\+=30 byPass=\{\"platforms3D\":30\}"),
-    _LV_FILL: (
-        "audit D24 (same root cause, 12788): the floor pass throws before its first fill(), 0 ground quads.",
-        r"l0Color=MISSING .*floorFills=0 drawLayersFloor3D threw TypeError"),
-    _LV_BAL: (
-        "audit D24 (L12472): the throw at 12788 skips the ctx.restore() at 12926 matching ctx.save() at 12472: "
-        "one leaked state per frame (save depth +30, 810 saves vs 780 restores over 30 frames).",
-        r"saveDepthDelta=30 save=\d+ restore=\d+"),
+    # _LV_ERR, _LV_FILL and _LV_BAL (audit D24's fixed-level floor) were
+    # repaired by codex/floor-render-crash: buildClassicFloorLayerColors gives
+    # a classic floor mesh the per-layer colours (l0Color) the 3D floor pass
+    # reads, so the pass no longer throws, draws its quads and restores what
+    # it saved. Their BREAK probe below removes that step again.
 }
 
 # Causal probes against the current renderer. Each disables a real path,
@@ -89,6 +84,13 @@ PROBES = [
      "function drawGoalMarker3D() { return;", {_GOAL_ZERO: "FAIL"}),
     ("BREAK: missing portal geometry", "function drawCaveEntrance3D() {",
      "function drawCaveEntrance3D() { return;", {_ARCHSEEN: "FAIL"}),
+    # Audit D24's fixed-level floor, repaired: classic meshes lose their
+    # per-layer colours again, so the floor pass throws on its first quad
+    # every frame. The Endless tunnel floor (chunk-authored colours) is an
+    # unaffected control.
+    ("BREAK: classic floor meshes are built without per-layer colours again",
+     "  buildClassicFloorLayerColors(floorMesh);\n", "",
+     {_LV_ERR: "FAIL", _LV_FILL: "FAIL", _LV_BAL: "FAIL", _INFLOOR: "PASS"}),
     # Audit D7 + N7, repaired: restores the tower's literal world-Z 0 call and
     # its legacy column/hill gates. The exit goal is an unaffected control.
     ("BREAK: shop tower asks about world height 0 again",

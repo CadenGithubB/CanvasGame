@@ -326,8 +326,9 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
 
     // ════════════════════════════════════════════════════════════════════
     // 2. Fixed Level 4: buffer capacity over a 3x3 camera grid. (Whether a
-    //    fixed level's floor pass completes at all -- D24, no lNColor arrays,
-    //    L12788 -- is owned by the render suite.)
+    //    fixed level's floor pass completes at all -- D24, repaired: classic
+    //    meshes now carry the lNColor arrays it reads -- is owned by the
+    //    render suite.)
     // ════════════════════════════════════════════════════════════════════
     scenario("perf: fixed level 4", function () {
         LAB.freshPage();
