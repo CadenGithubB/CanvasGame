@@ -784,12 +784,21 @@ drawing and a lookup.
   water; a point is reserved the same way in every window that holds it,
   including a footprint chunk that recorded a neighbouring structure and was
   never levelled. Legacy valley pools there keep their water. Reserved
-  ground drains water (`field.sink`): a river whose steepest drop is
-  reserved ground, or a basin whose water reaches it, ends there as an
-  outflow, as at the window edge, so no lake stands above it. Such a river
-  (`drains` on its object) falls to the reserved ground's height along its
-  last stretch within its width of it, and has no water and no end cap past
-  its end. Markets, shrines, ruin pads and the spawn clearing are not
+  ground drains water (`field.sink`), so no river or lake stands above it:
+  water that reaches reserved ground lower than its surface ends there as
+  an outflow, as at the window edge. The solver tests every open point
+  within a river's half-width of its course that would lie under its water
+  (`_waterReachesSink`, the spring's `reach`); a basin drains where its
+  rising water meets reserved ground, its level at that ground's height;
+  and once smoothed, a river ends at the start of the first stretch whose
+  carved water would stand above reserved ground beside it
+  (`_waterRiverKeepOff`; points next to reserved ground are never reshaped,
+  so they keep their own height), or has no river at all when that is at
+  its spring. Such a river (`drains` on its object) falls over its last
+  `WATER_DRAIN_FALL` (36) units toward the reserved ground it drains into,
+  but never below the ground at its end or under its course, so its tail
+  never runs dry or sinks into a trench where that ground lies below a
+  generator step; past its end there is no water and no end cap. Markets, shrines, ruin pads and the spawn clearing are not
   reserved; the transition ring beyond the margin, where the levelled floor
   blends back into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
@@ -806,7 +815,8 @@ drawing and a lookup.
   triangles), then the higher of a cut bank rising to higher ground and a
   levee shelf just above the water that falls back to lower ground only after
   `WATER_LEVEE_WIDTH` (so the river never sits perched above its banks).
-  Points next to walls, caves and lakes keep their height. Carved ground takes
+  Points next to walls, caves and reserved ground keep their height, as do
+  lakes. Carved ground takes
   the colour the generator would give its new height, with the generator's
   slope shading. Water past a river end that opens into a lake joins that
   lake. The walkable floor changes with the carve, so players and enemies wade
@@ -864,27 +874,37 @@ Tests: `water_system.js` checks the solver on authored terrain (a slope, a
 notched bowl whose lake must be flat at its spill height and cover exactly
 the expected cells, a weak spring, a walled gap, a flat plateau, the bowl
 with a reserved patch on its slope, strictly below every open cell not yet
-flooded, that it fills exactly up to, and a river that drains into lower
-reserved ground beside it) and on real seeded
+flooded, that it fills exactly up to, a river that drains into lower
+reserved ground beside it, and a river as wide as carving makes it that
+drains where its width first reaches a band two rows from its course) and
+on real seeded
 windows (legacy lakes, no water on closed ground, surfaces never rising
 downstream along cells or river objects, carved channels measured on the
 rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system). Five structure windows are entered from the home
+without the system). Seven structure windows are entered from the home
 window, as a walk-in is, and compared with themselves rebuilt with the
 system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
 used to cross, the seed 3 fortress with a footprint chunk recorded by a
-neighbouring watchtower, and two watchtowers (seeds 10 and 8) beside the
-generator's terrain steps. Their levelled floors, footprints and margins
-get no new water, reshaped ground, spring or river surface; keep props,
-structure floors and structure models stand the same; water that drains
-into reserved ground never stands above it; both carving bounds bind and
-hold; and a point is reserved the same way in a window one region over.
-The suite has 16 mutation controls (including no carving, banks
-without the levee, no reserve, a reserve read from the stale
-`largeStructures` list, no margin, no drain, a basin drain level left out,
-no fall at a drained end and unbounded carving). `water_movement.js` runs the real player step and
+neighbouring watchtower, two watchtowers (seeds 10 and 8) beside the
+generator's terrain steps, the seed 22 arena and fortress sharing chunks
+(a channel cut to the bound at a terrain step) and the seed 14 arena
+(carved water wider than the solver's estimate of it). Their levelled
+floors, footprints and margins get no new water, reshaped ground, spring
+or river surface; keep props, structure floors and structure models stand
+the same; no water stands more than 0.001 above a reserved neighbour's
+ground, while water comes within two points of reserved ground and every
+drained river ends within its width, a section and a point and a half of
+it; each drained river ends at the natural ground where it ends (or at
+higher reserved ground) with water along its last 16 sections; both
+carving bounds bind and hold; and a point is reserved the same way in a
+window one region over. The suite has 19 mutation controls (including no
+carving, banks without the levee, no reserve, a reserve read from the stale
+`largeStructures` list, no margin, no basin or river drain, a drain level
+or reach left out, no keep-off, no fall or a fall below the land at a
+drained end and unbounded carving). `water_movement.js`
+runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
