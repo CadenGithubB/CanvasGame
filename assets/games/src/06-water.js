@@ -715,9 +715,10 @@ function _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK) {
 // past an end that drains into reserved ground are left unchanged, and no
 // ground rises more than WATER_MAX_FILL above or sinks more than
 // WATER_MAX_CUT below its natural height (the bounds bind only at terrain
-// steps, where the water may stand above a bank or run dry). Then river
-// water is written from the channel: level across, falling downstream.
-// Returns the points carved.
+// steps, where the water may stand above a bank or run dry; a channel point
+// that the cut bound would leave dry is not cut at all). Then river water is
+// written from the channel: level across, falling downstream. Returns the
+// points carved.
 function carveWaterRivers(mesh, field, rivers) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, H = field.height;
   // Rivers replace the solver's per-point river marks.
@@ -779,7 +780,13 @@ function carveWaterRivers(mesh, field, rivers) {
         ground = Math.max(cut, levee);
       }
       if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;
-      if (ground < H[q] - WATER_MAX_CUT) ground = H[q] - WATER_MAX_CUT;
+      if (ground < H[q] - WATER_MAX_CUT) {
+        ground = H[q] - WATER_MAX_CUT;
+        // A channel cut as deep as the bound allows that still holds no
+        // water here is not cut at all: no dry pit where the water runs
+        // below a terrain step.
+        if (d2 < hw && !(S - ground > WATER_WET_EPS)) ground = H[q];
+      }
       if (ground !== H[q]) {
         saved[q] = mesh.l0TopZ[q];
         H[q] = ground; mesh.l0TopZ[q] = ground; mesh.surfaceH[q] = ground; carved++;

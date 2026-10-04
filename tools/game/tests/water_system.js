@@ -45,9 +45,11 @@
   // Channel and banks shaped past a drained river's end (only its water left out).
   src=patch(src,'    if (bestEnd[q] > 0 && river.drains) continue;\n    var qx','    var qx','--carve-past-drains');
   src=patch(src,'    var mouth = bestEnd[q] ?','    if (bestEnd[q] > 0 && river.drains) continue;\n    var mouth = bestEnd[q] ?','--carve-past-drains');
-  // Levees raised, or channels cut, without bound.
+  // Levees raised, or channels cut, without bound; or a channel cut to the
+  // bound where it then holds no water (a dry pit).
   src=patch(src,'      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;\n','','--no-fill-cap');
-  src=patch(src,'      if (ground < H[q] - WATER_MAX_CUT) ground = H[q] - WATER_MAX_CUT;\n','','--no-cut-cap');
+  src=patch(src,'      if (ground < H[q] - WATER_MAX_CUT) {\n','      if (false) {\n','--no-cut-cap');
+  src=patch(src,'        if (d2 < hw && !(S - ground > WATER_WET_EPS)) ground = H[q];\n','','--dry-cuts');
   // A height point tested against the wall cell north-west of it instead of
   // the floor square it stands for.
   src=patch(src,'Math.floor((i % mesh.w + 0.5) * gs / cell), gy = Math.floor((((i / mesh.w) | 0) + 0.5) * gs / cell)',
@@ -342,9 +344,9 @@
       var on={water:new Uint8Array(mm.water),z:new Float32Array(mm.l0TopZ)};rec.keepOn=keepFloors();rec.modelsOn=models();
       if(fi===0){var rA=new Uint8Array(R),oA=[G.windowOriginX,G.windowOriginY],wA=mm.w;}
       G.setWaterSystemEnabled(false);var off=G.floorMesh;rec.keepOff=keepFloors();rec.modelsOff=models();
-      rec.newWet=0;rec.reshaped=0;rec.maxRaise=0;rec.atCap=0;rec.maxCut=0;rec.atCut=0;
+      rec.newWet=0;rec.reshaped=0;rec.maxRaise=0;rec.atCap=0;rec.maxCut=0;rec.atCut=0;rec.dryCut=0;
       for(var j=0;j<nn;j++){var dz=on.z[j]-off.l0TopZ[j];if(dz>rec.maxRaise)rec.maxRaise=dz;if(Math.abs(dz-G.WATER_MAX_FILL)<1e-4)rec.atCap++;
-        if(-dz>rec.maxCut)rec.maxCut=-dz;if(Math.abs(dz+G.WATER_MAX_CUT)<1e-4)rec.atCut++;
+        if(-dz>rec.maxCut)rec.maxCut=-dz;if(Math.abs(dz+G.WATER_MAX_CUT)<1e-4){rec.atCut++;if(!on.water[j])rec.dryCut++;}
         if(!keep[j])continue;if(on.water[j]&&!off.water[j])rec.newWet++;if(dz!==0)rec.reshaped++;}
       // Rivers that drain into reserved ground, measured against the natural
       // ground (the window rebuilt with the system off): how far the end lies
@@ -412,10 +414,14 @@
     check('a river that drains leaves the ground past its end as it was: no channel, bank or water there',
       pastOk&&past>50,seen.map(function(r){return brief(r,['past','pastShaped']);}));
     // Both bounds bind in the fixtures (points carved exactly to them).
-    var shapeOk=raise33<=G.WATER_MAX_FILL+1e-4&&cut33<=G.WATER_MAX_CUT+1e-4,raiseBinds=0,cutBinds=0;
-    seen.forEach(function(r){if(r.maxRaise>G.WATER_MAX_FILL+1e-4||r.maxCut>G.WATER_MAX_CUT+1e-4)shapeOk=false;raiseBinds+=r.atCap;cutBinds+=r.atCut;});
+    var shapeOk=raise33<=G.WATER_MAX_FILL+1e-4&&cut33<=G.WATER_MAX_CUT+1e-4,raiseBinds=0,cutBinds=0,dryCuts=0;
+    seen.forEach(function(r){if(r.maxRaise>G.WATER_MAX_FILL+1e-4||r.maxCut>G.WATER_MAX_CUT+1e-4)shapeOk=false;raiseBinds+=r.atCap;cutBinds+=r.atCut;dryCuts+=r.dryCut;});
     check('carving never moves ground more than WATER_MAX_FILL above or WATER_MAX_CUT below its natural height',
       shapeOk&&raiseBinds>0&&cutBinds>0,{world33:[raise33,cut33],windows:seen.map(function(r){return brief(r,['maxRaise','atCap','maxCut','atCut']);})});
+    // Where the cut bound binds, the channel holds water: a channel cut that
+    // deep and left dry would be a pit (seed 22 holds one without the rule).
+    check('a channel cut as deep as WATER_MAX_CUT allows always holds water: no dry pit',
+      dryCuts===0&&cutBinds>0,seen.map(function(r){return brief(r,['atCut','dryCut']);}));
     check('a point is reserved the same way in every window that holds it',
       pair&&pair.differ===0&&pair.reserved>100,pair);
     out('WATER_SYSTEM_RESULT PASS '+checks);

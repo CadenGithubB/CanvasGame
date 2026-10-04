@@ -825,7 +825,9 @@ drawing and a lookup.
   above or `WATER_MAX_CUT` below its natural height (1 mesh unit each:
   ordinary terrain needs up to about 1, only the steps the generator leaves
   at the edges of a structure's levelled ground ask for more, and there a
-  bank may stand below the water or a channel run dry). Rebuilding restores
+  bank may stand below the water or a channel run dry; a channel point that
+  the cut bound would leave dry is not cut at all, so no dry pit is left
+  behind). Rebuilding restores
   the saved heights and colours first, so carving never compounds.
 - **Rendering** (`13-render-water.js`, pass `water3D` after walls, the
   landmark pass and `sceneEntities`' opaque phase, before its overlay phase
@@ -900,12 +902,13 @@ drained river ends within its width, a section and a point and a half of
 it; each drained river ends at the natural ground where it ends (or at
 higher reserved ground) with water along its last 16 sections; the ground
 whose nearest river point is a drained end stays as it was; both carving
-bounds bind and hold; and a point is reserved the same way in a window one
-region over. The suite has 20 mutation controls (including no carving,
-banks without the levee, no reserve, a reserve read from the stale
-`largeStructures` list, no margin, no basin or river drain, a drain level
-or reach left out, no keep-off, no fall or a fall below the land at a
-drained end, carving past a drained end and unbounded carving). `water_movement.js`
+bounds bind and hold, and no channel cut to the bound is dry; and a point
+is reserved the same way in a window one region over. The suite has 21
+mutation controls (including no carving, banks without the levee, no
+reserve, a reserve read from the stale `largeStructures` list, no margin,
+no basin or river drain, a drain level or reach left out, no keep-off, no
+fall or a fall below the land at a drained end, carving past a drained
+end, unbounded carving and dry cuts at the bound). `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
