@@ -810,8 +810,12 @@ drawing and a lookup.
   the colour the generator would give its new height, with the generator's
   slope shading. Water past a river end that opens into a lake joins that
   lake. The walkable floor changes with the carve, so players and enemies wade
-  down into rivers. Rebuilding restores the saved heights and colours first,
-  so carving never compounds.
+  down into rivers. Carving never moves ground more than `WATER_MAX_FILL`
+  above or `WATER_MAX_CUT` below its natural height (1 mesh unit each:
+  ordinary terrain needs up to about 1, only the steps the generator leaves
+  at the edges of a structure's levelled ground ask for more, and there a
+  bank may stand below the water or a channel run dry). Rebuilding restores
+  the saved heights and colours first, so carving never compounds.
 - **Rendering** (`13-render-water.js`, pass `water3D` after walls, the
   landmark pass and `sceneEntities`' opaque phase, before its overlay phase
   and every later billboard or sprite stage: water writes no depth, so a
@@ -866,18 +870,20 @@ downstream along cells or river objects, carved channels measured on the
 rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system). Four structure windows are entered from the home
+without the system). Five structure windows are entered from the home
 window, as a walk-in is, and compared with themselves rebuilt with the
 system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
 used to cross, the seed 3 fortress with a footprint chunk recorded by a
-neighbouring watchtower, and the seed 10 watchtower. Their levelled
-floors, footprints and margins get no new water, reshaped ground, spring
-or river surface; keep props, structure floors and structure models stand
-the same; water that drains into reserved ground never stands above it;
-and a point is reserved the same way in a window one region over. The
-suite has thirteen mutation controls (including no carving, banks without
-the levee, no reserve, a reserve read from the stale `largeStructures`
-list, no margin, no drain and no fall at a drained end). `water_movement.js` runs the real player step and
+neighbouring watchtower, and two watchtowers (seeds 10 and 8) beside the
+generator's terrain steps. Their levelled floors, footprints and margins
+get no new water, reshaped ground, spring or river surface; keep props,
+structure floors and structure models stand the same; water that drains
+into reserved ground never stands above it; both carving bounds bind and
+hold; and a point is reserved the same way in a window one region over.
+The suite has fifteen mutation controls (including no carving, banks
+without the levee, no reserve, a reserve read from the stale
+`largeStructures` list, no margin, no drain, no fall at a drained end and
+unbounded carving). `water_movement.js` runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
@@ -903,7 +909,8 @@ the window moves; level (non-Endless) maps keep their legacy water for now.
 The generator levels a structure's surroundings only in chunks that record
 the structure, and a chunk records one structure, so steps of up to about 3
 height units stand at the edges of some levelled floors (older than the
-water system). Outside structure floors, carving and lakes leave generated
+water system); the carving bounds keep rivers beside them from building dams
+or trenches. Outside structure floors, carving and lakes leave generated
 objects (floor props, chests, shrines) where chunk generation put them, so
 some stand in water, a few deep under it (seeds 1, 15, 29 and 31: 6 of 69
 chests and 1 of 6 shrine pedestals fully submerged, up to 42 units deep).

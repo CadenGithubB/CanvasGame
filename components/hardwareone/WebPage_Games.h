@@ -10183,6 +10183,12 @@ var WATER_BANK_LIP = 0.25;              // mesh units a levee stands above the w
 var WATER_LEVEE_WIDTH = 20;             // world units of levee shelf beside the water (wider than the height grid)
 var WATER_LEVEE_FALL = 18;              // world units over which a levee falls back to lower ground
 var WATER_BANK_REACH = Math.max(WATER_BANK_WIDTH, WATER_LEVEE_WIDTH + WATER_LEVEE_FALL);
+// Carving never moves ground more than these (mesh units) above or below its
+// natural height. A levee holding a river above lower ground, or a channel
+// cut through higher ground, needs up to about 1 on ordinary terrain; only
+// the steps the generator leaves where a structure's levelled ground meets
+// natural terrain ask for more.
+var WATER_MAX_FILL = 1.0, WATER_MAX_CUT = 1.0;
 var WATER_RIVER_STEP = 6;               // world units between river cross-sections
 // Reserved ground: the levelled floor of every fortress, arena and watchtower
 // (05-endless-world.js, largeStructureFlatRadii's inner zone) plus this margin
@@ -10510,8 +10516,11 @@ function _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK) {
 // height grid's spacing, so the rendered ground next to the water always
 // stands above it and the river never hangs over a falling slope. Walls,
 // caves, reserved ground, lakes and points next to closed ground are left
-// unchanged. Then river water is written from the channel: level across,
-// falling downstream. Returns the points carved.
+// unchanged, and no ground rises more than WATER_MAX_FILL above or sinks
+// more than WATER_MAX_CUT below its natural height (the bounds bind only at
+// terrain steps, where the water may stand above a bank or run dry). Then
+// river water is written from the channel: level across, falling
+// downstream. Returns the points carved.
 function carveWaterRivers(mesh, field, rivers) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, H = field.height;
   // Rivers replace the solver's per-point river marks.
@@ -10568,6 +10577,8 @@ function carveWaterRivers(mesh, field, rivers) {
         else { var f0 = Math.min(1, (e - WATER_LEVEE_WIDTH) / WATER_LEVEE_FALL); levee = lip + (Math.min(T, lip) - lip) * f0 * f0 * (3 - 2 * f0); }
         ground = Math.max(cut, levee);
       }
+      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;
+      if (ground < H[q] - WATER_MAX_CUT) ground = H[q] - WATER_MAX_CUT;
       if (ground !== H[q]) {
         saved[q] = mesh.l0TopZ[q];
         H[q] = ground; mesh.l0TopZ[q] = ground; mesh.surfaceH[q] = ground; carved++;

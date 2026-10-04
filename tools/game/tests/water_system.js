@@ -31,6 +31,9 @@
   src=patch(src,'var rx0 = Math.floor(windowCX / span) - 1','var rx0 = Math.floor(windowCX / span)','--reserve-window-regions');
   // A river that drains into reserved ground keeps its surface to the end.
   src=patch(src,'    if (dz < pts[di][2]) pts[di][2] = dz;\n','','--no-drain-fall');
+  // Levees raised, or channels cut, without bound.
+  src=patch(src,'      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;\n','','--no-fill-cap');
+  src=patch(src,'      if (ground < H[q] - WATER_MAX_CUT) ground = H[q] - WATER_MAX_CUT;\n','','--no-cut-cap');
   // A height point tested against the wall cell north-west of it instead of
   // the floor square it stands for.
   src=patch(src,'Math.floor((i % mesh.w + 0.5) * gs / cell), gy = Math.floor((((i / mesh.w) | 0) + 0.5) * gs / cell)',
@@ -236,7 +239,7 @@
       if(m.water[i4]){sampled++;if(!wa||Math.abs(wa.depth-(m.waterSurface[i4]-G._waterWindowBed(m,i4)))>1e-5||Math.abs(wa.surfaceZ-(m.waterSurface[i4]*40+60))>1e-4||!(wa.depth>0))sampleOk=false;}
       else if(wa)sampleOk=false;}
     check('waterAt reports depth and surface height from the solved cell, and null on dry ground',sampleOk&&sampled>20,{sampled:sampled});
-    var shaped=0;for(var i6=0;i6<n;i6++)if(m.l0TopZ[i6]!==reference.z[i6])shaped++;
+    var shaped=0,raise33=0,cut33=0;for(var i6=0;i6<n;i6++){if(m.l0TopZ[i6]!==reference.z[i6])shaped++;raise33=Math.max(raise33,m.l0TopZ[i6]-reference.z[i6]);cut33=Math.max(cut33,reference.z[i6]-m.l0TopZ[i6]);}
     G.setWaterSystemEnabled(false);var off=G.floorMesh,restored=off!==m&&off.l0TopZ.length===n;
     for(var i5=0;i5<n&&restored;i5++)if(off.water[i5]!==reference.water[i5]||off.l0TopZ[i5]!==reference.z[i5]||off.l0Color[i5]!==reference.colour[i5])restored=false;
     check('switching the system off gives back the ground, colours and water of a world generated without it',
@@ -267,8 +270,10 @@
       return (G.structureModels||[]).map(function(md){var sum=0;md.faces.forEach(function(f){sum+=f.minZ*1.25+f.maxZ;});return [md.key,md.floorZ,md.faces.length,sum];});}
     // seed, window centre, the structure the window is for (seed 3: a chunk of
     // the fortress's footprint recorded a neighbouring watchtower and was never
-    // levelled)
-    var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5']],seen=[];
+    // levelled; seeds 10 and 8: rivers beside the steps at the edges of a
+    // watchtower's levelled ground)
+    var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5'],
+      [8,-15,102,'watchtower','-5,34']],seen=[];
     var pair=null;
     fixtures.forEach(function(fx,fi){
       var home=enter(fx[0],fx[1],fx[2]),mm=G.floorMesh,nn=mm.w*mm.h,gs=mm.gridSize,R=mm.waterReserve,rec={fx:fx.join(' '),home:home,stats:G.getWaterStats()};
@@ -293,8 +298,9 @@
       var on={water:new Uint8Array(mm.water),z:new Float32Array(mm.l0TopZ)};rec.keepOn=keepFloors();rec.modelsOn=models();
       if(fi===0){var rA=new Uint8Array(R),oA=[G.windowOriginX,G.windowOriginY],wA=mm.w;}
       G.setWaterSystemEnabled(false);var off=G.floorMesh;rec.keepOff=keepFloors();rec.modelsOff=models();
-      rec.newWet=0;rec.reshaped=0;
-      for(var j=0;j<nn;j++){var dz=on.z[j]-off.l0TopZ[j];
+      rec.newWet=0;rec.reshaped=0;rec.maxRaise=0;rec.atCap=0;rec.maxCut=0;rec.atCut=0;
+      for(var j=0;j<nn;j++){var dz=on.z[j]-off.l0TopZ[j];if(dz>rec.maxRaise)rec.maxRaise=dz;if(Math.abs(dz-G.WATER_MAX_FILL)<1e-4)rec.atCap++;
+        if(-dz>rec.maxCut)rec.maxCut=-dz;if(Math.abs(dz+G.WATER_MAX_CUT)<1e-4)rec.atCut++;
         if(!keep[j])continue;if(on.water[j]&&!off.water[j])rec.newWet++;if(dz!==0)rec.reshaped++;}
       G.setWaterSystemEnabled(true);
       if(fi===0){
@@ -321,6 +327,11 @@
     // The fixtures hold rivers that run into reserved ground (drained >= 2).
     check('water that reaches reserved ground drains into it and never stands above it',
       aboveOk&&drained>=2,seen.map(function(r){return brief(r,['besideReserve','drainedRivers','above']);}));
+    // Both bounds bind in the fixtures (points carved exactly to them).
+    var shapeOk=raise33<=G.WATER_MAX_FILL+1e-4&&cut33<=G.WATER_MAX_CUT+1e-4,raiseBinds=0,cutBinds=0;
+    seen.forEach(function(r){if(r.maxRaise>G.WATER_MAX_FILL+1e-4||r.maxCut>G.WATER_MAX_CUT+1e-4)shapeOk=false;raiseBinds+=r.atCap;cutBinds+=r.atCut;});
+    check('carving never moves ground more than WATER_MAX_FILL above or WATER_MAX_CUT below its natural height',
+      shapeOk&&raiseBinds>0&&cutBinds>0,{world33:[raise33,cut33],windows:seen.map(function(r){return brief(r,['maxRaise','atCap','maxCut','atCut']);})});
     check('a point is reserved the same way in every window that holds it',
       pair&&pair.differ===0&&pair.reserved>100,pair);
     out('WATER_SYSTEM_RESULT PASS '+checks);
