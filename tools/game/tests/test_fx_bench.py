@@ -21,8 +21,8 @@ LAB_FILES = (REPO_ROOT / "tools/webui/game_lab.py", REPO_ROOT / "tools/webui/har
 # camera drift, menus and resizes mid-run, a second injection, restoration
 # after a failed run, a world reset and a chunk crossing mid-run, stage names
 # and bodies, the source scan, leaks and errors; effect family modes in the
-# report (C33, 34).
-PASS_COUNT = 34
+# report (C33, 34) and in each run (C34, 35).
+PASS_COUNT = 35
 SENTINEL = f"FX_BENCH_RESULT PASS {PASS_COUNT}"
 
 RESTORED = "every global the bench changes is restored after a completed run, and the live pool sat out"
@@ -49,6 +49,7 @@ DRIFT = "a run whose camera turned while measuring is reported invalid, with the
 GUARDS = "a menu opened or the canvas resized during a run ends it with a message and restores the page"
 REINJECT = "injecting the bench again while a run is active keeps the running copy, which still refuses a second run and aborts"
 FAMILIES = "the report's env.game records each effect family's mode as the run starts, which a console override sets apart from every switch"
+RUN_FAMILIES = "each run records the mode it drew each effect family in, so a console override shows in the runs of the other mode, whose switches are the same"
 # Each mutation must fail its named check; setup failures and crashes do not count.
 MUTATIONS = {
     "--no-restore": RESTORED,
@@ -102,6 +103,8 @@ MUTATIONS = {
     "--replace-active": REINJECT,
     "--flush-stage-drift": STAGES,
     "--no-family-modes": FAMILIES,
+    "--no-run-families": RUN_FAMILIES,
+    "--run-families-before-flip": RUN_FAMILIES,
 }
 # Checks a mutation must fail as well as its named one.
 ALSO_FAILS = {
@@ -113,6 +116,9 @@ ALSO_FAILS = {
     # A per-run quantile error moves the A/B medians built on it.
     "--p95-is-max": [AB],
     "--p50-is-p60": [AB],
+    # The smoke pass's runs must hold the modes the game drew in them too.
+    "--no-run-families": [REPORT],
+    "--run-families-before-flip": [REPORT],
 }
 # The failure detail must also show the intended cause.
 CAUSES = {
@@ -179,6 +185,9 @@ CAUSES = {
     "--flush-stage-drift": r'"drift":\{"coneFX3D":\{"loop":\["drawConeEffects3D\(\)","drawFlameStream3D\(\)"\],"bench":\["drawConeEffects3D\(\)"\]',
     # The report holds no family modes; its switches alone match the override run's.
     "--no-family-modes": r'"families":"MISSING","toggles":"\{',
+    "--no-run-families": r'"wrong":\[\{"leg":"plain","run":\{"mode":"new","recorded":"MISSING",',
+    # The plain Legacy run records the New modes the run before it left.
+    "--run-families-before-flip": r'"wrong":\[\{"leg":"plain","run":\{"mode":"legacy","recorded":\{"ambient":"new",',
 }
 
 

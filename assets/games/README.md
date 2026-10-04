@@ -1297,14 +1297,20 @@ It is not in the manifest and never ships in the header. `dev.py serve` serves
 it at `/fx-bench.js`, to be injected into a separate, visible, foreground test
 tab. Its header comment gives the procedure. Its report's `env.game` records
 the effect switches, the render preset and switches (`render`) and each effect
-family's mode (`effectFamilies`), as the cave browser profile's
-`canonicalInputs` does: models and textures change what particles are
-depth-tested against and the frame's work, so runs taken under different
+family's mode as the bench starts (`effectFamilies`), as the cave browser
+profile's `canonicalInputs` does: models and textures change what particles
+are depth-tested against and the frame's work, so runs taken under different
 switches can be told apart. The profile's `renderFeatures` hold the effect
 switches too (they are registered as render features). A console
 `setEffectFamilyMode` override sets a family's mode apart from every switch,
-and the bench's A/B flips only Unified effects, so only `effectFamilies` tells
-a run under an override from one without it.
+and the bench's A/B flips only Unified effects, so the override holds its
+family in one mode through the other mode's runs too. `env.game` reads an
+override to the mode Unified effects already gives as no override: with
+Unified effects on, torch glow overridden to New reads New either way, yet
+every Legacy run draws it New. Each run therefore records the mode it drew
+each family in (its own `effectFamilies`, read once the A/B has set Unified
+effects), and only those records tell such a run from one without the
+override.
 
 ### Adding an effect
 

@@ -34,7 +34,9 @@
 // "2 s" and "30 s" (C28, C29); a camera that moves mid-run left valid (C30);
 // a menu opened or the canvas resized mid-run left measuring (C31); a second
 // injection that orphans the running copy (C32); reports that cannot tell
-// runs under a console effect family override from runs without it (C33).
+// runs under a console effect family override from runs without it (C33),
+// or that record the modes the bench started with but not the ones each run
+// drew, so a Legacy run with torch glow held New reads as a plain one (C34).
 // Oracles: the global values captured here before each run; the spec's
 // target definitions restated here (pinned Particles settings, governors,
 // flush stage sets, rates); stage costs injected here on the virtual clock
@@ -62,6 +64,7 @@
 //   --gov-2s-frames --hold-frames --no-hold-buffer-check
 //   --stress-count-smoke-exempt --drift-check-off --no-menu-guard
 //   --no-size-guard --replace-active --flush-stage-drift --no-family-modes
+//   --no-run-families --run-families-before-flip
 (0, eval)(slurp('tools/webui/harness/_game_env.js'));
 LAB.init(__out, slurp, __engine, __argv);
 (function () {
@@ -142,6 +145,12 @@ LAB.init(__out, slurp, __engine, __argv);
   benchSource = mutate(benchSource, '--median-even-upper', '(a[m - 1] + a[m]) / 2', 'a[m]');
   benchSource = mutate(benchSource, '--no-abba', 'var modes = r & 1 ? o.modes.slice().reverse() : o.modes;', 'var modes = o.modes;');
   benchSource = mutate(benchSource, '--no-family-modes', '        effectFamilies: effectFamilies()}', '        }');
+  benchSource = mutate(benchSource, '--no-run-families', '      effectFamilies: job.families,\n', '');
+  // The read moved before the A/B sets Unified effects: each run records the
+  // mode the run before it (or the page) left.
+  benchSource = mutate(benchSource, '--run-families-before-flip', '    job.families = effectFamilies();\n', '');
+  benchSource = mutate(benchSource, '--run-families-before-flip', "    setToggle(job, 'fxUnified', !legacy);\n",
+    "    job.families = effectFamilies();\n    setToggle(job, 'fxUnified', !legacy);\n");
   benchSource = mutate(benchSource, '--gov-2s-frames', "if (cell.governor === 'unpinned' && !job.gov.atTwoSeconds && now - job.govReset >= 2000)",
     "if (cell.governor === 'unpinned' && !job.gov.atTwoSeconds && job.m === 120)");
   benchSource = mutate(benchSource, '--hold-frames', 'if (cell.holdMs ? now - job.measureAt >= cell.holdMs : job.m >= cell.frames)', 'if (job.m >= cell.frames)');
@@ -176,6 +185,7 @@ LAB.init(__out, slurp, __engine, __argv);
     var S = G.fxState, W = G.effectWeatherState(), F = G._fxStats, GR = G._fxRender;
     stepLog.push({frame: cur ? cur.k : 0, base: base, index: st.index, phase: st.phase, mode: st.mode, target: st.target, repeat: st.repeat,
       warm: st.warm, unified: G.effectToggleValue('fxUnified'), ang: G.cam.ang, pitch: G.cam.pitch, camX: G.cam.x, camY: G.cam.y,
+      families: JSON.stringify(familyModes()),
       motes: G.ambientParticles.length, live: S.count, weatherLive: S.classLive[0], weatherKind: W ? W.kind : 'none', pinned: S.pinned,
       fx: {considered: F.considered, drawn: F.drawn, thinned: F.thinned, offscreen: F.offscreen, subpixel: F.subpixel, glowDraws: F.glowDraws,
         maskPx: F.maskPx, torchDrawn: F.torchDrawn},
@@ -338,11 +348,20 @@ LAB.init(__out, slurp, __engine, __argv);
     return res;
   }
   // Each migrated effect family's mode, read from the game here when a run
-  // starts: what the report's env.game.effectFamilies must hold.
+  // starts and at each of its frames (preStep): what the report's
+  // env.game.effectFamilies and each run's effectFamilies must hold.
   function familyModes() {
     var m = {};
     Object.keys(G.EFFECT_FAMILY_MIGRATED).forEach(function (f) { m[f] = G.effectFamilyMode(f); });
     return m;
+  }
+  // The family modes the game gave at a run's measured frames (its pre-step
+  // entries, as JSON): one value, or every value seen when they varied.
+  function drawnFamilies(R) {
+    var seen = {};
+    (R ? R.measured : []).forEach(function (s) { seen[s.families] = 1; });
+    var k = Object.keys(seen);
+    return k.length === 1 ? k[0] : k.length ? 'VARIED ' + k.join(' | ') : 'NONE';
   }
   function allRuns(report) {
     var runs = [];
@@ -416,7 +435,7 @@ LAB.init(__out, slurp, __engine, __argv);
     '--no-suppress-dump', '--ab-single-mode', '--bench-random', '--no-face-torch', '--stage-typo', '--no-raster-reset', '--no-raster-restore',
     '--weather-on-live', '--stats-poll', '--workload-once', '--frame-total-wrong-slot', '--no-scratch-release', '--rain-never-forced',
     '--no-weather-toggle', '--no-stress-fill', '--stress-no-scale', '--legacy-stress-P', '--stress-count-smoke-exempt', '--no-flame-refresh',
-    '--drift-check-off'];
+    '--drift-check-off', '--no-run-families', '--run-families-before-flip'];
   var OPTS = {target: 'all', frames: 3, warmup: 2, repeats: 1, sizes: [[400, 270]], particles: [60], stress: 300, flushFrames: 2, flushBatches: 1,
     allowHidden: true, smoke: true};
   var smokeRan = false, smokeOk = false, report = null, runs = [], smokeSteps = [], smokePost = [], smokeByRun = [], measured = {}, familiesAtStart = null;
@@ -491,6 +510,8 @@ LAB.init(__out, slurp, __engine, __argv);
         // Seed 424242 is the protocol seed; T8 has none.
         if (r.scene.seed !== 424242 || r.scene.protocolSeed !== (r.target === 'T8' ? null : true)) p.push('seed');
         if ((r.target === 'T10') !== (r.flushed === null)) p.push('flushed presence');
+        // The modes the game drew each effect family in while the run measured.
+        if (JSON.stringify(r.effectFamilies) !== drawnFamilies(smokeByRun[i])) p.push('effectFamilies');
         if (p.length) runProblems.push({i: i, target: r.target, mode: r.mode, problems: p});
       });
       var abProblems = [];
@@ -926,26 +947,45 @@ LAB.init(__out, slurp, __engine, __argv);
       {kept: kept, warned: warned, refusedSecondRun: refused, aborted: aborted, replacedWhenIdle: replaced});
   });
 
-  // ── C33: effect family modes in the report ───────────────────────────────
+  // ── C33, C34: effect family modes in the report ─────────────────────────
   // A console override (setEffectFamilyMode, never persisted) sets one
   // family's mode apart from every switch, and the bench's A/B flips only
-  // Unified effects, so a run under an override draws that family in its
-  // other mode in every New run. env.game.effectFamilies records each
+  // Unified effects, so the override holds its family in one mode through
+  // the other mode's runs too. C33: env.game.effectFamilies records each
   // migrated family's mode as the run starts, as the cave profile's
   // canonicalInputs does. Oracle: the override set here (torch glow Legacy)
   // and the game's effectFamilyMode() read here before each run. Control:
   // the same run without the override, whose effect switches and render
   // record are the same, so only effectFamilies tells the two apart.
-  if (needed('effect family modes', ['--no-family-modes'])) run('effect family modes', function () {
-    function familyRun(override) {
+  // C34: that start record reads an override to the mode Unified effects
+  // already gives as no override (torch glow New with Unified effects on,
+  // Legacy with it off), yet its Legacy (New) run draws torch glow New
+  // (Legacy). Each run records the modes it drew. Oracles: the modes restated
+  // here for each run of five legs (no override, a Legacy override and a New
+  // override with Unified effects on; no override and a Legacy override with
+  // it off), and the game's effectFamilyMode() read here at every measured
+  // frame of each run. Controls: the legs without an override, whose
+  // switches and render record equal their override legs'.
+  if (needed('effect family modes', ['--no-family-modes', '--no-run-families', '--run-families-before-flip'])) run('effect family modes', function () {
+    function familyRun(override, unified) {
+      if (unified === false) G.setEffectToggle('fxUnified', false);
       if (override) G.setEffectFamilyMode('torchGlow', override);
       try {
+        stepLog = [];
         var want = familyModes(), res = startRun({target: 'T2', frames: 3, warmup: 2, repeats: 1, sizes: [[400, 270]], allowHidden: true, smoke: true});
         pump(200, function () { return res.report || res.error; });
-        var g = res.report && res.report.env && res.report.env.game;
+        var g = res.report && res.report.env && res.report.env.game, R = byRun(stepLog);
         return {want: want, error: res.error ? res.error.message : res.report ? null : 'no report', families: !g ? null : g.effectFamilies === undefined ? 'MISSING' : g.effectFamilies,
-          toggles: g ? JSON.stringify(g.toggles) : null, render: g ? JSON.stringify(g.render) : null};
-      } finally { if (override) G.setEffectFamilyMode('torchGlow', null); }
+          toggles: g ? JSON.stringify(g.toggles) : null, render: g ? JSON.stringify(g.render) : null,
+          runs: allRuns(res.report).map(function (r, i) {
+            var drawn = drawnFamilies(R[i]);
+            return {mode: r.mode, recorded: r.effectFamilies === undefined ? 'MISSING' : r.effectFamilies, drawn: /^[{]/.test(drawn) ? JSON.parse(drawn) : drawn};
+          })};
+      } finally {
+        stepLog = [];
+        if (override) G.setEffectFamilyMode('torchGlow', null);
+        if (unified === false) G.setEffectToggle('fxUnified', true);
+      }
     }
     var plain = familyRun(null), over = familyRun('legacy'), after = G.effectFamilyMode('torchGlow');
     check('the report\'s env.game records each effect family\'s mode as the run starts, which a console override sets apart from every switch',
@@ -953,6 +993,32 @@ LAB.init(__out, slurp, __engine, __argv);
       JSON.stringify(plain.families) === JSON.stringify(plain.want) && JSON.stringify(over.families) === JSON.stringify(over.want) &&
       plain.toggles !== null && plain.toggles === over.toggles && plain.render !== null && plain.render === over.render && after === 'new',
       {plain: plain, override: over, torchGlowAfter: after});
+
+    var legs = {plain: plain, overLegacy: over, overNew: familyRun('new'), plainOff: familyRun(null, false), overOffLegacy: familyRun('legacy', false)};
+    var unifiedAfter = G.effectToggleValue('fxUnified'), torchGlowAfter = G.effectFamilyMode('torchGlow'), families = Object.keys(G.EFFECT_FAMILY_MIGRATED);
+    // Restated: every family in the run's own mode, torch glow in the override's.
+    function modes(mode, torchGlow) { var m = {}; families.forEach(function (f) { m[f] = f === 'torchGlow' && torchGlow ? torchGlow : mode; }); return JSON.stringify(m); }
+    var WANT = {plain: {'new': modes('new'), legacy: modes('legacy')}, overLegacy: {'new': modes('new', 'legacy'), legacy: modes('legacy')},
+      overNew: {'new': modes('new'), legacy: modes('legacy', 'new')}, plainOff: {'new': modes('new'), legacy: modes('legacy')},
+      overOffLegacy: {'new': modes('new', 'legacy'), legacy: modes('legacy')}};
+    var wrong = [];
+    Object.keys(legs).forEach(function (name) {
+      var L = legs[name], seen = {};
+      if (L.error || L.runs.length !== 2) { wrong.push({leg: name, error: L.error, runs: L.runs.length}); return; }
+      L.runs.forEach(function (r) {
+        seen[r.mode] = 1;
+        if (JSON.stringify(r.drawn) !== WANT[name][r.mode] || JSON.stringify(r.recorded) !== WANT[name][r.mode]) wrong.push({leg: name, run: r});
+      });
+      if (!seen['new'] || !seen.legacy) wrong.push({leg: name, modes: Object.keys(seen)});
+    });
+    function recordOf(L, mode) { var r = L.runs.filter(function (x) { return x.mode === mode; })[0]; return r ? JSON.stringify(r.recorded) : null; }
+    var sameSwitches = legs.overNew.toggles === plain.toggles && legs.overNew.render === plain.render && legs.plainOff.toggles !== null &&
+      legs.overOffLegacy.toggles === legs.plainOff.toggles && legs.overOffLegacy.render === legs.plainOff.render && legs.plainOff.toggles !== plain.toggles;
+    var apart = recordOf(legs.overNew, 'legacy') !== recordOf(plain, 'legacy') && recordOf(legs.overOffLegacy, 'new') !== recordOf(legs.plainOff, 'new');
+    check('each run records the mode it drew each effect family in, so a console override shows in the runs of the other mode, whose switches are the same',
+      families.length >= 6 && !wrong.length && sameSwitches && apart && unifiedAfter === true && torchGlowAfter === 'new',
+      {wrong: wrong.slice(0, 4), sameSwitches: sameSwitches, apart: apart, unifiedAfter: unifiedAfter, torchGlowAfter: torchGlowAfter,
+        startRecords: {overNew: legs.overNew.families, plain: plain.families, overOffLegacy: legs.overOffLegacy.families, plainOff: legs.plainOff.families}});
   });
 
   // ── C13: restoration after a failed run ──────────────────────────────────

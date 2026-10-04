@@ -247,10 +247,12 @@ var fxBench = (function (G, prev) {
         // passes change what particles are depth-tested against, so reports
         // taken under different switches must be told apart.
         render: typeof G.renderFeatureSnapshot === 'function' ? {preset: G.renderPresetName(), features: G.renderFeatureSnapshot()} : null,
-        // Each migrated effect family's mode, as the cave profile's
-        // canonicalInputs records it: a console setEffectFamilyMode override
-        // sets a family apart from every switch, and the A/B flips only
-        // Unified effects, so it holds through every New run.
+        // Each migrated effect family's mode as the bench starts, as the cave
+        // profile's canonicalInputs records it: a console setEffectFamilyMode
+        // override sets a family apart from every switch. An override to the
+        // mode Unified effects already gives reads here as no override, yet
+        // the A/B flips only Unified effects, so it holds through the other
+        // mode's runs: each run records the modes it drew (setupRun).
         effectFamilies: effectFamilies()}
     };
   }
@@ -399,6 +401,11 @@ var fxBench = (function (G, prev) {
     // Legacy stress reference is that many legacy motes.
     touchGlobal(job, 'AMBIENT_MAX'); G.AMBIENT_MAX = T.stress && legacy ? o.stress : cell.P;
     setToggle(job, 'fxUnified', !legacy);
+    // The mode this run draws each migrated effect family in, read once the
+    // A/B has set Unified effects: a console override holds its family in
+    // one mode through the other mode's runs too (torch glow New in a Legacy
+    // run), which neither the switches nor env.game record.
+    job.families = effectFamilies();
     if (T.weather === 'rain' && G.effectToggleValue('fxWeather') === 'off') setToggle(job, 'fxWeather', 'auto');
     if (T.combat && G.effectToggleValue('fxDebris') !== true) setToggle(job, 'fxDebris', true);
     if (o.timeOfDay !== null) { touchGlobal(job, 'dayTime'); touchGlobal(job, 'daySpeed'); G.dayTime = o.timeOfDay; G.daySpeed = 0; }
@@ -563,6 +570,7 @@ var fxBench = (function (G, prev) {
     if (Math.hypot(drift.x, drift.y) > 1 || Math.abs(drift.ang) > 1e-3) { job.scene.valid = false; job.scene.notes.push('the camera moved during the run (leave the input idle)'); }
     if (cell.governor === 'unpinned' && !job.gov.atTwoSeconds) job.scene.notes.push('the run ended less than 2000 ms after its governor reset: no atTwoSeconds snapshot');
     var run = {target: cell.target, size: cell.size.slice(), P: cell.P, mode: cell.mode, governor: cell.governor, repeat: cell.repeat,
+      effectFamilies: job.families,
       frames: {requested: cell.holdMs ? null : cell.frames, measured: n, warmup: job.o.warmup, lost: job.lost, holdMs: cell.holdMs || null,
         measuredMs: r4(now - job.measureAt)},
       stages: stages, sums: sums,
