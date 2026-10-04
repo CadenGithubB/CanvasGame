@@ -796,12 +796,17 @@ drawing and a lookup.
   so they keep their own height), or has no river at all when that is at
   its spring. Such a river (`drains` on its object) falls over its last
   `WATER_DRAIN_FALL` (36) units toward the reserved ground it drains into,
-  but never below the ground at its end or under its course, so its tail
-  never runs dry or sinks into a trench where that ground lies below a
-  generator step; past its end there is no channel, bank, water or end
-  cap. Markets, shrines, ruin pads and the spawn clearing are not
-  reserved; the transition ring beyond the margin, where the levelled floor
-  blends back into natural terrain, stays open ground.
+  but never below the ground at its end or under its course, so the fall
+  never leaves its tail dry or sunk below the land where that ground lies
+  below a generator step; past its end there is no channel, bank, water or
+  end cap. Where a drained river's own course drops over such a step just
+  before its end, smoothing its surface across the step can still leave its
+  water up to 0.8 below the upper ground, in a channel that holds it (7 of
+  370 drained rivers in a 1,045-window survey, a river counted once per
+  window; no undrained river there sits more than 0.1 below the land).
+  Markets, shrines, ruin pads and the spawn clearing are not reserved; the
+  transition ring beyond the margin, where the levelled floor blends back
+  into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
   player units and flow. Rendering, movement and enemies all read it.
 - **Rivers are carved into the land** (`buildWaterRivers`,
