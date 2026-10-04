@@ -1066,7 +1066,10 @@ whole floor at steep pitch on Level 4. Hosts that load
 `13-render-floors-ceilings.js` without `01-config-state.js` must seed
 `_drawFloorCellBuf` with a typed array; the pass replaces it when too small.
 `tools/game/tests/floor_cell_buffer.js` compares real Level 4 frames with an
-unconstrained reference copy of the pass and has an opt-in `--sweep`.
+unconstrained reference copy of the pass, walks in from the map corner (a
+larger scan rectangle at every stop) to check that the 40,000-cell start
+buffer is replaced once rather than at every larger rectangle, and has an
+opt-in `--sweep`.
 
 A classic level views at least 0.8 of its map's shorter side:
 `classicLevelViewDist()` returns `max(settings.viewDist, 0.8 * min(worldW,

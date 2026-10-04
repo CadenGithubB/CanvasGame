@@ -18,11 +18,16 @@
 // Fixtures: real Level 4 poses (seed 9127+4, the goal check's resetLevel),
 // each wanting more than 40,000 cells; the first is the level's first 3D
 // frame. Scene depth after the real floor pass, not browser pixels or timing.
+// Reuse: frames that need no larger rectangle allocate nothing, and a walk in
+// from the map corner (a larger scan rectangle at every stop, the pass's own
+// floorTotal counter) replaces the game's 40,000-cell start buffer once.
 // Checks print PASS/FAIL and keep going, so a mutation names what it broke.
 // Mutations (evaluated copies only; each anchor must match exactly once):
 //   --fixed-capacity       no growth: the fixed 40,000-cell buffer of 01
 //   --stale-local          the pass reads the buffer before growing it, so the
 //                          frame that grows it still writes the old one
+//   --exact-size           growth to this frame's scan rectangle only, so
+//                          every larger rectangle allocates again
 //   --realloc-every-frame  the pass allocates a new buffer on every frame
 // --sweep (opt-in, slow) adds a Level 4 pose sweep at two seeds: 25 positions
 // x 16 headings x pitch 0/0.6/1.2/1.4 x base/dash FOV, quads vs reference.
@@ -51,6 +56,7 @@
     source = swap(source, '--fixed-capacity', GROW_BLOCK, '');
     source = swap(source, '--stale-local', '  var _scanCells = ', READ + '  var _scanCells = ');
     source = swap(source, '--stale-local', GROW_BLOCK + READ, GROW_BLOCK);
+    source = swap(source, '--exact-size', GROW_BLOCK, GROW + '    _drawFloorCellBuf = new Float32Array(3 * _scanCells);\n  }\n');
     return swap(source, '--realloc-every-frame', GROW, '  if (true) {\n');
   });
   // The reference pass: drawLayersFloor3D from the unmutated source, renamed.
@@ -239,7 +245,47 @@
     {reusedFrames: reuse.filter(Boolean).length + '/' + reuse.length, keptOnSmaller: keptOnSmaller, keptOnReturn: keptOnReturn,
       capacity: grown.length / 3, level2ViewDist: smallerView});
 
+  // ── Walk in from the corner: one replacement, not one per larger rectangle ──
+  // The frames above revisit fixture positions, whose scan rectangles the
+  // fixtures already grew to. A player walking in from the map corner meets a
+  // larger scan rectangle at every step (the map edge clips less of the view).
+  // From the game's own start buffer (01-config-state.js's 40,000 cells, what
+  // a fresh page has), at a fixed view distance, the buffer must be replaced
+  // once and never be smaller than the rectangle scanned, not regrown to each
+  // larger rectangle. The rectangle is the pass's own floorTotal counter (one
+  // per scanned cell), which no buffer decision changes.
+  startClassic(4, 9127 + 4);
+  G._drawFloorCellBuf = new Float32Array(world.startCapacity * 3);
+  // (60,90) to (2100,1770) in 12 even steps; every stop is open ground.
+  var WALK_STOPS = 12, walk = [];
+  for (var ws = 0; ws <= WALK_STOPS; ws++) {
+    var wx = 60 + 170 * ws, wy = 90 + 140 * ws;
+    var prevBuf = G._drawFloorCellBuf, prevPasses = passes, prevLogged = H.errors.length, prevPt = ptTotals();
+    view({x: wx, y: wy, ang: 0, pitch: 0.6, dash: 0}); G.renderFrame();
+    walk.push({pos: [wx, wy], scanned: G.__caveStats.floorTotal, capacity: G._drawFloorCellBuf.length / 3,
+      replaced: G._drawFloorCellBuf !== prevBuf, viewDist: G.viewDist, floorPasses: passes - prevPasses,
+      inWall: G.isInGridWall(wx, wy, 8), crashes: ptDelta(prevPt), errors: H.errors.slice(prevLogged, prevLogged + 2)});
+  }
+  var walkGrows = walk.filter(function (w, i) { return i > 0 && w.scanned > walk[i - 1].scanned; }).length;
+  var walkReplaced = walk.filter(function (w) { return w.replaced; }).length;
+  function walkRow(w) { return [w.pos.join(','), 'scanned ' + w.scanned, 'capacity ' + w.capacity, w.replaced ? 'replaced' : 'kept']; }
+  check('setup: walking in from the map corner (13 stops, fixed 2304 u view, fresh 40,000-cell buffer), the first stop scans ' +
+    'within 40,000 cells and every later stop a larger rectangle, each frame running the floor pass once, outside walls, ' +
+    'with no render crash or console error',
+    world.startCapacity === CAP && walk[0].scanned <= CAP && walkGrows === WALK_STOPS && walk.every(function (w) {
+      return w.viewDist === world.viewDist && w.floorPasses === 1 && !w.inWall && !w.crashes && !w.errors.length;
+    }), {startCapacity: world.startCapacity, grows: walkGrows, walk: walk.map(function (w) {
+      return {pos: w.pos, scanned: w.scanned, viewDist: w.viewDist, floorPasses: w.floorPasses, inWall: w.inWall, crashes: w.crashes,
+        errors: w.errors};
+    })});
+  check('walking in from the map corner at a fixed view distance replaces the 40,000-cell start buffer once, never smaller ' +
+    'than the rectangle scanned',
+    walkReplaced === 1 && walk.every(function (w) { return w.capacity >= w.scanned; }),
+    {replacements: walkReplaced, walk: walk.map(walkRow)});
+
   out('NOTE ' + JSON.stringify({startCapacity: world.startCapacity, capacity: grown.length / 3,
+    walk: {stops: walk.length, replacements: walkReplaced, scanned: [walk[0].scanned, walk[walk.length - 1].scanned],
+      capacity: walk[walk.length - 1].capacity},
     fixtures: results.map(function (r) {
       return [r.name, 'demand ' + r.demand, 'quads ' + r.shipQuads + '/' + r.refQuads, 'floorless ' + r.floorlessShipped + '/' + r.floorlessRef];
     })}));

@@ -18,12 +18,19 @@ floor quads in order, and its scene depth from the same input; and an analytic
 expectation: 80 degrees down at single-layer ground under open sky, with the
 horizon above the canvas, every pixel is ground. Four fixtures each want more
 than 40,000 cells; the first is the level's first 3D frame. Scene depth, not
-browser pixels or timing.
+browser pixels or timing. Reuse: frames that need no larger scan rectangle
+allocate nothing, and a walk in from the map corner at the fixed 2304 u view
+(13 open-ground stops, each scanning a larger rectangle by the pass's own
+floorTotal counter, the first within 40,000 cells) replaces the game's
+40,000-cell start buffer exactly once and never leaves it smaller than the
+rectangle scanned.
 
 Mutation controls (evaluated copies only): --fixed-capacity restores the fixed
 40,000-cell buffer, --stale-local reads the buffer before growing it,
---realloc-every-frame allocates a buffer every frame. Each must fail exactly
-its named checks while every setup check still passes.
+--exact-size grows only to the current frame's scan rectangle (12 replacements
+on the walk instead of 1), --realloc-every-frame allocates a buffer every
+frame. Each must fail exactly its named checks while every setup check still
+passes.
 
 Opt-in (not run by this suite; slow, about 4 minutes on jsc): `--sweep` adds
 6,400 Level 4 poses at two seeds (25 positions x 16 headings x pitch
@@ -37,7 +44,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("floor_cell_buffer.js")
-EXPECTED = 9
+EXPECTED = 11
 SETUP = (
     "PASS real manifest loads, with a reference copy of the floor pass, and no console errors",
     "PASS setup: the classic Expanse (Level 4) has a 2304 u view over a 360x240 layered mesh",
@@ -45,17 +52,25 @@ SETUP = (
     "PASS setup: every fixture frame runs the floor pass once, outside walls, with no render crash or console error",
     "PASS setup: the first fixture is the level's first floor pass, looks down at single-layer ground under open sky "
     "(horizon above the canvas) and the reference floors every pixel",
+    "PASS setup: walking in from the map corner (13 stops, fixed 2304 u view, fresh 40,000-cell buffer), the first "
+    "stop scans within 40,000 cells and every later stop a larger rectangle, each frame running the floor pass once, "
+    "outside walls, with no render crash or console error",
 )
 QUADS = "Level 4 draws every floor quad the unconstrained reference draws, in the same order, at every fixture"
 ANALYTIC = "looking 80 deg down at open ground in the level's first 3D frame, every canvas pixel has floor depth"
 DEPTH = "Level 4 floor depth equals the unconstrained reference at every fixture (no near ground lost)"
 REUSE = ("the grown buffer is reused: 16 more Level 4 frames, a Level 2 frame and Level 4 again allocate no new "
          "buffer")
-# flag -> the checks that must FAIL (and no others)
+WALK = ("walking in from the map corner at a fixed view distance replaces the 40,000-cell start buffer once, never "
+        "smaller than the rectangle scanned")
+# flag -> the checks that must FAIL (and no others). The stale local still
+# replaces the global once per growth, so the walk (which counts replacements
+# and reads the global) passes under it; the fixture checks catch it.
 MUTATIONS = {
-    "--fixed-capacity": (QUADS, ANALYTIC, DEPTH),
+    "--fixed-capacity": (QUADS, ANALYTIC, DEPTH, WALK),
     "--stale-local": (QUADS, ANALYTIC, DEPTH),
-    "--realloc-every-frame": (REUSE,),
+    "--exact-size": (WALK,),
+    "--realloc-every-frame": (REUSE, WALK),
 }
 
 
@@ -71,7 +86,7 @@ class FloorCellBufferTests(unittest.TestCase):
         output, lines = run()
         self.assertIn(f"FLOOR_CELL_BUFFER_RESULT PASS {EXPECTED}", lines, output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in lines), output)
-        for name in (QUADS, ANALYTIC, DEPTH, REUSE):
+        for name in (QUADS, ANALYTIC, DEPTH, REUSE, WALK):
             self.assertIn("PASS " + name, lines, output)
         self.assertTrue(any(line.startswith("NOTE ") for line in lines), output)
         self.assertNotIn("SETUP", output)
