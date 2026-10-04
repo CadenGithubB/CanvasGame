@@ -1068,6 +1068,16 @@ whole floor at steep pitch on Level 4. Hosts that load
 `tools/game/tests/floor_cell_buffer.js` compares real Level 4 frames with an
 unconstrained reference copy of the pass and has an opt-in `--sweep`.
 
+A classic level views at least 0.8 of its map's shorter side:
+`classicLevelViewDist()` returns `max(settings.viewDist, 0.8 * min(worldW,
+worldH))` (768 u on Level 1, 1152 u on Levels 2-3, 2304 u on Level 4).
+`resetLevel` and the settings panel's **Apply** (`applySettings`) both use it,
+so applying settings mid-level gives what a restart would; Endless and the
+cave test view at the setting itself. Apply used to assign the raw setting,
+which cut the Expanse from 2304 u to 1800 u at Ultra (400 u at 400) until the
+next level. `tools/game/tests/level_view_distance.js` applies through the O key
+and panel clicks and compares with restarts and real Level 4 floor quads.
+
 This is a manual game/UI preview with local substitutes for device services. It
 has no hardware backend, sensors, or device network connection, and cannot verify
 ESP32 performance or hardware integration. Its JavaScript line numbers match the

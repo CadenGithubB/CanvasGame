@@ -9007,6 +9007,15 @@ function resetEndlessMode() {
   }
 }
 
+// A classic level's view distance: the Render Distance setting, but at least
+// 0.8 of the map's shorter side so large maps keep their reach (Level 4, the
+// Expanse: 2304 u). resetLevel and applySettings both use it, so applying
+// settings mid-level gives what a restart would; Endless and the cave test
+// view the assembled window at the setting itself (assembleWindow).
+function classicLevelViewDist() {
+  return Math.max(settings.viewDist, Math.min(worldW, worldH) * 0.8);
+}
+
 function resetLevel(lv) {
   if (typeof cancelPendingMissileCasts === 'function') cancelPendingMissileCasts(false);
   regenBoostUntil = 0; armorBoostUntil = 0; lastRegenTick = 0;
@@ -9038,7 +9047,7 @@ function resetLevel(lv) {
   worldW = cfg.w || 720;
   worldH = cfg.h || 480;
   // View distance scales with map size — ensures large maps feel appropriately vast
-  viewDist = Math.max(settings.viewDist, Math.min(worldW, worldH) * 0.8);
+  viewDist = classicLevelViewDist();
 
   // ── MAP SIZING DIAGNOSTICS ────────────────────────────────────────────────
   var _area       = worldW * worldH;
@@ -33891,7 +33900,9 @@ function drawMenuOverlay() {
 
 
 function applySettings() {
-  viewDist = settings.viewDist;
+  // A classic level keeps its map-size view distance, as a restart would
+  // (Ultra used to cut the Expanse from 2304 u to 1800 until the next level).
+  viewDist = ENDLESS_MODE ? settings.viewDist : classicLevelViewDist();
   AMBIENT_MAX = settings.particles;
   if (WINDOW_CHUNKS !== settings.chunkWindow) {
     WINDOW_CHUNKS = settings.chunkWindow;
