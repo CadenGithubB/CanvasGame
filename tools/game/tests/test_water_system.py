@@ -1,11 +1,11 @@
-"""Water system: solver contracts on authored terrain and the real Endless window."""
+"""Water system: solver contracts on authored terrain, the real Endless window and structure floors."""
 
 from pathlib import Path
 import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-CHECK_COUNT = 20
+CHECK_COUNT = 26
 PASS_RESULT = f"WATER_SYSTEM_RESULT PASS {CHECK_COUNT}"
 HARNESS = Path(__file__).with_name("water_system.js")
 
@@ -45,6 +45,41 @@ class WaterSystemTests(unittest.TestCase):
     def test_regression_rejects_banks_below_the_water(self) -> None:
         self.assert_rejected("--perched-bank",
                              "rivers run in carved channels: the bed dips below the water and dry banks stand above it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_basins_standing_above_reserved_ground(self) -> None:
+        self.assert_rejected("--no-basin-drain", "a basin beside reserved ground fills only to that ground and drains into it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_rivers_running_past_lower_reserved_ground(self) -> None:
+        self.assert_rejected("--no-downhill-drain", "a river passing lower reserved ground drains into it there")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_wall_cells_looked_up_off_their_floor_square(self) -> None:
+        self.assert_rejected("--wall-cell-nw", "no water on walls, cave interiors or carved ground in the real window")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_rivers_through_structure_floors(self) -> None:
+        self.assert_rejected("--no-reserve", "keep props, structure floors and structure models stand the same with water on and off")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_read_from_the_stale_structure_list(self) -> None:
+        # Seed 11's fortress is not yet in largeStructures when a walk-in solves its water.
+        self.assert_rejected("--stale-structures",
+                             "keep props, structure floors and structure models stand the same with water on and off")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_without_its_margin(self) -> None:
+        self.assert_rejected("--no-margin", "water keeps off the levelled floor, footprint and margin of a fortress, arena "
+                             "or watchtower: no new water, reshaped ground, spring or river surface there")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_rivers_standing_above_reserved_ground(self) -> None:
+        self.assert_rejected("--no-drain-fall", "water that reaches reserved ground drains into it and never stands above it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_that_depends_on_the_window(self) -> None:
+        self.assert_rejected("--reserve-window-regions", "a point is reserved the same way in every window that holds it")
 
 
 if __name__ == "__main__":

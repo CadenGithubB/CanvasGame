@@ -16,6 +16,25 @@
   src=patch(src,'if (ground !== H[q]) {','if (false) {','--no-carve');
   // Banks follow the natural ground down, with no levee holding them up.
   src=patch(src,'ground = Math.max(cut, levee);','ground = cut;','--perched-bank');
+  // Reserved ground stays closed but a filling basin no longer drains into
+  // it, or a river running downhill no longer takes it as a drop.
+  src=patch(src,'    var key = _waterPassable(field, ni) ? field.height[ni] : field.sink[ni];','    var key = _waterPassable(field, ni) ? field.height[ni] : NaN;','--no-basin-drain');
+  src=patch(src,'      var nh = _waterOpen(field, ni, scratch) ? H[ni] : field.sink[ni];','      var nh = _waterOpen(field, ni, scratch) ? H[ni] : NaN;','--no-downhill-drain');
+  // No structure ground is reserved at all.
+  src=patch(src,'          if (largeStructureFlatDistance(st.type, x * gs - lx, y * gs - ly) < reach) mask[y * w + x] = 1;\n','','--no-reserve');
+  // The reserve read from the window's largeStructures list, which is still
+  // the previous window's when the water is solved during assembly.
+  src=patch(src,'      var st = largeStructureForRegion(rx, ry);','      var st = null;\n      for (var ls = 0; ls < largeStructures.length; ls++) if (largeStructures[ls].regionX === rx && largeStructures[ls].regionY === ry) st = largeStructures[ls];','--stale-structures');
+  // The levelled floor alone, without the margin around it.
+  src=patch(src,'var WATER_RESERVE_MARGIN = 48;','var WATER_RESERVE_MARGIN = 0;','--no-margin');
+  // Only the regions the window's chunks lie in, not their neighbours.
+  src=patch(src,'var rx0 = Math.floor(windowCX / span) - 1','var rx0 = Math.floor(windowCX / span)','--reserve-window-regions');
+  // A river that drains into reserved ground keeps its surface to the end.
+  src=patch(src,'    if (dz < pts[di][2]) pts[di][2] = dz;\n','','--no-drain-fall');
+  // A height point tested against the wall cell north-west of it instead of
+  // the floor square it stands for.
+  src=patch(src,'Math.floor((i % mesh.w + 0.5) * gs / cell), gy = Math.floor((((i / mesh.w) | 0) + 0.5) * gs / cell)',
+    'Math.floor((i % mesh.w - 0.5) * gs / cell), gy = Math.floor((((i / mesh.w) | 0) - 0.5) * gs / cell)','--wall-cell-nw');
   var W=48,Hh=48;
   function field(fn){var f=G.createWaterField(W,Hh);for(var y=0;y<Hh;y++)for(var x=0;x<W;x++)f.height[y*W+x]=fn(x,y);f.surface.fill(NaN);return f;}
   function solve(f,sources){return G.solveWaterSources(f,sources,G.createWaterScratch(W*Hh));}
@@ -112,6 +131,46 @@
     }
     check('rough terrain: every source ends on a known outcome, uncapped, with water only on open ground',!bad&&runs===24,bad);
 
+    // 9. Reserved ground is closed to water but drains it (field.sink holds
+    // its ground height). The notched bowl with a reserved patch on its north
+    // slope fills only to the patch's lowest ground: expected lake = the
+    // cells connected to the bottom below that height (a BFS on the authored
+    // heights). Control: the same patch closed like a wall (no sink) leaves
+    // the bowl filling to its notch.
+    function patchedBowl(drains){var f=field(bowlH);
+      for(var nx4=cx+10;nx4<W;nx4++)for(var ny4=cy-1;ny4<=cy+1;ny4++)f.height[ny4*W+nx4]=notchH-(nx4-(cx+10))*0.15;
+      var cells=[];for(var py=cy-8;py<=cy-7;py++)for(var px=cx-1;px<=cx+1;px++){var pi=py*W+px;if(drains)f.sink[pi]=f.height[pi];f.height[pi]=NaN;cells.push(pi);}
+      f.patch=cells;return f;}
+    var drained=patchedBowl(true),closedPatch=patchedBowl(false),src9=[{cell:cy*W+3,strength:2000}],ctl9=[{cell:cy*W+3,strength:2000}];
+    solve(drained,src9);solve(closedPatch,ctl9);
+    var sinkLow=Infinity;drained.patch.forEach(function(i){sinkLow=Math.min(sinkLow,drained.sink[i]);});
+    var expect9={},q9=[cy*W+cx];expect9[cy*W+cx]=1;
+    while(q9.length){var c9=q9.pop(),c9x=c9%W,c9y=(c9/W)|0;for(var k9=0;k9<8;k9++){var e9x=c9x+[1,-1,0,0,1,-1,1,-1][k9],e9y=c9y+[0,0,1,-1,1,1,-1,-1][k9];
+      if(e9x<0||e9y<0||e9x>=W||e9y>=Hh)continue;var e9=e9y*W+e9x;if(expect9[e9]||!(drained.height[e9]<sinkLow-G.WATER_MIN_DEPTH))continue;expect9[e9]=1;q9.push(e9);}}
+    var lake9=wet(drained).filter(function(i){return drained.water[i]===G.WATER_KIND.still;}),level9=true,set9=true,patchDry=true,flagged=false;
+    lake9.forEach(function(i){if(Math.abs(drained.surface[i]-sinkLow)>1e-6)level9=false;if(!expect9[i])set9=false;});
+    Object.keys(expect9).forEach(function(k){if(drained.water[+k]!==G.WATER_KIND.still)set9=false;});
+    drained.patch.forEach(function(i){if(drained.water[i])patchDry=false;for(var k=0;k<8;k++){var a=i+[1,-1,0,0,1,-1,1,-1][k]+[0,0,1,-1,1,1,-1,-1][k]*W;if(drained.flags[a]&G.WATER_FLAG_DRAIN)flagged=true;}});
+    var ctlLevel=wet(closedPatch).filter(function(i){return closedPatch.water[i]===G.WATER_KIND.still;}).map(function(i){return closedPatch.surface[i];});
+    check('a basin beside reserved ground fills only to that ground and drains into it',
+      lake9.length>50&&level9&&set9&&patchDry&&flagged&&src9[0].end==='outflow'&&ctlLevel.length>lake9.length&&Math.abs(Math.max.apply(Math,ctlLevel)-notchH)<1e-6,
+      {lake:lake9.length,expected:Object.keys(expect9).length,surface:lake9.length&&drained.surface[lake9[0]],sink:sinkLow,end:src9[0].end,flagged:flagged,control:ctlLevel.length&&Math.max.apply(Math,ctlLevel)});
+
+    // 10. A river running down the plane past a band of reserved ground a
+    // unit lower than the plane (rows 22-23 from x 12 on) takes the band as
+    // its steepest drop and ends there: its last cell beside the band is
+    // marked as draining and nothing further east is wet. Control: the same
+    // band closed like a wall, and the river runs on to the window edge.
+    function banded(drains){var f=field(function(x,y){return 10-x*0.2+Math.sin(y*0.7)*0.01;});
+      for(var by=22;by<=23;by++)for(var bx=12;bx<W;bx++){var bi=by*W+bx;if(drains)f.sink[bi]=f.height[bi]-1;f.height[bi]=NaN;}return f;}
+    var band=banded(true),wall10=banded(false),src10=[{cell:24*W+4,strength:600}],ctl10=[{cell:24*W+4,strength:600}];
+    solve(band,src10);solve(wall10,ctl10);
+    var east=0,eastCtl=0,flag10=[];for(var i10=0;i10<W*Hh;i10++){if(band.water[i10]&&i10%W>=13)east++;if(wall10.water[i10]&&i10%W>=W-2)eastCtl++;if(band.flags[i10]&G.WATER_FLAG_DRAIN)flag10.push(i10);}
+    var besideBand=flag10.length===1&&(function(c){var x=c%W,y=(c/W)|0;return y===24&&x>=11&&x<=12;}(flag10[0]));
+    check('a river passing lower reserved ground drains into it there',
+      src10[0].end==='outflow'&&east===0&&besideBand&&ctl10[0].end==='outflow'&&eastCtl>0,
+      {end:src10[0].end,east:east,drainCells:flag10.map(function(c){return [c%W,(c/W)|0];}),control:[ctl10[0].end,eastCtl]});
+
     // Real Endless windows through the shipping host (with the same, possibly
     // mutated, water source). World A has springs; world B has legacy pools.
     var host=slurp('tools/game/tests/cave_occlusion_integration.js'),hostEnd=host.indexOf('  function check(name, okay) {');
@@ -183,6 +242,87 @@
     check('switching the system off gives back the ground, colours and water of a world generated without it',
       shaped>500&&restored&&G.waterAt(0,0)===null&&G.getWaterStats().lastSolveMs===0,{shaped:shaped});
     G.setWaterSystemEnabled(true);
+
+    // Structures. A fortress, arena or watchtower levels its ground
+    // (05-endless-world.js, "Flatten floor inside structures": flat within
+    // 1.75, 1.25 or 1.55 chunk sizes times its scale of its centre, by the
+    // larger axis distance, straight-line for arenas). Water keeps off that
+    // floor, the structure's footprint and a WATER_RESERVE_MARGIN ring around
+    // the floor (the widest river half-width and a ribbon's reach into its
+    // bank, in whole height-grid steps). Each window is entered from the home window, as a walk-in
+    // is: the window's largeStructures list is assembled after its water, so
+    // while the water is solved it still holds the home window's structures.
+    // The window is then compared with itself rebuilt with the system off.
+    // The structures come from the window's list after assembly and the radii
+    // are the generator's authored numbers, not the water code's.
+    var FLAT={fortress:1.75,arena:1.25,watchtower:1.55},margin=Math.ceil((G.WATER_RIVER_HALF_WIDTH[1]+G.WATER_RIBBON_OVERLAP)/12)*12;
+    function enter(seed,cx,cy){world(seed);var home=G.largeStructures.map(function(st){return st.regionX+','+st.regionY;});
+      var st1=seed+101,realRandom=Math.random;Math.random=function(){st1=(st1*1103515245+12345)%2147483648;return st1/2147483648;};
+      try{G.assembleWindow(cx,cy);}finally{Math.random=realRandom;}return home;}
+    function floorDist(st,x,y){var dx=G.windowOriginX+x-st.centerWX,dy=G.windowOriginY+y-st.centerWY;
+      return st.type==='arena'?Math.sqrt(dx*dx+dy*dy):Math.max(Math.abs(dx),Math.abs(dy));}
+    function keepFloors(){var z=[];G.largeStructures.forEach(function(st){z.push(G.getEntityRenderFloorZ(st));
+      if(st.type==='fortress')G.fortressInteractables3D(st).forEach(function(item){z.push(G.fortressInteractableFloorZ(st,item));});});return z;}
+    function models(){G.buildStructureModels({force:true});
+      return (G.structureModels||[]).map(function(md){var sum=0;md.faces.forEach(function(f){sum+=f.minZ*1.25+f.maxZ;});return [md.key,md.floorZ,md.faces.length,sum];});}
+    // seed, window centre, the structure the window is for (seed 3: a chunk of
+    // the fortress's footprint recorded a neighbouring watchtower and was never
+    // levelled)
+    var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5']],seen=[];
+    var pair=null;
+    fixtures.forEach(function(fx,fi){
+      var home=enter(fx[0],fx[1],fx[2]),mm=G.floorMesh,nn=mm.w*mm.h,gs=mm.gridSize,R=mm.waterReserve,rec={fx:fx.join(' '),home:home,stats:G.getWaterStats()};
+      rec.target=G.largeStructures.filter(function(st){return st.type===fx[3]&&st.regionX+','+st.regionY===fx[4];}).length;
+      // Floor (no margin), floor plus margin, and footprint hull points.
+      var floor=new Uint8Array(nn),keep=new Uint8Array(nn);
+      G.largeStructures.forEach(function(st){var r=G.CHUNK_SIZE*FLAT[st.type]*st.scale,hull=G.landmarkFootprintHull(st);
+        for(var i=0;i<nn;i++){var x=(i%mm.w)*gs,y=((i/mm.w)|0)*gs,d=floorDist(st,x,y);if(d<r)floor[i]=1;if(d<r+margin||(hull&&G.landmarkHullGap(hull,x,y)<=0))keep[i]=1;}});
+      rec.floor=0;rec.keep=0;for(var k=0;k<nn;k++){rec.floor+=floor[k];rec.keep+=keep[k];}
+      rec.springs=G.waterSources.filter(function(src){return keep[src.cell];}).length;
+      // River surfaces drawn over the floor (ribbon pieces, sampled 3x3).
+      rec.ribbonsOverFloor=0;G.buildWaterTiles(mm).forEach(function(t){if(!t.ribbon)return;var q=t.quad;
+        for(var a=0;a<=2;a++)for(var b=0;b<=2;b++){var u=a/2,v=b/2,x=(q[0][0]*(1-u)+q[1][0]*u)*(1-v)+(q[3][0]*(1-u)+q[2][0]*u)*v,y=(q[0][1]*(1-u)+q[1][1]*u)*(1-v)+(q[3][1]*(1-u)+q[2][1]*u)*v;
+          var gx=Math.round(x/gs),gy=Math.round(y/gs);if(gx>=0&&gy>=0&&gx<mm.w&&gy<mm.h&&floor[gy*mm.w+gx])rec.ribbonsOverFloor++;}});
+      // Water beside reserved ground.
+      rec.besideReserve=0;rec.above=[];
+      for(var w1=0;w1<nn;w1++){if(!mm.water[w1])continue;var x1=w1%mm.w,y1=(w1/mm.w)|0,near=false;
+        for(var oy=-1;oy<=1;oy++)for(var ox=-1;ox<=1;ox++){var X=x1+ox,Y=y1+oy;if(X<0||Y<0||X>=mm.w||Y>=mm.h||!R[Y*mm.w+X])continue;var g=G._waterPlainGround(mm,Y*mm.w+X);
+          if(!(g===g))continue;near=true;if(mm.waterSurface[w1]-g>G.WATER_MIN_DEPTH)rec.above.push([x1*gs,y1*gs,+(mm.waterSurface[w1]-g).toFixed(3)]);}
+        if(near)rec.besideReserve++;}
+      rec.drainedRivers=G.waterRivers.filter(function(r){return r.drains;}).length;rec.rivers=G.waterRivers.length;
+      var on={water:new Uint8Array(mm.water),z:new Float32Array(mm.l0TopZ)};rec.keepOn=keepFloors();rec.modelsOn=models();
+      if(fi===0){var rA=new Uint8Array(R),oA=[G.windowOriginX,G.windowOriginY],wA=mm.w;}
+      G.setWaterSystemEnabled(false);var off=G.floorMesh;rec.keepOff=keepFloors();rec.modelsOff=models();
+      rec.newWet=0;rec.reshaped=0;
+      for(var j=0;j<nn;j++){var dz=on.z[j]-off.l0TopZ[j];
+        if(!keep[j])continue;if(on.water[j]&&!off.water[j])rec.newWet++;if(dz!==0)rec.reshaped++;}
+      G.setWaterSystemEnabled(true);
+      if(fi===0){
+        // The same world points in the window one region east share their reserve.
+        G.assembleWindow(fx[1]+4,fx[2]);var mB=G.floorMesh,rB=mB.waterReserve,oB=[G.windowOriginX,G.windowOriginY];pair={shared:0,reserved:0,differ:0};
+        for(var p=0;p<rA.length;p++){var bx=(oA[0]+(p%wA)*gs-oB[0])/gs,by=(oA[1]+((p/wA)|0)*gs-oB[1])/gs;
+          if(bx<0||by<0||bx>=mB.w||by>=mB.h)continue;pair.shared++;if(rA[p])pair.reserved++;if(rA[p]!==rB[by*mB.w+bx])pair.differ++;}
+      }
+      seen.push(rec);
+    });
+    function brief(r,keys){var o={fx:r.fx};keys.forEach(function(k){o[k]=r[k];});return o;}
+    var modelsOk=true,keepOk=true;
+    seen.forEach(function(r){if(JSON.stringify(r.modelsOn)!==JSON.stringify(r.modelsOff)||!r.modelsOn.length)modelsOk=false;if(JSON.stringify(r.keepOn)!==JSON.stringify(r.keepOff))keepOk=false;});
+    check('keep props, structure floors and structure models stand the same with water on and off',
+      modelsOk&&keepOk&&seen[0].keepOn.length===4,seen.map(function(r){return brief(r,['keepOn','keepOff','modelsOn','modelsOff']);}));
+    var floorsOk=true,setupOk=true,drains=0;
+    seen.forEach(function(r){drains+=r.stats.drains;
+      if(r.target!==1||r.home.indexOf(r.fx.split(' ').slice(-1)[0])>=0||r.floor<1000||r.rivers<1)setupOk=false;
+      if(r.newWet||r.reshaped||r.springs||r.ribbonsOverFloor)floorsOk=false;});
+    check('water keeps off the levelled floor, footprint and margin of a fortress, arena or watchtower: no new water, reshaped ground, spring or river surface there',
+      setupOk&&floorsOk&&drains>=2,seen.map(function(r){return brief(r,['target','home','floor','keep','rivers','newWet','reshaped','springs','ribbonsOverFloor']);}).concat([{drains:drains}]));
+    var aboveOk=true,drained=0;
+    seen.forEach(function(r){drained+=r.drainedRivers;if(r.above.length)aboveOk=false;});
+    // The fixtures hold rivers that run into reserved ground (drained >= 2).
+    check('water that reaches reserved ground drains into it and never stands above it',
+      aboveOk&&drained>=2,seen.map(function(r){return brief(r,['besideReserve','drainedRivers','above']);}));
+    check('a point is reserved the same way in every window that holds it',
+      pair&&pair.differ===0&&pair.reserved>100,pair);
     out('WATER_SYSTEM_RESULT PASS '+checks);
   } catch(e){throw e;}
 }());

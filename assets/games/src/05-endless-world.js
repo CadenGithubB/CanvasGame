@@ -105,7 +105,7 @@ function largeStructureForRegion(rX, rY) {
 // structures"): flat below `inner`, blended back into natural terrain by
 // `outer`, by largeStructureFlatDistance from the centre (Chebyshev, straight
 // line for arenas; the layout rotation never applies). Only chunks that
-// record the structure are levelled.
+// record the structure are levelled. Water keeps off it (06-water.js).
 function largeStructureFlatRadii(type, scale) {
   if (type === 'fortress') return {inner: CHUNK_SIZE * 1.75 * scale, outer: CHUNK_SIZE * 2.2 * scale};
   if (type === 'arena') return {inner: CHUNK_SIZE * 1.25 * scale, outer: CHUNK_SIZE * 1.7 * scale};
@@ -883,7 +883,7 @@ function generateChunk(cx, cy) {
   // Each chunk checks the 4 surrounding regions for overlap and stamps the
   // portion of any structure that falls within its own 32×32 grid.
   // largeStructureForRegion() repeats the presence, type and scale rolls for
-  // one region (landmark finder); keep the two in step.
+  // one region (landmark finder, water reserve); keep the two in step.
   var cStructure = null; // {type, centerWX, centerWY, regionX, regionY}
   var REGION_CHUNKS = 3;
   var regionX = Math.floor(cx / REGION_CHUNKS);

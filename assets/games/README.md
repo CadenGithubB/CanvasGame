@@ -765,7 +765,33 @@ drawing and a lookup.
   spring at its highest open cell above `WATER_SPRING_MIN_H`; chunk
   coordinates seed it, so the same spring appears in every window.
 - **Open ground.** Plain surface terrain only: walls, cave interiors, carved
-  entrance ramps and cave caps stay dry in this version.
+  entrance ramps and cave caps stay dry in this version. A height point
+  stands for the floor square to its south-east (as `waterAt` and the ground
+  colours read it), so it is closed when that square's wall cell, found in
+  world units, is solid.
+- **Reserved ground.** The levelled floor of every fortress, arena and
+  watchtower stays dry and keeps its shape: the generator's flat zone
+  (`largeStructureFlatRadii` in `05-endless-world.js`: 1.75, 1.25 and 1.55
+  chunk sizes times the structure's scale from its centre, by the larger
+  axis distance, straight-line for arenas) plus a `WATER_RESERVE_MARGIN`
+  (48-unit) ring, the widest river half-width and a ribbon's reach into its
+  bank in whole grid steps. No spring rises there, no river, lake or river
+  surface covers it and carving never reshapes it, so courtyards, keep props
+  and structure models stand at the same height with water on and off. The
+  mask (`_waterReserveMask`, `mesh.waterReserve`) is built once per window
+  build from the generator's own region rule (`largeStructureForRegion`),
+  not from the window's `largeStructures` list, which is assembled after the
+  water; a point is reserved the same way in every window that holds it,
+  including a footprint chunk that recorded a neighbouring structure and was
+  never levelled. Legacy valley pools there keep their water. Reserved
+  ground drains water (`field.sink`): a river whose steepest drop is
+  reserved ground, or a basin whose water reaches it, ends there as an
+  outflow, as at the window edge, so no lake stands above it. Such a river
+  (`drains` on its object) falls to the reserved ground's height along its
+  last stretch within its width of it, and has no water and no end cap past
+  its end. Markets, shrines, ruin pads and the spawn clearing are not
+  reserved; the transition ring beyond the margin, where the levelled floor
+  blends back into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
   player units and flow. Rendering, movement and enemies all read it.
 - **Rivers are carved into the land** (`buildWaterRivers`,
@@ -827,30 +853,45 @@ drawing and a lookup.
 - **Toggles and stats.** `setWaterSystemEnabled(false)` reassembles the
   window as if the system had never run (legacy water flags, ground heights
   and colours); `WATER_RENDER_ENABLED` hides only the
-  surfaces. `getWaterStats()` and `getWaterRenderStats()` report counts and
-  timings.
+  surfaces. `getWaterStats()` (including `drains` and `reserved` points) and
+  `getWaterRenderStats()` report counts and timings.
 
 Tests: `water_system.js` checks the solver on authored terrain (a slope, a
 notched bowl whose lake must be flat at its spill height and cover exactly
-the expected cells, a weak spring, a walled gap, a flat plateau) and on real
-seeded windows (legacy lakes, no water on closed ground, surfaces never
-rising downstream along cells or river objects, carved channels measured on
-the rendered ground: the bed dips at least 0.3 below the water across every
+the expected cells, a weak spring, a walled gap, a flat plateau, the bowl
+with a reserved patch on its slope that it fills only up to, and a river
+that drains into lower reserved ground beside it) and on real seeded
+windows (legacy lakes, no water on closed ground, surfaces never rising
+downstream along cells or river objects, carved channels measured on the
+rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system), with five mutation controls (including no carving and
-banks without the levee). `water_movement.js` runs the real player step and
+without the system). Four structure windows are entered from the home
+window, as a walk-in is, and compared with themselves rebuilt with the
+system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
+used to cross, the seed 3 fortress with a footprint chunk recorded by a
+neighbouring watchtower, and the seed 10 watchtower. Their levelled
+floors, footprints and margins get no new water, reshaped ground, spring
+or river surface; keep props, structure floors and structure models stand
+the same; water that drains into reserved ground never stands above it;
+and a point is reserved the same way in a window one region over. The
+suite has thirteen mutation controls (including no carving, banks without
+the levee, no reserve, a reserve read from the stale `largeStructures`
+list, no margin, no drain and no fall at a drained end). `water_movement.js` runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
-controls. `water_render.js` checks the built tiles in two seeded windows:
+controls. `water_render.js` checks the built tiles in two seeded windows
+and a window beside a fortress (seed 6 at 36,26):
 every floor square touching lake water carries a lake surface, lakes never
 hang above lower dry ground, ribbons never fold, every point of river water
 lies under a water surface, ribbon edges never hang above dry open ground, no
-bed under water is near-black, and the toggle restores every ground colour,
-with seven mutation controls (one-square-per-point coverage, unclamped lake
-edges, dark natural beds, half-width ribbons, unrelaxed courses, no bend fan,
-banks without the levee). `cave_surface_material.js` skips the river-bank
+bed under water is near-black, a river that drains into reserved ground
+draws and leaves no water past its end, and the toggle restores every
+ground colour, with nine mutation controls (one-square-per-point coverage,
+unclamped lake edges, dark natural beds, half-width ribbons, unrelaxed
+courses, no bend fan, banks without the levee, water and an end cap past a
+drained end). `cave_surface_material.js` skips the river-bank
 points the water system lists in `mesh.waterCarveColors`, as it already
 accepts shoreline tint. Browser, one local run in the app's browser: a window
 solve including carving took 6-23 ms and building the tiles 1-4 ms, once per
@@ -859,10 +900,14 @@ frames) with 148 visible tiles. Known limits: the terrain is coloured per
 12-unit square, so up close a diagonal river still shows a faint staircase in
 its bed and bank colours; rivers from springs outside the window appear when
 the window moves; level (non-Endless) maps keep their legacy water for now.
-Carving and lakes leave generated objects (floor props, chests, shrines)
-where chunk generation put them, so some stand in water, a few deep under it
-(seeds 1, 15, 29 and 31: 6 of 69 chests and 1 of 6 shrine pedestals fully
-submerged, up to 42 units deep). Their models draw before the water, whose
+The generator levels a structure's surroundings only in chunks that record
+the structure, and a chunk records one structure, so steps of up to about 3
+height units stand at the edges of some levelled floors (older than the
+water system). Outside structure floors, carving and lakes leave generated
+objects (floor props, chests, shrines) where chunk generation put them, so
+some stand in water, a few deep under it (seeds 1, 15, 29 and 31: 6 of 69
+chests and 1 of 6 shrine pedestals fully submerged, up to 42 units deep).
+Their models draw before the water, whose
 alpha rises from 0.64 at the shore to 0.94 at 1.2 H deep, so a deep chest or
 pedestal shows only faintly through it, while its billboards (chest glow,
 sparkle and label; shrine crystal, glow and prompt) and Legacy sprites draw

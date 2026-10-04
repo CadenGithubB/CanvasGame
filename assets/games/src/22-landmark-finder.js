@@ -20,7 +20,8 @@ function resetLandmarkFinder() { _landmarkFinderVisited = {seed: null, keys: [],
 
 // The generator's presence rule, biome exclusion and type roll for one
 // region, without generating any chunk. Null when the region has none.
-// The rule lives with the generator (05-endless-world.js).
+// The rule lives with the generator (05-endless-world.js), which the water
+// reserve also uses.
 function landmarkRegionStructure(rX, rY) {
   return largeStructureForRegion(rX, rY);
 }
