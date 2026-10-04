@@ -785,10 +785,10 @@ function fxTorchGlows() {
   // own depth-writing shaft or bowl stands in front of its light (0.5 u out;
   // the modelled flame hangs 2.2-2.7 u out), so from in front and below it
   // hid most corona samples. The corona then tests the visible flame at the
-  // light's glowOut/glowUp (buildPointLights, scaled with the prop: a torch
-  // 2 out, 2 up at full size, where embers leave it; a sconce its flame
-  // body's centre above the bowl rim; 2 and 2 when a light has none); the
-  // glow is still drawn at the light.
+  // light's glowOut/glowUp (buildPointLights: a torch 2 out, 2 up, where
+  // embers leave it; a sconce its flame body's centre above the bowl rim;
+  // 2 and 2 when a light has none; full-size offsets on a smaller prop
+  // too); the glow is still drawn at the light.
   // Sprite torches keep the test at the light.
   var atFlame = !tiles && typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels');
   try {

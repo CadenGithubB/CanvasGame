@@ -10960,22 +10960,22 @@ function buildPointLights() {
     // Glow and illumination originate at the visible flame, just OUTSIDE its
     // supporting face. The former half-cell offset pointed into solid rock.
     // glowOut/glowUp: where the modelled flame's corona is tested, from the
-    // light (14-fx-render.js fxTorchGlows, wall prop models on). The model
-    // and its flame scale by k = size / WALL_PROP_MODEL_S (12-prop-models.js)
-    // about the wall plane, while the light stays 0.5 out and size / 4
-    // (torch) or size / 6 (sconce) up, so fixed offsets hit the flame only
-    // at full size (35.2; a wall face spanning under about 117 clamps it). A
-    // torch's flame clears its shaft 0.3 k out and 3.3 k up from the shaft
-    // tip (2.2 k out of the wall, 1.3 k below the light): 2 out, 2 up from
-    // the light at full size, where embers leave it. A sconce's bowl rim (k
-    // below the light) hides the flame's base from below, so it tests the
-    // flame body's centre: the bowl axis (2.7 k out of the wall) and 0.19
-    // size above the rim (the flame recipe's outer ellipse). Without the
-    // model module k is moot (the point is used only with wall prop models).
-    var sconce = d.type === 'sconce', k = typeof WALL_PROP_MODEL_S === 'number' ? attachment.size / WALL_PROP_MODEL_S : 1;
+    // light (14-fx-render.js fxTorchGlows, wall prop models on). A torch's
+    // flame clears its shaft 2 out, 2 up (where embers leave it). A sconce's
+    // bowl rim (1 below the light) hides the flame's base from below, so it
+    // tests the flame body's centre: the bowl axis (2.7 out, the light 0.5),
+    // 0.19 size above the rim (the flame recipe's outer ellipse). These are
+    // full-size offsets, kept on a smaller prop (a wall face spanning under
+    // about 117 clamps its size, and its model scales about the wall plane):
+    // the corona's samples spread 0.2 of the glow radius (about 5.8 units)
+    // whatever the prop's size, and a point scaled in toward the wall with
+    // the model left the near side of an oblique wall and the prop's own
+    // lower parts in front of the test depth, dimming the glow below the
+    // sprite's (wall_decor_driver.js, glow section, lower walls).
+    var sconce = d.type === 'sconce';
     pointLights.push({x: attachment.x, y: attachment.y, z: attachment.flameZ,
       radius: 90, intensity: 0.55, r: 255, g: 180, b: 80, kind: 'torch', nx: attachment.nx, ny: attachment.ny,
-      glowOut: (sconce ? 2.7 : 2.5) * k - 0.5, glowUp: sconce ? attachment.size * 0.19 - k : 2 * k});
+      glowOut: sconce ? 2.2 : 2, glowUp: sconce ? attachment.size * 0.19 - 1 : 2});
   }
   // Warm amber glow at cave entrances — subtle light spilling from the archway
   // onto the approach. Offset slightly into the cave mouth so the opening reads
@@ -29627,10 +29627,10 @@ function fxTorchGlows() {
   // own depth-writing shaft or bowl stands in front of its light (0.5 u out;
   // the modelled flame hangs 2.2-2.7 u out), so from in front and below it
   // hid most corona samples. The corona then tests the visible flame at the
-  // light's glowOut/glowUp (buildPointLights, scaled with the prop: a torch
-  // 2 out, 2 up at full size, where embers leave it; a sconce its flame
-  // body's centre above the bowl rim; 2 and 2 when a light has none); the
-  // glow is still drawn at the light.
+  // light's glowOut/glowUp (buildPointLights: a torch 2 out, 2 up, where
+  // embers leave it; a sconce its flame body's centre above the bowl rim;
+  // 2 and 2 when a light has none; full-size offsets on a smaller prop
+  // too); the glow is still drawn at the light.
   // Sprite torches keep the test at the light.
   var atFlame = !tiles && typeof renderFeatureOn === 'function' && renderFeatureOn('wallPropModels');
   try {
