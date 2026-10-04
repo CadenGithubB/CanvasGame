@@ -946,7 +946,9 @@ index/distance/visibility buffers start at 512 entries and double when one call
 keeps more, so they allocate only while growing; indices are Uint32. A former
 fixed 512 cap stopped at the 512th visible entity in array order and dropped
 Endless floor scatter at the Ultra preset (up to ~700 sprites in view)
-without a word; `tools/game/tests/render_entities_capacity.js` covers it.
+without a word; `tools/game/tests/render_entities_capacity.js` covers it,
+including that growth only doubles and that later frames and calls that fit
+keep the same buffers.
 
 `sampleEntitySupportRenderZ(x, y, referenceZ, underground, requireTriangle)`
 samples the same semantic layer and diagonal as the floor renderer. A finite

@@ -16,12 +16,17 @@
 //             exactly the items entityVisible3D keeps by distance and
 //             forward: every one of them must reach the depth-tested draw
 //             (the scatter's bounds callback), each once, farthest first.
+// Allocation: the index and distance buffers grow by doubling only (sampled
+// at every entityVisible3D call of the first 2,000-entity call) and, once
+// grown, later frames and calls that fit keep the same buffer objects.
 // Commands and callbacks, not browser pixels or timing.
 // Checks print PASS/FAIL and keep going, so a mutation names what it broke.
 // Mutations (evaluated copies only; each anchor must match exactly once):
 //   --cap-512        the fixed 512-entry cap (break at the 512th visible)
 //   --uint16-index   Uint16 entity indices (wrap past 65,535)
 //   --grow-no-copy   growth that does not copy the entries already kept
+//   --shrink-each-call  every call starts from new 512-entry buffers
+//   --grow-by-one    growth by one entry instead of doubling
 (function () {
   (0, eval)(slurp('tools/game/tests/render_host.js'));
   var H = createRenderTestHost(), G = H.G, out = H.output, checked = 0, failed = 0;
@@ -41,6 +46,9 @@
       '    if (count >= 512) break; // safety cap\n');
     source = swap(source, '--uint16-index', 'var _reIdxBuf  = new Uint32Array(512);', 'var _reIdxBuf  = new Uint16Array(512);');
     source = swap(source, '--uint16-index', 'idx = new Uint32Array(n)', 'idx = new Uint16Array(n)');
+    source = swap(source, '--shrink-each-call', '  var count = 0;\n',
+      '  var count = 0; _reIdxBuf = new Uint32Array(512); _reDistBuf = new Float32Array(512);\n');
+    source = swap(source, '--grow-by-one', '  var n = _reIdxBuf.length * 2,', '  var n = _reIdxBuf.length + 1,');
     return swap(source, '--grow-no-copy', '  idx.set(_reIdxBuf); dist.set(_reDistBuf);\n', '');
   });
   check('real manifest loads with no console errors',
@@ -137,7 +145,23 @@
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     var j = seed % (s + 1), t = arr[s]; arr[s] = arr[j]; arr[j] = t;
   }
-  var a1 = draw(arr), seen = new Set(), behind = 0, dupes = 0, ordered = true;
+  // The index and distance buffers one call's visibility pass (where they
+  // grow) works with, in order: sampled at every entityVisible3D call, from
+  // the first, and once after the call; a new pair is recorded on change.
+  function buffersDuring(fn) {
+    var vis = G.entityVisible3D, seq = [], calls = 0;
+    function sample() {
+      var last = seq[seq.length - 1];
+      if (!last || last.idx !== G._reIdxBuf || last.dist !== G._reDistBuf) seq.push({idx: G._reIdxBuf, dist: G._reDistBuf});
+    }
+    G.entityVisible3D = function () { calls++; sample(); return vis.apply(this, arguments); };
+    var result;
+    try { result = fn(); } finally { G.entityVisible3D = vis; }
+    if (seq.length) sample();
+    return {result: result, seq: seq, visCalls: calls};
+  }
+  var traced1 = buffersDuring(function () { return draw(arr); });
+  var a1 = traced1.result, seen = new Set(), behind = 0, dupes = 0, ordered = true;
   a1.got.forEach(function (e) { if (e.id[0] === 'b') behind++; if (seen.has(e)) dupes++; seen.add(e); });
   for (var q = 1; q < a1.dist.length; q++) if (a1.dist[q] > a1.dist[q - 1]) { ordered = false; break; }
   var missingFront = front.filter(function (e) { return !seen.has(e); }).length;
@@ -155,7 +179,45 @@
   check('authored: entities past index 65,535 are drawn as themselves',
     exact, {drawn: a2.got.length, ids: a2.got.slice(0, 12).map(function (e) { return e.id; })});
 
+  // ── Growth doubles ──
+  // The first 2,000-entity call keeps more than the buffers hold. From the
+  // capacity its visibility pass starts with, each replacement must double
+  // both buffers, ending with room for 2,000: ceil(log2(2000 / start))
+  // replacements, not one per extra entity. (The authored check above covers
+  // the copy of the entries already kept.)
+  var grow = traced1.seq.map(function (b) { return {idx: b.idx.length, dist: b.dist.length}; });
+  var doubled = grow.length > 0 && grow.every(function (b, i) {
+    return b.idx === b.dist && (i === 0 || b.idx === 2 * grow[i - 1].idx);
+  });
+  var startCap = grow.length ? grow[0].idx : 0, finalCap = grow.length ? grow[grow.length - 1].idx : 0;
+  var wantSteps = startCap ? Math.max(0, Math.ceil(Math.log2(2000 / startCap))) : null;
+  check('growth doubles: the first 2,000-entity call replaces the index and distance buffers only by doubling, ' +
+    'ending with room for 2,000',
+    doubled && startCap < 2000 && finalCap >= 2000 && grow.length - 1 === wantSteps,
+    {capacities: grow.slice(0, 8).map(function (b) { return b.idx + '/' + b.dist; }), replacements: grow.length - 1,
+      expectedReplacements: wantSteps, startCapacity: startCap, finalCapacity: finalCap, visibilityCalls: traced1.visCalls});
+
+  // ── Reuse: grown buffers are kept across calls and frames ──
+  // Once grown, the buffers serve every later call that fits: three more
+  // Endless Ultra scatter frames (each with more than 512 sprites in view, so
+  // a reset to the 512-entry start would have to regrow) and a second
+  // 2,000-entity call keep the same index and distance buffers.
+  var idxKept = G._reIdxBuf, distKept = G._reDistBuf, again = [];
+  [DEFAULT, LEGACY, DEFAULT].forEach(function (f) {
+    var r = scatterFrame(f);
+    again.push({name: r.name, inView: r.inView, reached: r.reached, sameIdx: G._reIdxBuf === idxKept, sameDist: G._reDistBuf === distKept});
+  });
+  aim();
+  var a3 = draw(arr);
+  again.push({name: 'second 2,000-entity call', drawn: a3.got.length, sameIdx: G._reIdxBuf === idxKept, sameDist: G._reDistBuf === distKept});
+  check('grown buffers are reused: 3 more Endless Ultra frames and a second 2,000-entity call keep the same index and ' +
+    'distance buffers',
+    again.every(function (a) { return a.sameIdx && a.sameDist && (a.reached > 0 || a.drawn > 0); }) &&
+      again.slice(0, 3).every(function (a) { return a.inView > 512; }),
+    {entries: idxKept.length, calls: again});
+
   out('NOTE ' + JSON.stringify({bufferEntries: G._reIdxBuf.length, indexType: Object.prototype.toString.call(G._reIdxBuf),
+    growth: {replacements: grow.length - 1, capacities: grow.slice(0, 6).map(function (b) { return b.idx; })},
     scatter: [rd, rl].map(function (r) { return [r.name, 'in view ' + r.inView, 'reached ' + r.reached, 'sprites drawn ' + r.drawnSprites]; })}));
   out('RENDER_ENTITIES_CAPACITY_RESULT ' + (failed ? 'FAIL ' + failed : 'PASS ' + checked));
 }());

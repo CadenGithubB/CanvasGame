@@ -16,11 +16,17 @@ index 65,535 drawn as themselves), and the stage K floor-scatter prefilter,
 which keeps exactly the items entityVisible3D keeps by distance and forward:
 each must reach the scatter's depth-tested draw (its bounds callback) once,
 farthest first, with floor-prop models on (default) and off. Callbacks and
-commands, not browser pixels or timing.
+commands, not browser pixels or timing. Allocation: the index and distance
+buffers, sampled at every entityVisible3D call of the first 2,000-entity call,
+are replaced only by doubling (ceil(log2(2000 / start)) times, here 1,024 to
+2,048), and once grown three more Endless Ultra scatter frames and a second
+2,000-entity call keep the same buffer objects.
 
 Mutation controls (evaluated copies only): --cap-512 restores the fixed cap,
 --uint16-index restores Uint16 indices, --grow-no-copy grows without copying
-the entries already kept. Each must fail exactly its named checks while the
+the entries already kept, --shrink-each-call starts every call from new
+512-entry buffers, --grow-by-one grows one entry at a time (1,390
+replacements in one call). Each must fail exactly its named checks while the
 setup checks still pass.
 """
 from pathlib import Path
@@ -29,7 +35,7 @@ import unittest
 from tools.webui.js_engine import JS_ENGINE, run_js
 
 SCRIPT = Path(__file__).with_name("render_entities_capacity.js")
-EXPECTED = 7
+EXPECTED = 9
 SETUP = (
     "PASS real manifest loads with no console errors",
     "PASS setup: Endless seed 899731 at the Ultra preset (1800 u view, 9x9 window), floor-prop models on (default)",
@@ -43,13 +49,22 @@ LEGACY = ("Endless Ultra: every in-view floor-scatter sprite reaches the depth-t
 AUTHORED = ("authored: of 2,000 entities in front and 2,000 behind, exactly the front ones are drawn, each once, "
             "farthest first")
 INDEX = "authored: entities past index 65,535 are drawn as themselves"
+DOUBLING = ("growth doubles: the first 2,000-entity call replaces the index and distance buffers only by doubling, "
+            "ending with room for 2,000")
+REUSE = ("grown buffers are reused: 3 more Endless Ultra frames and a second 2,000-entity call keep the same index "
+         "and distance buffers")
 # flag -> the checks that must FAIL (and no others). Growth without a copy
 # bites only in the frame that grows, so the second scatter fixture, drawn
-# after the first grew the buffers, still passes.
+# after the first grew the buffers, still passes. The fixed cap never grows,
+# so the call that needs 2,000 entries never gets room for them. A per-call
+# reset still doubles from 512 within the call; growth by one still keeps
+# what later calls need.
 MUTATIONS = {
-    "--cap-512": (DEFAULT, LEGACY, AUTHORED),
+    "--cap-512": (DEFAULT, LEGACY, AUTHORED, DOUBLING),
     "--uint16-index": (INDEX,),
     "--grow-no-copy": (DEFAULT, AUTHORED),
+    "--shrink-each-call": (REUSE,),
+    "--grow-by-one": (DOUBLING,),
 }
 
 
@@ -65,7 +80,7 @@ class RenderEntitiesCapacityTests(unittest.TestCase):
         output, lines = run()
         self.assertIn(f"RENDER_ENTITIES_CAPACITY_RESULT PASS {EXPECTED}", lines, output)
         self.assertEqual(EXPECTED, sum(line.startswith("PASS ") for line in lines), output)
-        for name in (DEFAULT, LEGACY, AUTHORED, INDEX):
+        for name in (DEFAULT, LEGACY, AUTHORED, INDEX, DOUBLING, REUSE):
             self.assertIn("PASS " + name, lines, output)
         self.assertTrue(any(line.startswith("NOTE ") for line in lines), output)
         self.assertNotIn("SETUP", output)
