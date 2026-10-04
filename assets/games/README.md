@@ -798,7 +798,8 @@ drawing and a lookup.
   `WATER_DRAIN_FALL` (36) units toward the reserved ground it drains into,
   but never below the ground at its end or under its course, so its tail
   never runs dry or sinks into a trench where that ground lies below a
-  generator step; past its end there is no water and no end cap. Markets, shrines, ruin pads and the spawn clearing are not
+  generator step; past its end there is no channel, bank, water or end
+  cap. Markets, shrines, ruin pads and the spawn clearing are not
   reserved; the transition ring beyond the margin, where the levelled floor
   blends back into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
@@ -897,13 +898,14 @@ the same; no water stands more than 0.001 above a reserved neighbour's
 ground, while water comes within two points of reserved ground and every
 drained river ends within its width, a section and a point and a half of
 it; each drained river ends at the natural ground where it ends (or at
-higher reserved ground) with water along its last 16 sections; both
-carving bounds bind and hold; and a point is reserved the same way in a
-window one region over. The suite has 19 mutation controls (including no
-carving, banks without the levee, no reserve, a reserve read from the stale
+higher reserved ground) with water along its last 16 sections; the ground
+whose nearest river point is a drained end stays as it was; both carving
+bounds bind and hold; and a point is reserved the same way in a window one
+region over. The suite has 20 mutation controls (including no carving,
+banks without the levee, no reserve, a reserve read from the stale
 `largeStructures` list, no margin, no basin or river drain, a drain level
 or reach left out, no keep-off, no fall or a fall below the land at a
-drained end and unbounded carving). `water_movement.js`
+drained end, carving past a drained end and unbounded carving). `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies

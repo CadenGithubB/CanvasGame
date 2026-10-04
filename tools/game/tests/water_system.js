@@ -42,6 +42,9 @@
   src=patch(src,'  if (course.drains) _waterRiverDrainFall(mesh, field, course.points);\n','','--no-drain-fall');
   src=patch(src,'target = ground === ground ? (low > ground ? low : ground) : low;','target = low;','--drain-below-ground');
   src=patch(src,'    if (under > fall) fall = under;\n','','--drain-below-ground');
+  // Channel and banks shaped past a drained river's end (only its water left out).
+  src=patch(src,'    if (bestEnd[q] > 0 && river.drains) continue;\n    var qx','    var qx','--carve-past-drains');
+  src=patch(src,'    var mouth = bestEnd[q] ?','    if (bestEnd[q] > 0 && river.drains) continue;\n    var mouth = bestEnd[q] ?','--carve-past-drains');
   // Levees raised, or channels cut, without bound.
   src=patch(src,'      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;\n','','--no-fill-cap');
   src=patch(src,'      if (ground < H[q] - WATER_MAX_CUT) ground = H[q] - WATER_MAX_CUT;\n','','--no-cut-cap');
@@ -310,6 +313,8 @@
     // solver's estimate there, would stand above the arena's reserved ground)
     var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5'],
       [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1']],seen=[];
+    function segDist(a,b,x,y){var sx=b[0]-a[0],sy=b[1]-a[1],l2=sx*sx+sy*sy,t=l2>0?Math.max(0,Math.min(1,((x-a[0])*sx+(y-a[1])*sy)/l2)):0;
+      return Math.hypot(x-a[0]-sx*t,y-a[1]-sy*t);}
     var pair=null;
     fixtures.forEach(function(fx,fi){
       var home=enter(fx[0],fx[1],fx[2]),mm=G.floorMesh,nn=mm.w*mm.h,gs=mm.gridSize,R=mm.waterReserve,rec={fx:fx.join(' '),home:home,stats:G.getWaterStats()};
@@ -344,10 +349,11 @@
       // Rivers that drain into reserved ground, measured against the natural
       // ground (the window rebuilt with the system off): how far the end lies
       // from reserved ground, the surface at the end against the ground there
-      // and the lowest reserved ground within the river's width of it, and
-      // water along the last 16 sections (within 0.6 of the width of each
-      // section over open plain ground).
-      rec.drained=[];
+      // and the lowest reserved ground within the river's width of it, water
+      // along the last 16 sections (within 0.6 of the width of each section
+      // over open plain ground), and the ground whose nearest river point is
+      // the end itself (past the end, toward the reserve).
+      rec.drained=[];rec.past=0;rec.pastShaped=[];
       courses.forEach(function(cr){if(!cr.drains)return;var P0=cr.pts,e=P0[P0.length-1],ex=Math.round(e[0]/gs),ey=Math.round(e[1]/gs),gap=Infinity,low=Infinity;
         for(var i=0;i<nn;i++){if(!R[i])continue;var d=Math.hypot((i%mm.w)*gs-e[0],((i/mm.w)|0)*gs-e[1]);gap=Math.min(gap,d);
           if(d<=e[4]+gs*Math.SQRT2){var z0=G._waterPlainGround(off,i);if(z0<low)low=z0;}}
@@ -358,6 +364,12 @@
           if(!wet)dry.push(k);}
         rec.drained.push({end:[Math.round(e[0]),Math.round(e[1])],gap:+gap.toFixed(1),bound:+(cr.hw+G.WATER_RIVER_STEP+1.5*gs).toFixed(1),
           surface:+e[2].toFixed(4),ground:+ground.toFixed(4),low:+low.toFixed(4),dry:dry});
+        var pv=P0[P0.length-2],tx=e[0]-pv[0],ty=e[1]-pv[1],reach=e[4]+G.WATER_BANK_REACH,r0=Math.ceil(reach/gs);
+        for(var dy=-r0;dy<=r0;dy++)for(var dx=-r0;dx<=r0;dx++){var X3=ex+dx,Y3=ey+dy;if(X3<1||Y3<1||X3>=mm.w-1||Y3>=mm.h-1)continue;
+          var p3=Y3*mm.w+X3,px=X3*gs,py=Y3*gs,dEnd=Math.hypot(px-e[0],py-e[1]);
+          if(dEnd>=reach||(px-e[0])*tx+(py-e[1])*ty<=0||R[p3]||!(G._waterPlainGround(off,p3)===G._waterPlainGround(off,p3)))continue;
+          var nearer=courses.some(function(c2){for(var s2=0;s2<c2.pts.length-1;s2++)if(segDist(c2.pts[s2],c2.pts[s2+1],px,py)<dEnd-1e-6)return true;return false;});
+          if(nearer)continue;rec.past++;if(on.z[p3]!==off.l0TopZ[p3]||on.water[p3])rec.pastShaped.push([px,py]);}
       });
       G.setWaterSystemEnabled(true);
       if(fi===0){
@@ -395,6 +407,10 @@
       if(!(d.surface>=d.ground-1e-3&&d.surface<=Math.max(d.ground,d.low)+1e-3)||d.dry.length)fallOk=false;});});
     check('a river that drains falls to the ground where it ends, its tail neither standing above it nor running dry',
       fallOk&&drained>=4,seen.map(function(r){return brief(r,['drained']);}));
+    var pastOk=true,past=0;
+    seen.forEach(function(r){past+=r.past;if(r.pastShaped.length)pastOk=false;});
+    check('a river that drains leaves the ground past its end as it was: no channel, bank or water there',
+      pastOk&&past>50,seen.map(function(r){return brief(r,['past','pastShaped']);}));
     // Both bounds bind in the fixtures (points carved exactly to them).
     var shapeOk=raise33<=G.WATER_MAX_FILL+1e-4&&cut33<=G.WATER_MAX_CUT+1e-4,raiseBinds=0,cutBinds=0;
     seen.forEach(function(r){if(r.maxRaise>G.WATER_MAX_FILL+1e-4||r.maxCut>G.WATER_MAX_CUT+1e-4)shapeOk=false;raiseBinds+=r.atCap;cutBinds+=r.atCut;});

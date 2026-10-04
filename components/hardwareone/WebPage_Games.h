@@ -10628,12 +10628,13 @@ function _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK) {
 // natural ground only after WATER_LEVEE_WIDTH. The shelf is wider than the
 // height grid's spacing, so the rendered ground next to the water always
 // stands above it and the river never hangs over a falling slope. Walls,
-// caves, reserved ground, lakes and points next to closed ground are left
-// unchanged, and no ground rises more than WATER_MAX_FILL above or sinks
-// more than WATER_MAX_CUT below its natural height (the bounds bind only at
-// terrain steps, where the water may stand above a bank or run dry). Then
-// river water is written from the channel: level across, falling
-// downstream. Returns the points carved.
+// caves, reserved ground, lakes, points next to closed ground and the ground
+// past an end that drains into reserved ground are left unchanged, and no
+// ground rises more than WATER_MAX_FILL above or sinks more than
+// WATER_MAX_CUT below its natural height (the bounds bind only at terrain
+// steps, where the water may stand above a bank or run dry). Then river
+// water is written from the channel: level across, falling downstream.
+// Returns the points carved.
 function carveWaterRivers(mesh, field, rivers) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, H = field.height;
   // Rivers replace the solver's per-point river marks.
@@ -10671,6 +10672,9 @@ function carveWaterRivers(mesh, field, rivers) {
     if (ri < 0 || !(H[q] === H[q]) || mesh.water[q] === WATER_KIND.still) continue;
     var river = rivers[ri], hw = bestW[q], d2 = bestD[q], S = bestS[q];
     if (d2 >= hw + WATER_BANK_REACH) continue;
+    // Past an end that drains into reserved ground there is no channel, bank
+    // or water: the ground stays as it is.
+    if (bestEnd[q] > 0 && river.drains) continue;
     var qx = q % w, qy = (q / w) | 0, open = qx > 0 && qy > 0 && qx < w - 1 && qy < h - 1;
     // Points next to walls, caves or reserved ground keep their height (wall
     // caps and cave mouths are derived from it, and _waterRiverKeepOff counts
@@ -10698,10 +10702,8 @@ function carveWaterRivers(mesh, field, rivers) {
         H[q] = ground; mesh.l0TopZ[q] = ground; mesh.surfaceH[q] = ground; carved++;
       }
     }
-    // Past an end that opens into a lake the channel is part of that lake;
-    // past one that drains into reserved ground there is no water.
+    // Past an end that opens into a lake the channel is part of that lake.
     var mouth = bestEnd[q] ? river.mouthLake[bestEnd[q] > 0 ? 1 : 0] : -1;
-    if (bestEnd[q] > 0 && river.drains) continue;
     if (d2 < hw && S - ground > WATER_WET_EPS && mouth >= 0) {
       mesh.water[q] = WATER_KIND.still; mesh.waterSurface[q] = mesh.waterSurface[mouth]; mesh.waterBody[q] = mesh.waterBody[mouth];
     } else if (d2 < hw && S - ground > WATER_WET_EPS) {

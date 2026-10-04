@@ -5,7 +5,7 @@ import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-CHECK_COUNT = 29
+CHECK_COUNT = 30
 PASS_RESULT = f"WATER_SYSTEM_RESULT PASS {CHECK_COUNT}"
 HARNESS = Path(__file__).with_name("water_system.js")
 
@@ -96,6 +96,10 @@ class WaterSystemTests(unittest.TestCase):
         self.assert_rejected("--drain-below-ground", "a river that drains falls to the ground where it ends, its tail neither "
                              "standing above it nor running dry")
 
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_carving_past_a_drained_end(self) -> None:
+        self.assert_rejected("--carve-past-drains", "a river that drains leaves the ground past its end as it was: "
+                             "no channel, bank or water there")
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_unbounded_levees(self) -> None:
