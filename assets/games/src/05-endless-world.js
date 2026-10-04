@@ -77,6 +77,43 @@ function getStructureFloorScatterZone(st, wx, wy) {
   if (towerCheb >= reach) return 0;
   return towerCheb < cell * 5 * scale ? 1 : 2;
 }
+// The large structure (fortress, arena, watchtower) of one 3x3-chunk region,
+// without generating a chunk: generateChunk's own presence roll, cave/ice
+// exclusion, type roll and scale ("Multi-chunk structures"). Null when the
+// region has none. A chunk records only the first structure whose box it
+// overlaps, so a structure's ground can reach a chunk that recorded another.
+var STRUCTURE_REGION_CHUNKS = 3;
+function largeStructureForRegion(rX, rY) {
+  if (rX === 0 && rY === 0) return null;              // none near spawn
+  if (CAVE_TEST_MODE && !caveTestFlags.structures) return null;
+  var rng = chunkRng(rX, rY, 80);
+  if (rng() > 0.012) return null;
+  var cx = rX * STRUCTURE_REGION_CHUNKS + Math.floor(STRUCTURE_REGION_CHUNKS / 2);
+  var cy = rY * STRUCTURE_REGION_CHUNKS + Math.floor(STRUCTURE_REGION_CHUNKS / 2);
+  var wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2, wy = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
+  var biome = getBiomeAt(wx, wy);
+  if (biome === 'cave' || biome === 'ice') return null;
+  var roll = rng(), type;
+  if (biome === 'expanse') type = roll < 0.25 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
+  else if (biome === 'ground') type = roll < 0.5 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
+  else if (biome === 'forest') type = roll < 0.55 ? 'fortress' : roll < 0.70 ? 'arena' : 'watchtower';
+  else type = roll < 0.4 ? 'fortress' : roll < 0.7 ? 'arena' : 'watchtower';
+  return {regionX: rX, regionY: rY, centerCX: cx, centerCY: cy, centerWX: wx, centerWY: wy,
+    type: type, scale: 0.85 + rng() * 0.3, biome: biome};
+}
+// The ground a large structure levels (generateChunk, "Flatten floor inside
+// structures"): flat below `inner`, blended back into natural terrain by
+// `outer`, by largeStructureFlatDistance from the centre (Chebyshev, straight
+// line for arenas; the layout rotation never applies). Only chunks that
+// record the structure are levelled.
+function largeStructureFlatRadii(type, scale) {
+  if (type === 'fortress') return {inner: CHUNK_SIZE * 1.75 * scale, outer: CHUNK_SIZE * 2.2 * scale};
+  if (type === 'arena') return {inner: CHUNK_SIZE * 1.25 * scale, outer: CHUNK_SIZE * 1.7 * scale};
+  return {inner: CHUNK_SIZE * 1.55 * scale, outer: CHUNK_SIZE * 2.0 * scale};
+}
+function largeStructureFlatDistance(type, dx, dy) {
+  return type === 'arena' ? Math.sqrt(dx * dx + dy * dy) : Math.max(Math.abs(dx), Math.abs(dy));
+}
 
 function getBiomeAt(wx, wy) {
   if (CAVE_TEST_MODE) return 'plains';
@@ -845,6 +882,8 @@ function generateChunk(cx, cy) {
   // per region center decides if a large structure spawns there (~4% chance).
   // Each chunk checks the 4 surrounding regions for overlap and stamps the
   // portion of any structure that falls within its own 32×32 grid.
+  // largeStructureForRegion() repeats the presence, type and scale rolls for
+  // one region (landmark finder); keep the two in step.
   var cStructure = null; // {type, centerWX, centerWY, regionX, regionY}
   var REGION_CHUNKS = 3;
   var regionX = Math.floor(cx / REGION_CHUNKS);
@@ -1287,14 +1326,8 @@ function generateChunk(cx, cy) {
     flatH = (flatH - 0.5) * 1.0; // mild elevation, not full geography offset
     // Inner radius = fully flat, outer radius = blend to natural terrain
     var _fsc = cStructure.scale;
-    var sInner, sOuter, sTransition;
-    if (cStructure.type === 'fortress') {
-      sInner = CHUNK_SIZE * 1.75 * _fsc; sOuter = CHUNK_SIZE * 2.2 * _fsc;
-    } else if (cStructure.type === 'arena') {
-      sInner = CHUNK_SIZE * 1.25 * _fsc; sOuter = CHUNK_SIZE * 1.7 * _fsc;
-    } else {
-      sInner = CHUNK_SIZE * 1.55 * _fsc; sOuter = CHUNK_SIZE * 2.0 * _fsc;
-    }
+    var _flatR = largeStructureFlatRadii(cStructure.type, _fsc);
+    var sInner = _flatR.inner, sOuter = _flatR.outer, sTransition;
     sTransition = sOuter - sInner;
     for (var fy = 0; fy < meshH; fy++) {
       for (var fx = 0; fx < meshW; fx++) {
@@ -1302,12 +1335,7 @@ function generateChunk(cx, cy) {
         var ffwy = cy * CHUNK_SIZE + fy * meshGridSize;
         var fdx2 = ffwx - cStructure.centerWX, fdy2 = ffwy - cStructure.centerWY;
         // Distance metric: use Chebyshev (max of abs) for box structures, Euclidean for arena
-        var sDist;
-        if (cStructure.type === 'arena') {
-          sDist = Math.sqrt(fdx2 * fdx2 + fdy2 * fdy2);
-        } else {
-          sDist = Math.max(Math.abs(fdx2), Math.abs(fdy2));
-        }
+        var sDist = largeStructureFlatDistance(cStructure.type, fdx2, fdy2);
         if (sDist < sOuter) {
           var fi2 = fy * meshW + fx;
           var naturalH = cHeights[fi2];

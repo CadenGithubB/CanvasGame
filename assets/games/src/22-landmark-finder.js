@@ -20,23 +20,9 @@ function resetLandmarkFinder() { _landmarkFinderVisited = {seed: null, keys: [],
 
 // The generator's presence rule, biome exclusion and type roll for one
 // region, without generating any chunk. Null when the region has none.
+// The rule lives with the generator (05-endless-world.js).
 function landmarkRegionStructure(rX, rY) {
-  if (rX === 0 && rY === 0) return null;              // none near spawn
-  if (CAVE_TEST_MODE && !caveTestFlags.structures) return null;
-  var rng = chunkRng(rX, rY, 80);
-  if (rng() > 0.012) return null;
-  var cx = rX * LANDMARK_REGION_CHUNKS + Math.floor(LANDMARK_REGION_CHUNKS / 2);
-  var cy = rY * LANDMARK_REGION_CHUNKS + Math.floor(LANDMARK_REGION_CHUNKS / 2);
-  var wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2, wy = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
-  var biome = getBiomeAt(wx, wy);
-  if (biome === 'cave' || biome === 'ice') return null;
-  var roll = rng(), type;
-  if (biome === 'expanse') type = roll < 0.25 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
-  else if (biome === 'ground') type = roll < 0.5 ? 'fortress' : roll < 0.65 ? 'arena' : 'watchtower';
-  else if (biome === 'forest') type = roll < 0.55 ? 'fortress' : roll < 0.70 ? 'arena' : 'watchtower';
-  else type = roll < 0.4 ? 'fortress' : roll < 0.7 ? 'arena' : 'watchtower';
-  return {regionX: rX, regionY: rY, centerCX: cx, centerCY: cy, centerWX: wx, centerWY: wy,
-    type: type, scale: 0.85 + rng() * 0.3, biome: biome};
+  return largeStructureForRegion(rX, rY);
 }
 
 // Nearest structure centre by straight-line distance, ring by ring. A region
