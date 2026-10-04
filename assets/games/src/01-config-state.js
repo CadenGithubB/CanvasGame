@@ -268,11 +268,21 @@ function entityVisible3D(wx, wy, wz, C, opts) {
 //   ctx    = canvas context
 //   now    = gameTimeNow() (computed once, shared)
 
-// Pre-allocated sort buffers for renderEntities3D (shared across all callers)
-var _reIdxBuf  = new Uint16Array(512);
+// Sort buffers for renderEntities3D, shared across all callers. They start at
+// 512 entries and double when one call keeps more (Endless floor scatter at
+// the Ultra preset keeps up to ~700). A fixed 512 cap used to drop every
+// entity after the 512th visible one in array order, not the farthest, and
+// without a word. Uint32 indices keep arrays past 65,535 entries exact.
+var _reIdxBuf  = new Uint32Array(512);
 var _reDistBuf = new Float32Array(512);
 var _reVisBuf  = new Array(512);
 for (var _ri = 0; _ri < 512; _ri++) _reVisBuf[_ri] = null;
+function growRenderEntityBuffers() {
+  var n = _reIdxBuf.length * 2, idx = new Uint32Array(n), dist = new Float32Array(n);
+  idx.set(_reIdxBuf); dist.set(_reDistBuf);
+  for (var i = _reVisBuf.length; i < n; i++) _reVisBuf.push(null);
+  _reIdxBuf = idx; _reDistBuf = dist;
+}
 
 function renderEntities3D(arr, visOpts, drawFn) {
   if (!arr || !arr.length) return;
@@ -294,7 +304,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
     if (!vis) continue;
     if (visOpts.groundAnchor) vis.floorZ = wz;
     if (vis.dist < minDist) continue;
-    if (count >= 512) break; // safety cap
+    if (count === _reIdxBuf.length) growRenderEntityBuffers();
     _reIdxBuf[count] = i;
     _reDistBuf[count] = vis.dist;
     _reVisBuf[count] = vis;

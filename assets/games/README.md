@@ -941,6 +941,13 @@ depth. Beam endpoint glow can be unioned through `extraPolygons` in one depth
 clip; do not nest clips. Ground effects follow actual terrain triangles rather
 than placing one flat screen ellipse over varying terrain.
 
+`renderEntities3D()` draws every entity `entityVisible3D` keeps. Its shared
+index/distance/visibility buffers start at 512 entries and double when one call
+keeps more, so they allocate only while growing; indices are Uint32. A former
+fixed 512 cap stopped at the 512th visible entity in array order and dropped
+Endless floor scatter at the Ultra preset (up to ~700 sprites in view)
+without a word; `tools/game/tests/render_entities_capacity.js` covers it.
+
 `sampleEntitySupportRenderZ(x, y, referenceZ, underground, requireTriangle)`
 samples the same semantic layer and diagonal as the floor renderer. A finite
 reference height selects the nearest support; otherwise underground selects the
