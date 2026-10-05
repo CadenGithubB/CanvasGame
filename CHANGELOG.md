@@ -12,13 +12,14 @@
   mapping (planar row strips, triangles elsewhere) the structure study default,
   with recorded tessellation and tile-size evidence.
 - Brings 3D models for wall props, chests, spawner obelisks, floor props,
-  landmarks and structures into the game, with hybrid-mapped structure and prop
-  textures from the procedural material catalog on a per-frame budget. Every
-  new path is a render feature: the Recommended preset turns them on, Legacy
-  (the pre-integration reference) turns them off, G switches presets, the
-  Graphics row sets single switches, and the HUD shows the preset and texture
-  counters. Adds the `/render-lab.html` developer page and a developer "go to
-  nearest landmark" action.
+  landmarks and structures into the game, with hybrid-mapped structure textures
+  and triangle-mapped prop textures (chest wood, obelisk stone) from the
+  procedural material catalog on a per-frame budget. Every new path is a render
+  feature: the Recommended preset turns them on, Legacy (the pre-integration
+  reference) turns them off, G switches presets, the Graphics row sets single
+  switches, and with Show FPS on the HUD shows the preset and texture counters.
+  Adds the `/render-lab.html` developer page and a developer "go to nearest
+  landmark" action.
 - Adds spell visuals slice 1: per-spell visual recipes, a cached glow sprite
   layer without shadow blur, bolts and bursts drawn in front of enemies, and a
   Spell gallery mode in the casting studio.
@@ -33,11 +34,13 @@
   change or cast, stays while the spell is busy or mana is short, and otherwise
   fades.
 - Adds a solved water system: springs run downhill and fill basins as flat
-  lakes, rivers are carved into the terrain with banks, one `waterAt` query
-  serves rendering, movement and enemies, a 3D pass draws lakes and rivers, and
-  wading slows actors while currents carry the player. Water keeps off
-  fortress, arena and watchtower floors plus a 48 u margin, carving is bounded,
-  and rivers drain where they would reach that reserved ground.
+  lakes, rivers are carved into the terrain with banks, one solved water model
+  feeds a 3D pass that draws lakes and rivers, and wading slows actors while
+  currents carry the player; movement, enemies and effects read that model
+  through one `waterAt` query. No spring, river, spring-fed lake or carve
+  touches fortress, arena and watchtower floors or a 48 u margin around them
+  (legacy valley pools there keep their water), carving is bounded, and rivers
+  drain where they would reach that reserved ground.
 - Fixes the classic-level 3D floor crash (audit D24): classic levels now build
   the per-layer floor colors the 3D floor pass reads.
 - Stops silently dropping 3D floor cells and sprites: the floor cell buffer
@@ -50,11 +53,12 @@
   fx-bench and the browser profile record the render preset and effect family
   modes.
 - Refreshes the audit lab: page reloads restore the simulation clock, probes
-  can expect a precondition failure, entries for repaired defects (D19, D24,
-  D25, G7/N1, G8, N2, N5 and N11) are retired, the missing near-chest prompt in
-  caves is recorded as a known game defect, and stale fixtures and probes are
-  repaired or re-anchored. The harness runs under Deno as well as jsc, and the
-  core gate grows from 160 to 367 tests.
+  can expect a precondition failure, entries for repaired defects (D19, D24's
+  fixed-level floor crash, D25, G7/N1, G8, N2, N5 and N11) are retired while
+  D24's Endless goal-spawn and calibration parts remain known bugs, the missing
+  near-chest prompt in caves is recorded as a known game defect, and stale
+  fixtures and probes are repaired or re-anchored. The harness runs under Deno
+  as well as jsc, and the core gate grows from 160 to 367 tests.
 
 ## 0.0 — 2026-09-27
 

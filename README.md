@@ -81,8 +81,8 @@ catalog and its headless runs always draw the untextured models.
 - `components/hardwareone/WebPage_Games.h`: generated compatibility artifact.
   Its legacy path is retained so existing assembly and regression tools continue
   to work; the rest of the HardwareOne firmware is not part of this repository.
-- `tools/game/`: build/server tooling, developer pages (previews, render lab,
-  effects benchmark), texture-study helpers, and regressions.
+- `tools/game/`: build/server tooling, developer pages (previews, render lab),
+  the effects benchmark script, texture-study helpers, and regressions.
 - `tools/webui/`: game audit lab and its shared JavaScript execution helpers.
 - `docs/`: physics/visual plans, historical investigations, work handoffs, and
   release notes.
@@ -98,11 +98,11 @@ See [0.0 release notes](docs/releases/0.0.md) for the snapshot's limitations.
 Texture work is capped per frame (2,048 primitives by default in the game). The
 game textures structure faces nearest first, then each prop family near to far,
 and paints a face that no longer fits with its material's flat mean color; the
-structure study still spends its budget in draw order and leaves solid
-fallbacks. Texture LOD and coverage-first texture allocation have been discussed
-but are not implemented. The held staff rig is a casting-studio preview; normal
-play still draws the original arms. Historical benchmark numbers are
-workload/device-specific, not FPS promises.
+structure study also spends its budget nearest first but leaves a face that does
+not fit in its solid authored color. Texture LOD and coverage-first texture
+allocation have been discussed but are not implemented. The held staff rig is a
+casting-studio preview; normal play still draws the original arms. Historical
+benchmark numbers are workload/device-specific, not FPS promises.
 
 ## License
 

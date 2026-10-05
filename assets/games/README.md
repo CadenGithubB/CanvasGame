@@ -840,7 +840,10 @@ drawing and a lookup.
   transition ring beyond the margin, where the levelled floor blends back
   into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
-  player units and flow. Rendering, movement and enemies all read it.
+  player units and flow. Movement, enemies and effects read it. Rendering
+  reads the solved data directly: the water pass reads the per-cell arrays and
+  walks `waterRivers`, and the 2D floor pass and debug overview read
+  `mesh.water`.
 - **Rivers are carved into the land** (`buildWaterRivers`,
   `carveWaterRivers`). Each spring's solved path becomes a river object: the
   cell path is relaxed (`WATER_RIVER_RELAX` passes of neighbour averaging) so

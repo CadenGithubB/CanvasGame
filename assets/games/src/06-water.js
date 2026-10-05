@@ -3,8 +3,8 @@
 // terrain, fills the first basin it meets up to that basin's spill point,
 // then continues from the spill, until its strength budget is spent, it joins
 // standing water, or it leaves the loaded window. The result is written once
-// per window into per-cell arrays that every consumer reads through
-// waterAt(): rendering, movement and the 2D map. Nothing here runs per frame.
+// per window into per-cell arrays and river objects (waterAt() for movement,
+// enemies and effects; rendering reads them). Nothing here runs per frame.
 //
 // Heights are mesh height units (floorMesh). Surfaces are flat for lakes and
 // follow the bed for rivers. The solver is pure: it reads a field, writes the
