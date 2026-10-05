@@ -315,7 +315,13 @@ var LAB = (function () {
             L.loaded = true;
             L._snapshotPage();
         } catch (e) {
-            L.loadError = String(e) + (e && e.line ? " (header line " + e.line + ")" : "") + (e && e.stack ? "\n" + e.stack : "");
+            // A runtime error thrown by the page carries its line in the
+            // evaluated text, which is the header line (game_lab pads the
+            // text to match). A SyntaxError does not: jsc reports e.line as
+            // the line of the eval call above, so naming it would blame an
+            // unrelated header line. Report no line for a SyntaxError.
+            var syntax = !!e && (e.name === "SyntaxError" || e instanceof SyntaxError);
+            L.loadError = String(e) + (e && e.line && !syntax ? " (header line " + e.line + ")" : "") + (e && e.stack ? "\n" + e.stack : "");
         }
         // The page's own boot sequence schedules nothing we want (auto-overview
         // and sensor probes); start every scenario from a quiet queue.
