@@ -940,10 +940,10 @@ system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
 used to cross, the seed 3 fortress with a footprint chunk recorded by a
 neighbouring watchtower, two watchtowers (seeds 10 and 8) beside the
 generator's terrain steps, the seed 22 arena and fortress sharing chunks
-(a channel cut to the bound at a terrain step), the seed 14 arena
-(carved water wider than the solver's estimate of it), the seed 9
-watchtower (a drained river down a wall, whose tail once ran dry where the
-carve cannot cut), the seed 35
+(a channel cut to the bound at a terrain step), the seed 14 arena (a
+short river the solver drains into it, whose end no point of its course can
+hold, so no river is left), the seed 9 watchtower (a drained river down a
+wall, whose tail once ran dry where the carve cannot cut), the seed 35
 fortress (a river held back short of its confluence) and the seed 1
 watchtower (a tributary joining a drained river's falling tail). Their
 levelled floors, footprints and margins get no new water, reshaped ground,
@@ -971,7 +971,13 @@ end carved but left dry, unbounded carving, dry pits or bank notches at the
 cut bound, and a tributary of a river that drains left as it was, meeting
 it without falling to its surface, searching only its own end, or not
 draining without an outlet), each the first failure of the check it
-names. `water_movement.js`
+names. Keep-off (`_waterRiverKeepOff`) is covered only by the authored
+course: in the real windows the solver's width-aware drain already ends
+rivers where their water would reach reserved ground, and with keep-off
+removed from river building no measured contract changes in a 1,966-window
+survey (two rivers differ: one records a longer hold-back to the same end,
+and one short drained river that keep-off removes survives, with no water
+above reserved ground, dry hole or low rim either way). `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies

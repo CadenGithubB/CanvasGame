@@ -370,14 +370,17 @@
     // levelled; seeds 10 and 8: rivers beside the steps at the edges of a
     // watchtower's levelled ground; seed 22: an arena and a fortress sharing
     // chunks, with a channel cut as deep as WATER_MAX_CUT allows at a
-    // terrain step; seed 14: a river whose carved water, wider than the
-    // solver's estimate there, would stand above the arena's reserved ground;
-    // seed 9: a drained river down a wall, where the carve leaves the ground
-    // under its tail as it is, and its tail ran dry when the fall took no
-    // account of that; seed 35: a river held back short of its confluence,
-    // which left its tributary's end on dry ground above its water; seed 1: a
-    // tributary joining a drained river just before its tail falls to its
-    // end)
+    // terrain step; seed 14: a short river the solver drains into the arena's
+    // reserved ground, whose end no point of its course can hold, so that no
+    // river is left (keep-off once kept that river's carved water off the
+    // reserved ground; the solver's width-aware drain now leaves keep-off
+    // nothing to change in these windows, and the authored course above is
+    // its contract); seed 9: a drained river down a
+    // wall, where the carve leaves the ground under its tail as it is, and
+    // its tail ran dry when the fall took no account of that; seed 35: a
+    // river held back short of its confluence, which left its tributary's end
+    // on dry ground above its water; seed 1: a tributary joining a drained
+    // river just before its tail falls to its end)
     var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5'],
       [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1'],[9,-3,-35,'watchtower','-1,-13'],
       [35,-20,-17,'fortress','-7,-6'],[1,28,-2,'watchtower','9,-1']],seen=[];
