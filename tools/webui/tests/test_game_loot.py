@@ -37,6 +37,7 @@ Header line numbers below are WebPage_Games.h lines (== extracted-JS lines).
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from tools.webui.game_lab import probe_testcase, suite_testcase
@@ -59,6 +60,19 @@ _WALK = "loot: a cave chest is reached on foot from the entrance and offered, wi
 _PROMPTPRE = "loot: precondition: the prompt scenario offers an equipment chest and draws its prompt in every case"
 _PROMPT = "loot: the chest prompt says Take or Swap exactly as pressing A takes or swaps"
 _RESERVE = "loot: chests inside a cave entrance reserve are filtered out of the window"
+
+# One walk's detail (walkIn, game_loot_harness.js) when that walk fails ONLY on
+# the near-chest prompt: it reached the chest (a STUCK clause would sit between
+# 'fps' and '; end at'), stands on the chest cell's floor underground (the
+# harness's own onFloor: |h - floor| < 0.5 and playerUnderground), rests inside
+# 22 u, is offered the chest, draws no prompt and logs 0 render errors. Every
+# field is pinned inside each walk, so one walk cannot vouch for another.
+_NUM = r"-?\d+\.\d+"
+_WALK_ONLY_PROMPT = (
+    rf"\w+: entrance \({_NUM},{_NUM}\) -> chest \({_NUM},{_NUM}\) \d+ corridor nodes, {_NUM} u, \d+ frames at 30 fps; "
+    rf"end at \({_NUM},{_NUM}\) h={_NUM} chest-cell floor {_NUM} underground=true onFloor=true "
+    rf"airborne frames \d+ min h {_NUM}; rest (?:1?\d|2[01])\.\d u from the chest; "
+    r"offered=true prompt no prompt drawn; render errors 0")
 
 # check id -> (why it fails today, regex its FAIL detail must match). The regex
 # pins the documented mechanism, so a known bug that starts failing for another
@@ -86,10 +100,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "~18-22 u of the chest it projects wholly below the canvas even at full downward pitch, so "
         "withSceneDepthBillboard culls it, while updateTreasureChests still offers the chest (dist < 90 && "
         "canReachChest) and A/E loots it. The walker releases W ~70 u out at ~120 u/s and cave damping (0.975 per "
-        "60 Hz step) slides it to 6-17 u from the chest: offered=true, no prompt.",
-        r"^0/\d+ walks at 30 fps (?!.*STUCK)(?!.*underground=false)(?!.*offered=false)(?!.*prompt ')"
-        r"(?!.*render errors [1-9])(?!.*rest (?:2[2-9]|[3-9]\d|\d{3,})\.\d u from the chest)"
-        r".*offered=true prompt no prompt drawn; render errors 0$"),
+        "60 Hz step) slides it to 6-17 u from the chest: offered=true, no prompt. The check needs at least 2 "
+        "walks, and every walk must fail only this way (_WALK_ONLY_PROMPT).",
+        rf"^0/(?:[2-9]|[1-9]\d+) walks at 30 fps [^:|]*: {_WALK_ONLY_PROMPT}(?: \| {_WALK_ONLY_PROMPT})+$"),
 }
 
 # Window assembly copy, reserve filter and pickup texts used by more than one
@@ -248,6 +261,76 @@ PROBES: list = [
 
 LootSuite = suite_testcase("loot", KNOWN_BUGS, min_checks=18)
 LootProbes = probe_testcase("loot", PROBES)
+
+
+class WalkKnownBugDetailTests(unittest.TestCase):
+    """KNOWN_BUGS[_WALK] accepts the near-chest prompt defect and nothing else (no JS engine needed).
+
+    The positive control is the walk detail a real run prints today (jsc, Cave
+    Test 12345/424242/777). Each negative control changes one walk the way the
+    harness would report one more failure condition of the walk check
+    (rec.ok = reached && onFloor && offered && drawn && errs === 0, and at
+    least 2 walks), while the other walks stay the documented defect.
+    """
+
+    HEAD = ("walks at 30 fps (real loop) reached the chest, stood on its cave floor underground, were offered it "
+            "and saw its prompt, with 0 render errors: ")
+    WALKS = [
+        "cavetest12345: entrance (865.3,426.9) -> chest (699.5,978.0) 8 corridor nodes, 570.7 u, 181 frames at "
+        "30 fps; end at (704.8,962.0) h=-4.77 chest-cell floor -4.77 underground=true onFloor=true airborne "
+        "frames 0 min h -4.77; rest 16.8 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+        "cavetest424242: entrance (1028.4,604.1) -> chest (615.6,785.5) 6 corridor nodes, 452.2 u, 150 frames at "
+        "30 fps; end at (616.9,779.3) h=-6.45 chest-cell floor -6.45 underground=true onFloor=true airborne "
+        "frames 0 min h -6.45; rest 6.3 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+        "cavetest777: entrance (545.3,916.0) -> chest (934.4,576.1) 7 corridor nodes, 521.9 u, 168 frames at "
+        "30 fps; end at (928.3,576.0) h=-7.57 chest-cell floor -7.57 underground=true onFloor=true airborne "
+        "frames 0 min h -7.57; rest 6.1 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+    ]
+
+    def detail(self, walks, ok=0):
+        return f"{ok}/{len(walks)} " + self.HEAD + " | ".join(walks)
+
+    def matches(self, detail):
+        return re.search(KNOWN_BUGS[_WALK][1], detail) is not None
+
+    def test_the_documented_defect_matches(self):
+        self.assertTrue(self.matches(self.detail(self.WALKS)))
+        self.assertTrue(self.matches(self.detail(self.WALKS[:2])), "2 walks satisfy the check's W.length >= 2")
+
+    def test_too_few_walks_or_a_passing_walk_do_not_match(self):
+        self.assertFalse(self.matches(self.detail(self.WALKS[:1])), "0/1: the check also fails on W.length < 2")
+        self.assertFalse(self.matches("0/0 " + self.HEAD + "PRECONDITION: no walk ran"))
+        self.assertFalse(self.matches(self.detail(self.WALKS, ok=1)))
+
+    def test_every_other_failure_condition_of_one_walk_does_not_match(self):
+        w = self.WALKS[1]
+        cases = {
+            "off the cave floor, above it": w.replace("h=-6.45 chest-cell floor -6.45 underground=true onFloor=true",
+                                                      "h=-2.50 chest-cell floor -6.45 underground=true onFloor=false"),
+            "on the surface cap": w.replace("h=-6.45 chest-cell floor -6.45 underground=true onFloor=true",
+                                            "h=3.10 chest-cell floor -6.45 underground=false onFloor=false"),
+            "no walkable floor in the chest cell": w.replace("chest-cell floor -6.45 underground=true onFloor=true",
+                                                             "chest-cell floor none underground=true onFloor=false"),
+            "on the floor height but not underground": w.replace("underground=true onFloor=true",
+                                                                 "underground=false onFloor=false"),
+            "the detail no longer reports onFloor": w.replace(" onFloor=true", ""),
+            "stuck in a corridor": w.replace("30 fps; end at",
+                                             "30 fps; STUCK 30.2 u short of node 3 at (700.1,900.2); end at"),
+            "not offered": w.replace("offered=true", "offered=false"),
+            "a prompt drawn": w.replace("prompt no prompt drawn", "prompt '[E] Take / +12 Gold'"),
+            "render errors": w.replace("render errors 0", "render errors 2"),
+            "at rest 22 u or more out": w.replace("rest 6.3 u", "rest 22.0 u"),
+            "a walk without a route": "cavetest424242: PRECONDITION: cavetest424242: no corridor path from an "
+                                      "entrance to a chamber holding a window chest",
+        }
+        for name, bad in cases.items():
+            with self.subTest(name):
+                self.assertNotEqual(w, bad, "the substitution did not apply")
+                walks = [self.WALKS[0], bad, self.WALKS[2]]
+                self.assertFalse(self.matches(self.detail(walks)), self.detail(walks))
+                self.assertFalse(self.matches(self.detail([bad, self.WALKS[0]])), "first walk")
+                self.assertFalse(self.matches(self.detail([self.WALKS[0], bad])), "last walk")
+
 
 if __name__ == "__main__":
     unittest.main()

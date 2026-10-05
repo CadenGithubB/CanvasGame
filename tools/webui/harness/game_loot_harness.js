@@ -499,7 +499,7 @@ if (LAB.loaded) {
             best.sp.nodes.length + " corridor nodes, " + r1(best.sp.len) + " u, " + frames + " frames at " + WALK_FPS + " fps" +
             (stuckAt ? "; STUCK " + r1(stuckAt.d) + " u short of node " + stuckAt.k + " at (" + r1(stuckAt.w.x) + "," + r1(stuckAt.w.y) + ")" : "") +
             "; end at (" + r1(w2.x) + "," + r1(w2.y) + ") h=" + r2(LAB.h()) + " chest-cell floor " + (fl ? r2(fl.z) : "none") +
-            " underground=" + !!playerUnderground + " airborne frames " + air + " min h " + r2(minH) +
+            " underground=" + !!playerUnderground + " onFloor=" + rec.onFloor + " airborne frames " + air + " min h " + r2(minH) +
             "; rest " + r1(restD) + " u from the chest; offered=" + rec.offered + " prompt " + fmtPrompt(pr) + "; render errors " + errs;
         A.walk.push(rec);
     }
