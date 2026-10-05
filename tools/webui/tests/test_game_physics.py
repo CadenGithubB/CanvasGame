@@ -26,7 +26,8 @@ window at the nearest cave network). What it checks:
   - walking into ordinary surface walls never puts the player inside one
     (regression guard)
   - a lethal enemy hit ends the game within 2 s                    [D21]
-  - every enemy type chasing a player in open ground can land an attack [N2]
+  - every enemy type chasing a player in open ground can land an attack
+    (regression guard: N2 is repaired)                              [N2]
   - a new world does not inherit a jump in progress               [N5]
 
 Frame-rate dependence of walking speed and turn rate (N1/G7) is owned by the
@@ -79,16 +80,18 @@ N5 = "physics: a new world starts with the player on the ground even if the prev
 # pins the documented mechanism; "PRECONDITION" in a detail always fails the
 # suite (game_lab.suite_testcase).
 KNOWN_BUGS: dict[str, tuple[str, str]] = {
-    E1: ("D21 -- _applyEnemyAttack clamps health to 0 (L11282) and step() regenerates (L10090) "
-         "before its death check (L10334 health <= 0), so health is 0.05 at the check and the "
-         "game never ends",
+    E1: ("D21 -- _applyEnemyAttack clamps health to 0 (11-enemies.js) and step() regenerates "
+         "(09-physics.js) before its death check (health <= 0, later in step()), so health is above 0 "
+         "at the check and the game never ends",
          r"_applyEnemyAttack\(11272\): hit landed, health after 2 s (?!0\.00)[\d.]+, gameOverState=false"),
-    F1: ("N2 -- repelFromEnemies pushes the player out to 12 + 8*size (L10042) while an enemy "
-         "attacks only inside 6 + 8*size (L11372); in open ground no type gets inside its reach "
-         "(closest Scout 16.3 / Soldier 18.7 / Brute 22.4 / Wolf 16.6 u vs reach 12.4 / 14 / 17.2 / "
-         "13.2) and none lands a hit -- enemies connect only once the shoved player is pinned "
-         "against a wall",
-         r"Scout 0 hits in [\d.]+ s of open ground \(ended: (wall|10 s);"),
+    # F1 (audit N2: repelFromEnemies pushed the player out to 12 + 8*size while
+    # an enemy attacked only inside 6 + 8*size, so no type landed a hit in open
+    # ground) was repaired before the 0.0 snapshot: meleeRange is now
+    # 12 + 8*size + NPC_PROFILES.enemy.meleeReach. Its FIX probe became the
+    # BREAK below. (F1 also failed in full runs for a harness reason, since
+    # fixed: LAB.freshPage did not restore the simulation clock, so after a
+    # real-loop scenario LAB.tick no longer moved gameTimeNow() and enemy
+    # windups never completed.)
 }
 
 # (description, anchor, replacement, {check id: expected verdict}), or the
@@ -138,9 +141,19 @@ PROBE_GROUPS: dict[str, list[tuple]] = {
          {N4: "FAIL"}),
     ],
     "C": [
-        ("BREAK D15: preserve the old mesh cache across window replacement",
-         "  if (_floorCacheMesh !== mesh) {", "  if (false && _floorCacheMesh !== mesh) {",
-         {C2: "FAIL", C3: "FAIL", C4: "FAIL"}),
+        # Both invalidations are off: the mesh-identity check and the epoch bump
+        # noteWorldGeometryEdit makes at the end of assembleWindow. C2 detects
+        # it through its primed read of the player's old cell. C3 and C4 are
+        # not claimed: since the 3D integration the renderer no longer leaves
+        # colliding cache entries for the wallFaceBase precompute to read, so
+        # their stale-face sensitivity is unproven here and needs a
+        # deterministic wallFaceBase fixture (a known gap, not coverage).
+        ("BREAK D15: preserve the old mesh cache across window replacement (mesh-identity check and the "
+         "window-assembly epoch bump both off)",
+         [("  if (_floorCacheMesh !== mesh) {", "  if (false && _floorCacheMesh !== mesh) {"),
+          ("  if (typeof _floorCacheTick === 'number') _floorCacheTick = (_floorCacheTick + 1) | 0;",
+           "  if (false) _floorCacheTick = (_floorCacheTick + 1) | 0;")], None,
+         {C2: "FAIL"}),
         ("BREAK rebase: assembleWindow rebases pos.x 12 u short -- the shift check must notice",
          "    pos.x -= shiftX;",
          "    pos.x -= shiftX + 12;",
@@ -160,15 +173,19 @@ PROBE_GROUPS: dict[str, list[tuple]] = {
          {E1: "PASS"}),
     ],
     "F": [
-        ("FIX enemy reach: push-apart radius inside the attack reach",
-         "    var thresh = 12 + enemyRad;",
-         "    var thresh = 4 + enemyRad;",
-         {F1: "PASS"}),
+        ("BREAK N2 (repaired): enemy melee reach back to the audit's 6 + 8*size, inside the 12 + 8*size push-apart",
+         "var meleeRange=12+8*(e.enemyType.size||1)+(NPC_PROFILES[brain.role].meleeReach||0);",
+         "var meleeRange=6+8*(e.enemyType.size||1);",
+         {F1: "FAIL"}),
     ],
     "N5": [
-        ("BREAK N5: spawn placement carries airborne motion into the new world",
+        # settlePlayerAtSpawn runs for every world start, so making it launch a
+        # jump also launches the previous world and the no-jump control, which
+        # the scenario's own precondition rejects. The real N5 mechanism is a
+        # jump that is not cleared.
+        ("BREAK N5: spawn settling forgets to clear the old jump",
          "  jumpVelZ = 0;\n  jumpAirborne = false;\n  pos.floorZ = 60 + h * 40;",
-         "  jumpVelZ = 200;\n  jumpAirborne = true;\n  pos.floorZ = 60 + h * 40;",
+         "  void 0;\n  void 0;\n  pos.floorZ = 60 + h * 40;",
          {N5: "FAIL"}),
     ],
 }

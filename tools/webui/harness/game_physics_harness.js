@@ -520,7 +520,20 @@ if (LAB.loaded) (function () {
             try { return origGFH(x, y); }
             finally { _floorCacheKey = k; _floorCacheVal = v; _floorCacheTickArr = t; _floorCacheTick = tk; }
         }
+        // D15 primed read: just before the measured shift, the player's cell is
+        // read on the OLD window (step() reads it every tick, so the cache holds
+        // it); the first getFloorHeightAt call on the NEW window inside
+        // assembleWindow re-reads those same local coordinates, which now name
+        // another world cell. A cache that survives the window replacement
+        // serves the old window's height there. This does not depend on which
+        // other keys the renderer happened to leave in the cache.
+        var PR = null;
         var gfhWrapper = function (x, y) {
+            if (inAW && PR && !PR.done && floorMesh !== PR.mesh) {
+                PR.done = true;
+                var pv = origGFH(PR.x, PR.y), pw = coldGFH(PR.x, PR.y);
+                PR.res = (pv !== pw ? "STALE " : "fresh ") + f2(pv) + " vs " + f2(pw);
+            }
             var v = origGFH(x, y), m = floorMesh;
             if (RD && m) {
                 var gx = Math.floor(x / m.gridSize), gy = Math.floor(y / m.gridSize);
@@ -535,6 +548,7 @@ if (LAB.loaded) (function () {
         var wrapAW = function (cx, cy) {
             var o0x = windowOriginX, o0y = windowOriginY, w0 = LAB.worldPos(), h0 = LAB.h();
             var pk0 = getWalkableLayerTopAt(pos.x, pos.y, h0).topH, ls0 = LAB.fmtLayers(LAB.layersAt(pos.x, pos.y));
+            if (!cap && RD) { PR = { x: pos.x, y: pos.y, mesh: floorMesh, done: false, res: "PRECONDITION FAILED: no read on the new window inside assembleWindow" }; origGFH(PR.x, PR.y); }
             if (!cap && RD) inAW = true;
             var r;
             try { r = orig.apply(this, arguments); } finally { inAW = false; }
@@ -548,7 +562,7 @@ if (LAB.loaded) (function () {
                 var got = origGFH((gx + 0.5) * GS, (gy + 0.5) * GS), want = coldGFH((gx + 0.5) * GS, (gy + 0.5) * GS);
                 if (got !== want) { stale++; if (gy * floorMesh.w + gx === pi) pStale = true; if (!ex) ex = "cell(" + gx + "," + gy + ") " + f2(got) + " vs " + f2(want); }
             }
-            cap = { w0: w0, w1: w1, pk0: pk0, pk1: pk1, ls0: ls0, ls1: ls1, h0: h0, wfb: wfb, stale: stale, ex: ex, pStale: pStale, cx: cx, cy: cy };
+            cap = { prime: PR ? PR.res : "PRECONDITION FAILED: not primed", w0: w0, w1: w1, pk0: pk0, pk1: pk1, ls0: ls0, ls1: ls1, h0: h0, wfb: wfb, stale: stale, ex: ex, pStale: pStale, cx: cx, cy: cy };
             return r;
         };
         G.assembleWindow = wrapAW;
@@ -600,10 +614,11 @@ if (LAB.loaded) (function () {
                         ", layers [" + cap.ls0 + "]->[" + cap.ls1 + "], dh over the shift frame " + LAB.fx(dhShift, 3) + errTxt);
                     var nStale = rd.aw.stale + rd.after.stale;
                     staleReads += nStale;
-                    if (nStale || rd.aw.n === 0 || rErr || cErr) c2Bad++;
+                    if (nStale || !/^fresh /.test(cap.prime) || rd.aw.n === 0 || rErr || cErr) c2Bad++;
                     c2.push(tag + " inside assembleWindow " + rd.aw.stale + "/" + rd.aw.n + " stale" + (rd.aw.ex ? " e.g. " + rd.aw.ex : "") +
                         ", after it " + rd.after.stale + "/" + rd.after.n + (rd.after.ex ? " e.g. " + rd.after.ex : "") +
                         " (incl. a sweep of every cell right after it returned: " + cap.stale + " stale" + (cap.pStale ? " incl. the player's cell" : "") + ")" +
+                        "; first new-window read at the old player cell " + cap.prime +
                         (rd.aw.n === 0 ? " PRECONDITION FAILED: no read inside assembleWindow" : "") + errTxt);
                     // wallFaceBase freshness: rebuild the SAME window twice with the
                     // cache invalidated first; the two rebuilds must agree (control),
@@ -638,7 +653,7 @@ if (LAB.loaded) (function () {
         LAB.check("physics: wallFaceBase after a window shift matches a rebuild of that window with the floor-height cache invalidated",
             shifted > 0 && c3Bad === 0,
             pre + (ctlBad ? "CONTROL: two cache-invalidated rebuilds disagree; " : "") + c3.join("; ") +
-            " (wallFaceBase 6834-6870 reads getFloorHeightAt; cache tick bumped only in draw() 18967)");
+            " (wallFaceBase reads getFloorHeightAt; the cache tick is bumped in draw() and by noteWorldGeometryEdit at the end of assembleWindow)");
     });
 
     // A new world is assembled by resetEndlessMode -> assembleWindow(0,0)
@@ -681,7 +696,7 @@ if (LAB.loaded) (function () {
             pre && bad === 0,
             (pre ? "" : "PRECONDITION FAILED: " + (preFail.join("; ") || "no world") + "; ") +
             (ctlBad ? "CONTROL: two cache-invalidated rebuilds disagree; " : "") + detail.join("; ") +
-            " (resetEndlessMode 7604 -> assembleWindow -> wallFaceBase 6834-6870 reads getFloorHeightAt; the cache tick is bumped only in draw() 18967)");
+            " (resetEndlessMode -> assembleWindow -> wallFaceBase reads getFloorHeightAt; the cache tick is bumped in draw() and by noteWorldGeometryEdit at the end of assembleWindow)");
     });
 
     // ── D. surface walls are solid (regression guard) ─────────────────────────
@@ -767,6 +782,9 @@ if (LAB.loaded) (function () {
         e.enemyType = T; e.health = T.health; e.maxHealth = T.health; e.speed = T.speed; e.chaseRange = T.chaseRange;
         e.x = x; e.y = y; e.vx = 0; e.vy = 0; e.z = 0; e.attackState = "idle"; e.attackStateUntil = 0;
         e.lastUpdate = 0; e.aggroAt = 0; e.stunUntil = 0; e.slowUntil = 0; e.burnUntil = 0; e._attackTarget = null;
+        // Its own brain from the game's constructor: the shallow copy above
+        // would share the template's npc object with every retyped enemy.
+        delete e.npc; delete e.npcSaved; delete e.lastAttackMs; npcEnsure(e, "enemy");
         return e;
     }
     // A spawn-window point with no wall within 120 u, so neither the player nor
@@ -788,9 +806,11 @@ if (LAB.loaded) (function () {
     // Two lethal hits per Endless seed, no relic/ward/dash/armour boost:
     // (a) straight through the game's damage function; (b) a Scout already
     // inside its reach at the end of its windup, so the NEXT updateEnemies call
-    // lands the hit through the game's own attack state machine (11372-11385) --
-    // independent of chase, push-apart (N2) and walls. The hit tick must not
-    // re-centre the window (the Scout would be saved to its chunk and replaced).
+    // lands the hit through the game's own attack state machine
+    // (npcUpdateAction) -- independent of chase, push-apart (N2) and walls. The
+    // windup targets the player as the controller records it (npc.attackTargetId
+    // 0) and ends now on the simulation clock (gameTimeNow). The hit tick must
+    // not re-centre the window (the Scout would be saved to its chunk and replaced).
     scenario("E", "physics: death", function () {
         var parts = [], pre = true, dead = 0, trials = 0;
         ENDLESS_SEEDS.forEach(function (seed) {
@@ -801,7 +821,7 @@ if (LAB.loaded) (function () {
             enemies = []; noDefences();
             health = 5;
             var dmg0 = stats.totalDamageTaken;
-            if (ea) _applyEnemyAttack(ea, ea.enemyType, Date.now());
+            if (ea) _applyEnemyAttack(ea, ea.enemyType, gameTimeNow());
             var landed = !!ea && stats.totalDamageTaken - dmg0 >= 5 && health === 0;
             for (t = 0; t < 120 && !gameOverState; t++) LAB.tick(1);
             trials++; if (!landed) pre = false; if (gameOverState) dead++;
@@ -810,7 +830,7 @@ if (LAB.loaded) (function () {
             build(W);
             var og = openGround();
             var eb = og && (LAB.placeWorld(og.x, og.y, "top"), enemyOfType("fast", pos.x + 8, pos.y));
-            if (eb) { eb.attackState = "windup"; eb.attackStateUntil = Date.now(); }
+            if (eb) { eb.attackState = "windup"; eb.attackStateUntil = gameTimeNow(); eb.npc.attackTargetId = 0; eb._attackTarget = null; }
             enemies = eb ? [eb] : []; noDefences();
             health = 5;
             var dB = stats.totalDamageTaken, aw = LAB.countCalls("assembleWindow"), hit = false, lethal = false, shiftsAtHit = 0;
@@ -828,7 +848,7 @@ if (LAB.loaded) (function () {
         LAB.check("physics: a lethal enemy hit ends the game within 2 s when no phoenix relic is equipped",
             pre && dead === trials,
             (pre ? "" : "PRECONDITION FAILED: a lethal hit did not land; ") + parts.join("; ") +
-            " (health clamps at 0 in 11282, regen 10090 runs before the death check 10334)");
+            " (_applyEnemyAttack clamps health at 0, 11-enemies.js; step() regenerates, 09-physics.js, before its death check)");
     });
 
     // ── F. every enemy type can land an attack in the open [N2] ───────────────
@@ -873,7 +893,7 @@ if (LAB.loaded) (function () {
         LAB.check("physics: every enemy type chasing a stationary player in open ground lands an attack",
             chaseFail === 0 && fail === 0,
             (chaseFail ? "PRECONDITION FAILED: an enemy was never engaged for 1 s in the open; " : "") + parts.join("; ") +
-            " (attack reach 6+8*size at 11372 vs player/enemy push-apart 12+8*size at 10042)");
+            " (attack reach 12+8*size+meleeReach, 11-enemies.js meleeRange, vs push-apart 12+8*size, repelFromEnemies)");
     });
 
     // ── N5. a new world does not inherit a jump in progress [N5] ──────────────
