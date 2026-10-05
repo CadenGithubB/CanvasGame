@@ -114,11 +114,10 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "audit H4; spells are assigned once at 1080 and resetEndlessMode (7511-7589) never resets them -- shop unlocks "
         "(applyShopItem 4225) and tier-2 upgrades (4229/19937) carry into the next world",
         r"after restart: carried over .*(unlocked=true|tier=2)"),
-    RESTART_FORTRESS: (
-        "audit N5; resetEndlessMode (7511-7589) resets companions (7584) but not fortressAllies (1145) or "
-        "completedFortresses (1144) -- a new world keeps the old garrison allies (stale window coords) and its "
-        "fortresses pre-completed",
-        r"after restart: allies=[1-9]\d* completedFortresses=[1-9]"),
+    # RESTART_FORTRESS (audit N5: a new world kept the old garrison allies and
+    # its fortresses pre-completed) was repaired before the 0.0 snapshot:
+    # resetEndlessMode and prepareGameRun both clear fortressAllies and
+    # completedFortresses. Its FIX probe became the two-site BREAK below.
     RELIC_INDEPENDENT: (
         "audit H7; pickRandomRelic (3685-3693) skips equipment.relic, and generateChunk rolls epic chests with it "
         "(5849) -- the same chunk rolls a different relic depending on what the player wears when it is first generated",
@@ -149,14 +148,10 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "chunk on every shift even when every cell is zero (7457-7458). A cache-scoped implementation needs at most "
         "the 64-region working set and 4 KiB of non-interaction deltas.",
         r"memo max \d+ vs bound \d+; delta bytes max [1-9]\d* vs bound 4096.*endlessCaveNetworks.*snapshots explored"),
-    ARENA_FLAG: (
-        "audit D19; arenaEnemy (spawnArenaWave 19531) is copied by neither saveEnemyStateToChunks (7369-7381) nor "
-        "assembleWindow (7051-7063), so a wave counts as cleared (19548-19556) while its enemies still live",
-        r"still arenaEnemy after the shift 0/[1-9]"),
-    SPAWNER_FLAG: (
-        "audit D19; fromSpawner (updateEnemySpawners 20275) is copied by neither saveEnemyStateToChunks (7369-7381) "
-        "nor assembleWindow (7051-7063), so the spawner cap (20235-20241) stops counting it",
-        r"fromSpawner=true before, fromSpawner=undefined after"),
+    # ARENA_FLAG and SPAWNER_FLAG (audit D19: arenaEnemy / fromSpawner were
+    # copied by neither saveEnemyStateToChunks nor assembleWindow) were
+    # repaired before the 0.0 snapshot: both copy the two flags. Their FIX
+    # probes became BREAK probes below, in the same slots.
     WINDOW_MATCHES_SETTINGS: (
         "audit D23; WINDOW_CHUNKS starts at GAME_CONFIG.world.windowChunks = 7 (293/965) while settings.chunkWindow "
         "and every quality preset below 'high' say 5 (1180-1186)",
@@ -177,9 +172,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "whole rectangle prevents a partial narrowing that merely uncovers its centre from counting as fixed.",
         r"hidden samples [1-9]\d*/400, fraction 0\.55"),
     ENDLESS_NO_GOAL: (
-        "audit D24 + N9; updateEnemies 11495 calls spawnGoal regardless of mode -- one clock phase spawns a "
-        "fixed-level goal in Endless, the other throws a TypeError inside spawnGoal (its LCG goes negative when "
-        "int32(Date.now()^0xBEEF) < 0, 4085-4104), swallowed by _pt (20576)",
+        "audit D24 + N9; updateEnemies (11-enemies.js) calls spawnGoal regardless of mode -- one clock phase spawns "
+        "a fixed-level goal in Endless, the other throws a TypeError inside spawnGoal (its LCG goes negative when "
+        "int32(gameTimeNow()^0xBEEF) < 0, 03-level-generation.js), swallowed by _pt",
         r"goalSpawned=true goal at world.*thrown inside spawnGoal"),
     CALIBRATION: (
         "audit D24; onCalibUpdate (9843-9855) calls resetLevel(1) whatever the mode, so finishing IMU calibration "
@@ -226,20 +221,19 @@ PROBES = [
      "caveSpawnId: e.caveSpawnId || null, underground: e.underground || false,",
      "caveSpawnId: e.caveSpawnId || null, underground: false,",
      {UNDERGROUND_FLAG: "FAIL"}),
-    ("FIX [D19]: arenaEnemy survives saveEnemyStateToChunks and assembleWindow",
-     [("patrolIdx: e.patrolIdx || 0, facing: e.facing || 0",
-       "patrolIdx: e.patrolIdx || 0, facing: e.facing || 0, arenaEnemy: e.arenaEnemy"),
-      ("patrolIdx: en.patrolIdx, facing: en.facing || 0, underground: en.underground || false});",
-       "patrolIdx: en.patrolIdx, facing: en.facing || 0, underground: en.underground || false, arenaEnemy: en.arenaEnemy});")],
+    # D19's arenaEnemy and fromSpawner halves were repaired before the 0.0
+    # snapshot (saveEnemyStateToChunks and assembleWindow copy both flags);
+    # their FIX probes became these BREAK probes, in the same slots.
+    ("BREAK [D19] (repaired): neither saveEnemyStateToChunks nor assembleWindow copies arenaEnemy",
+     [("arenaEnemy: !!e.arenaEnemy, fromSpawner: !!e.fromSpawner,", "fromSpawner: !!e.fromSpawner,"),
+      ("arenaEnemy: !!en.arenaEnemy, fromSpawner: !!en.fromSpawner,", "fromSpawner: !!en.fromSpawner,")],
      None,
-     {ARENA_FLAG: "PASS", SPAWNER_FLAG: "FAIL", UNDERGROUND_FLAG: "FAIL"}),
-    ("FIX [D19]: fromSpawner survives saveEnemyStateToChunks and assembleWindow",
-     [("patrolIdx: e.patrolIdx || 0, facing: e.facing || 0",
-       "patrolIdx: e.patrolIdx || 0, facing: e.facing || 0, fromSpawner: e.fromSpawner"),
-      ("patrolIdx: en.patrolIdx, facing: en.facing || 0, underground: en.underground || false});",
-       "patrolIdx: en.patrolIdx, facing: en.facing || 0, underground: en.underground || false, fromSpawner: en.fromSpawner});")],
+     {ARENA_FLAG: "FAIL", SPAWNER_FLAG: "PASS", UNDERGROUND_FLAG: "PASS"}),
+    ("BREAK [D19] (repaired): neither saveEnemyStateToChunks nor assembleWindow copies fromSpawner",
+     [("arenaEnemy: !!e.arenaEnemy, fromSpawner: !!e.fromSpawner,", "arenaEnemy: !!e.arenaEnemy,"),
+      ("arenaEnemy: !!en.arenaEnemy, fromSpawner: !!en.fromSpawner,", "arenaEnemy: !!en.arenaEnemy,")],
      None,
-     {SPAWNER_FLAG: "PASS", ARENA_FLAG: "FAIL"}),
+     {SPAWNER_FLAG: "FAIL", ARENA_FLAG: "PASS", UNDERGROUND_FLAG: "PASS"}),
     ("FIX [H2]: persist each window chunk's live enemy list as a delta and apply it on regeneration",
      [("  console.log('[ENEMY-SAVE] Saved ' + saved",
        "  for (var _kd = 0; _kd < WINDOW_CHUNKS * WINDOW_CHUNKS; _kd++) { var _kk = (windowCX + _kd % WINDOW_CHUNKS) + ',' +"
@@ -290,11 +284,16 @@ PROBES = [
      "if (equipment.relic && equipment.relic.id === RELIC_KEYS[i]) continue;",
      "/* roll independent of equipment */",
      {RELIC_INDEPENDENT: "PASS"}),
-    ("FIX [N5]: resetEndlessMode clears fortress allies and fortress progress",
-     "  companions = [];\n  equipment = {armor: null, hat: null, robes: null, boots: null, relic: null};",
-     "  companions = []; fortressAllies = []; completedFortresses = {};\n"
-     "  equipment = {armor: null, hat: null, robes: null, boots: null, relic: null};",
-     {RESTART_FORTRESS: "PASS"}),
+    # N5's fortress half was repaired before the 0.0 snapshot: resetEndlessMode
+    # clears fortress allies and progress, and prepareGameRun (which the real
+    # btnEndless handler calls; LAB.startEndless does not) clears them again.
+    # The BREAK removes both sites, so it stays faithful to the page.
+    ("BREAK [N5] (repaired): neither resetEndlessMode nor prepareGameRun clears fortress allies and fortress progress",
+     [("  fortressAllies = []; completedFortresses = {};\n  fortressLockedNear = null; nearestFortressInteract = null;",
+       "  void 0;\n  fortressLockedNear = null; nearestFortressInteract = null;"),
+      ("  companions=[];fortressAllies=[];completedFortresses={};", "  companions=[];")],
+     None,
+     {RESTART_FORTRESS: "FAIL"}),
     ("BREAK [N5]: spawn settling forgets to clear the old jump",
      "  jumpVelZ = 0;\n  jumpAirborne = false;\n  pos.floorZ = 60 + h * 40;",
      "  pos.floorZ = 60 + h * 40;",

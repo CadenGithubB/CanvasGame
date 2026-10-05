@@ -1296,13 +1296,15 @@ if (LAB.loaded) {
     });
 
     // ── S10: Endless has no exit goal ────────────────────────────────────────
-    // spawnGoal seeds its placement RNG from Date.now() (4085) and misbehaves for
-    // one sign of int32(Date.now() ^ 0xBEEF), so the clear is run at two clock
-    // values 2^31 ms apart (opposite sign bit, by construction) -- the verdict
-    // must not hinge on which half of a ~50-day cycle the clock sits in. The
-    // values are ABSOLUTE (LAB.setClock), so tick counts of earlier scenarios
-    // cannot move them. Real loop() frames (LAB.frame): an exception inside
-    // gameUpdate is swallowed by _pt (20576) exactly as on the page, and counted.
+    // spawnGoal seeds its placement RNG from gameTimeNow() (03-level-generation.js)
+    // and misbehaves for one sign of int32(gameTimeNow() ^ 0xBEEF), so the clear
+    // is run at two clock values 2^31 ms apart (opposite sign bit, by
+    // construction) -- the verdict must not hinge on which half of a ~50-day
+    // cycle the clock sits in. freshWorld reloads the page, which resets the
+    // simulation clock, so the first real frame captures the ABSOLUTE
+    // LAB.setClock value as the session's clock origin: tick counts of earlier
+    // scenarios cannot move it. Real loop() frames (LAB.frame): an exception
+    // inside gameUpdate is swallowed by _pt exactly as on the page, and counted.
     var GOAL_CLOCK_BASE = 1800000000000;
     LAB.scenario("persistence: endless goal", function () {
         var ok = true, det = [];
@@ -1314,7 +1316,7 @@ if (LAB.loaded) {
                 enemySpawners.forEach(function (sp) { sp.hp = 0; sp.active = false; });
                 enemies.forEach(function (e) { e.health = 0; });
                 var orig = spawnGoal, calledAt = [];
-                spawnGoal = function () { calledAt.push(Math.floor(Date.now())); return orig.apply(this, arguments); };
+                spawnGoal = function () { calledAt.push(Math.floor(gameTimeNow())); return orig.apply(this, arguments); };
                 var errs = 0, e0 = LAB.errors.length;
                 try { for (var f = 0; f < 6; f++) errs += LAB.frame(); } finally { spawnGoal = orig; }
                 var stages = [];
@@ -1326,10 +1328,10 @@ if (LAB.loaded) {
                 if (!pre || !good) ok = false;
                 det.push("s" + seed + " clock " + (GOAL_CLOCK_BASE + (2 * si + p) * 2147483648) + ": cleared " + n + " enemies and " + enemySpawners.length + " spawners" +
                     (pre ? "" : " (PRECONDITION: window not cleared: enemies left " + enemies.length + ", spawners " + sAlive + ")") +
-                    "; spawnGoal " + (calledAt.length ? "called at Date.now()=" + calledAt[0] : "not called") +
+                    "; spawnGoal " + (calledAt.length ? "called at gameTimeNow()=" + calledAt[0] : "not called") +
                     "; render errors in 6 frames " + errs + (stages.length ? " (" + stages.join(", ") + (inGoal ? ", thrown inside spawnGoal" : "") + ")" : "") +
                     "; goalSpawned=" + goalSpawned + (goal ? " goal at world(" + fx(goal.x + windowOriginX, 1) + "," + fx(goal.y + windowOriginY, 1) + ")" : " goal=null") +
-                    because(good, "(updateEnemies 11495 calls spawnGoal regardless of mode; its LCG goes negative when int32(Date.now()^0xBEEF) < 0, 4085-4104)"));
+                    because(good, "(updateEnemies calls spawnGoal regardless of mode; its LCG goes negative when int32(gameTimeNow()^0xBEEF) < 0, 03-level-generation.js spawnGoal)"));
             });
         });
         LAB.check("persistence: clearing every enemy in an Endless window neither spawns a fixed-level exit goal nor throws", ok, det.join(" || "));
