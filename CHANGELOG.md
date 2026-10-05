@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+- Fixes chest face order, so the lock and trim never show through the back, and
+  market stalls: facings are normalized at the window boundary so stalls no
+  longer vanish, collision matches the drawn table, and stalls and the guard
+  tower stand on their sampled terrain height and are hidden by terrain in
+  front.
+- Closes the texture pilot's antialiased seams with owner-mask edge coverage,
+  stops near-equal split edges from flipping between frames, and makes hybrid
+  mapping (planar row strips, triangles elsewhere) the structure study default,
+  with recorded tessellation and tile-size evidence.
+- Brings 3D models for wall props, chests, spawner obelisks, floor props,
+  landmarks and structures into the game, with hybrid-mapped structure and prop
+  textures from the procedural material catalog on a per-frame budget. Every
+  new path is a render feature: the Recommended preset turns them on, Legacy
+  (the pre-integration reference) turns them off, G switches presets, the
+  Graphics row sets single switches, and the HUD shows the preset and texture
+  counters. Adds the `/render-lab.html` developer page and a developer "go to
+  nearest landmark" action.
+- Adds spell visuals slice 1: per-spell visual recipes, a cached glow sprite
+  layer without shadow blur, bolts and bursts drawn in front of enemies, and a
+  Spell gallery mode in the casting studio.
+- Adds a unified, recipe-driven effects system that owns every transient effect
+  list, with occlusion tiers and a performance governor. Ambient motes, torch
+  embers and glow, bones, pickup bursts and flame embers move onto it, and
+  Settings > Effects adds weather (rain, peak snow, ash), impact debris (sparks,
+  chips, dust) and footstep, landing and dash dust presets. Adds the
+  `/fx-bench.js` effects benchmark.
+- Adds a held staff casting rig to the casting studio (preview only; normal
+  play still draws the original arms). The spell HUD panel now shows on a spell
+  change or cast, stays while the spell is busy or mana is short, and otherwise
+  fades.
+- Adds a solved water system: springs run downhill and fill basins as flat
+  lakes, rivers are carved into the terrain with banks, one `waterAt` query
+  serves rendering, movement and enemies, a 3D pass draws lakes and rivers, and
+  wading slows actors while currents carry the player. Water keeps off
+  fortress, arena and watchtower floors plus a 48 u margin, carving is bounded,
+  and rivers drain where they would reach that reserved ground.
+- Fixes the classic-level 3D floor crash (audit D24): classic levels now build
+  the per-layer floor colors the 3D floor pass reads.
+- Stops silently dropping 3D floor cells and sprites: the floor cell buffer
+  grows to the view's scan rectangle (audit D25) and renderEntities3D's sort
+  buffers grow past 512 entities. A classic level keeps its boosted view
+  distance when settings are applied.
+- Integration follow-ups: the Perf HUD counts each stage once per rendered
+  frame and keeps casting-studio and cave-profile frames out of the live table,
+  a modeled wall sconce's torch glow tests visibility at its own flame, and
+  fx-bench and the browser profile record the render preset and effect family
+  modes.
+- Refreshes the audit lab: page reloads restore the simulation clock, probes
+  can expect a precondition failure, entries for repaired defects (D19, D24,
+  D25, G7/N1, G8, N2, N5 and N11) are retired, the missing near-chest prompt in
+  caves is recorded as a known game defect, and stale fixtures and probes are
+  repaired or re-anchored. The harness runs under Deno as well as jsc, and the
+  core gate grows from 160 to 367 tests.
+
 ## 0.0 — 2026-09-27
 
 - Initial standalone game snapshot, including the source assembly, generated
