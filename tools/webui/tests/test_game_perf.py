@@ -2,10 +2,13 @@
 
 What this suite covers (harness: tools/webui/harness/game_perf_harness.js):
 
-  - floor render buffer capacity (D25): cells the floor pass REALLY writes into
-    _drawFloorCellBuf (40,000 cells, L786; unguarded write L12643), counted from
-    a NaN-filled buffer and re-measured with a 4x scratch buffer when the pass
-    fills it -- at every quality preset in Endless and across fixed Level 4, at
+  - floor render buffer capacity (D25, repaired): cells the floor pass REALLY
+    writes into _drawFloorCellBuf (a 40,000-cell start buffer that
+    drawLayersFloor3D grows to the largest scan rectangle its view distance and
+    mesh allow; the write itself has no bounds check), counted from a
+    NaN-filled buffer, re-read after a pass that grows it, and re-measured with
+    a 4x scratch buffer when the pass fills it -- at every quality preset in
+    Endless and across fixed Level 4 from a fresh page's start buffer, at
     pitch 0 / pitchMax, base / dash FOV and a full heading sweep;
   - window-rebuild budgets (G3), counted with LAB.countCalls("assembleWindow"):
     once per chunk-window change from the settings overlay's own Apply click
@@ -80,14 +83,13 @@ _FPS_WHY = ("loop() calls handleInput(FIXED_DT) once per RENDER frame (L21910) w
 # pins the mechanism: a known bug that starts failing for another reason (a
 # PRECONDITION, a different count) stops being "expected".
 KNOWN_BUGS: dict[str, tuple[str, str]] = {
-    _L4: (
-        "audit D25: _drawFloorCellBuf holds 40,000 cells (L786) and the write at L12643-12646 is unguarded; "
-        "Level 4 viewDist is 2304 (L7677), so the pass wants up to 46,596 cells at (2160,480) pitch 1.4 + dash, "
-        "heading 90deg -- and 43,290 already at pitch 0, so a fix aimed only at the high-pitch under-foot skirt "
-        "(L12630-12641) is not enough. Typed-array writes past the end are silently dropped. (D24's fixed-level "
-        "floor crash -- render suite, now repaired -- hid this: every fixed-level floor pass threw at L12788 after "
-        "buffering. The pass now completes.)",
-        r"demand \d+\+? > capacity 40000 \(over by \d+\)"),
+    # _L4 (audit D25: Level 4's 2304 u view wanted up to 46,596 floor cells at
+    # (2160,480) pitch 1.4 + dash, heading 90deg, and 43,290 at pitch 0, from a
+    # fixed 40,000-cell buffer whose write is unchecked, so typed-array writes
+    # past the end were silently dropped) was repaired by codex/floor-cell-buffer:
+    # drawLayersFloor3D grows _drawFloorCellBuf to the largest scan rectangle its
+    # view distance and mesh allow before collecting cells. Its BREAK probes
+    # below remove that growth, or reach it only in Endless, again.
     _JITTER: (
         "audit G3: updateChunks (L7474-7501) re-centres whenever the player's chunk differs from the window "
         "centre (L7483, no hysteresis), so 10 one-frame crossings of a chunk line = 10 assembleWindow calls "
@@ -147,6 +149,15 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
 
 # Shared probe texts.
 _BUF = "var _drawFloorCellBuf = new Float32Array(120000);"
+_BUF_20K = (_BUF, "var _drawFloorCellBuf = new Float32Array(60000);")
+# drawLayersFloor3D's growth step (audit D25's repair); the same block
+# tools/game/tests/floor_cell_buffer.js --fixed-capacity removes.
+_GROW_IF = "  if (_drawFloorCellBuf.length < _scanCells * 3) {\n"
+_NO_GROW = (_GROW_IF +
+            "    var _scanSpan = Math.ceil(2 * viewRad) + 2;\n"
+            "    _drawFloorCellBuf = new Float32Array(3 * Math.max(_scanCells,\n"
+            "      Math.min(_scanSpan, mesh.w - 1) * Math.min(_scanSpan, mesh.h - 1)));\n"
+            "  }\n", "")
 _LOD_ANCHOR = ("      if (distSq > viewDistSq) { __caveStats.floorDistCull++; continue; }\n"
                "      // \"Under-foot skirt\"")
 
@@ -183,12 +194,16 @@ _E6_FIX = [
 # (description, [(anchor, replacement), ...], None, {check_id: ...})   multi-site
 PROBES: list = [
     # ── FIX probes: remove a known bug's cause, its check must go PASS ──
-    ("FIX D25: a 60,000-cell floor buffer holds Level 4's worst view",
-     _BUF, "var _drawFloorCellBuf = new Float32Array(180000);",
-     {_L4: "PASS", _ENDLESS_BUF: "PASS"}),
-    ("FIX D25 by culling harder, counted in a NEW __caveStats counter: floor cells beyond 2000 u are skipped "
-     "(the demand really drops to ~36k; a cull-counter formula would have read ~50k)",
-     _LOD_ANCHOR, _lod(2000),
+    # D25 is repaired; its two FIX probes became the BREAK probe and the
+    # measurement GUARD below, in the same slots.
+    ("BREAK D25 (repaired): the floor pass no longer grows _drawFloorCellBuf, so Level 4 is back to the "
+     "40,000-cell start buffer (demand 46,596); every Endless preset still fits in it",
+     _NO_GROW[0], _NO_GROW[1],
+     {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
+    ("GUARD D25: with the growth removed, culling harder beyond 2000 u, counted in a NEW __caveStats counter, "
+     "brings Level 4 back under 40,000 cells (the demand really drops to ~36k; a cull-counter formula would "
+     "still read ~50k)",
+     [_NO_GROW, (_LOD_ANCHOR, _lod(2000))], None,
      {_L4: "PASS", _ENDLESS_BUF: "PASS"}),
     ("FIX G3: 24 u of hysteresis before re-centring the window",
      _HYSTERESIS[0], _HYSTERESIS[1],
@@ -280,9 +295,9 @@ PROBES: list = [
     ("BREAK: the page script throws at load (and the FAIL line must still parse under the real id)",
      _BUF, _BUF + "\nthrow new Error('probe: page script throws at load');",
      {_LOAD: "FAIL"}),
-    ("BREAK: a 20,000-cell floor buffer overflows at the ultra preset",
-     _BUF, "var _drawFloorCellBuf = new Float32Array(60000);",
-     {_ENDLESS_BUF: "FAIL"}),
+    ("BREAK: without the growth, a 20,000-cell start buffer overflows at the ultra preset",
+     [_NO_GROW, _BUF_20K], None,
+     {_ENDLESS_BUF: "FAIL", _L4: "FAIL"}),
     ("BREAK: Apply's rAF rebuild is centred one chunk off, so the next frame's updateChunks rebuilds again",
      "requestAnimationFrame(function() { assembleWindow(_rebuildPcx, _rebuildPcy); });",
      "requestAnimationFrame(function() { assembleWindow(_rebuildPcx + 1, _rebuildPcy); });",
@@ -306,12 +321,14 @@ PROBES: list = [
      {_SPAM: "FAIL", _NO_REBUILD: "FAIL"}),
 
     # ── GUARD probes: a plausible change that must NOT turn a check green / red ──
-    ("GUARD D25: with the buffer FIX, fixed levels that skip the floor pass must FAIL (pass wrote no cells), "
+    ("GUARD D25: with the growth fix, fixed levels that skip the floor pass must FAIL (pass wrote no cells), "
      "not read an earlier pass's counters",
-     [(_BUF, "var _drawFloorCellBuf = new Float32Array(180000);"), _SKIP_FIXED_FLOOR], None,
+     _SKIP_FIXED_FLOOR[0], _SKIP_FIXED_FLOOR[1],
      {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
-    ("GUARD D25: culling harder beyond 1200 u, counted in a NEW counter, keeps the Endless check PASS",
-     _LOD_ANCHOR, _lod(1200),
+    ("GUARD D25: with the growth removed and a 20,000-cell start buffer, culling harder beyond 1200 u, counted in "
+     "a NEW counter, brings the Endless check back to PASS (the cells written really drop under 20,000 at ultra; "
+     "a cull-counter formula would still read more than 20,000)",
+     [_NO_GROW, _BUF_20K, (_LOD_ANCHOR, _lod(1200))], None,
      {_ENDLESS_BUF: "PASS"}),
     ("GUARD G3: updateChunks moved from gameUpdate into loop() -- still no hysteresis, so jitter must still FAIL",
      [("  if (ENDLESS_MODE) updateChunks();\n\n  // Wall collision", "  /* moved to loop() */\n\n  // Wall collision"),
@@ -328,13 +345,25 @@ PROBES: list = [
      _E6_FIX + [("function startGamepadPolling() {\n  if (gpPoll) return;",
                  "function startGamepadPolling() {\n  if (gpPoll) return;\n  return;")], None,
      {_E6: "FAIL"}),
+
+    # ── D25, repaired: appended so the slots above keep their test_probe_NN ──
+    ("BREAK D25: the growth is reached only in Endless (as if moved into the Endless window rebuild), so Level 4 "
+     "on a fresh page keeps the 40,000-cell start buffer",
+     _GROW_IF, "  if (ENDLESS_MODE && _drawFloorCellBuf.length < _scanCells * 3) {\n",
+     {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
+    ("GUARD D25: a 20,000-cell start buffer is grown by the pass, so every view still fits (the harness re-reads "
+     "the grown buffer instead of counting the one it filled with NaN)",
+     _BUF_20K[0], _BUF_20K[1],
+     {_ENDLESS_BUF: "PASS", _L4: "PASS"}),
 ]
 
 # Checks whose ONLY flipping probe is a FIX of the known bug (no BREAK possible
 # while the bug is present), for the record:
-#   _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _L4, _JITTER, _SPAM, _RGB
+#   _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _JITTER, _SPAM, _RGB
 # each has a FIX above (plus a GUARD where a vacuous pass was possible). _FS is
-# repaired and now has the BREAK probe that reintroduces the viewport size.
+# repaired and now has the BREAK probe that reintroduces the viewport size. _L4
+# (D25) is repaired and has BREAK probes that remove the buffer growth or reach
+# it only in Endless, plus a GUARD that it measures real writes, not culls.
 
 PerfSuite = suite_testcase("perf", KNOWN_BUGS, min_checks=20)
 PerfProbes = probe_testcase("perf", PROBES)

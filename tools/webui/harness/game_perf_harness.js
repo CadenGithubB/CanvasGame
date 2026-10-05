@@ -75,18 +75,28 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     function chunkKey(p) { return Math.floor(p.x / CHUNK_SIZE) + "," + Math.floor(p.y / CHUNK_SIZE); }
 
     // ── floor render buffer: what the pass REALLY writes ─────────────────
-    // _drawFloorCellBuf (L786) packs [distSq, x, y] per surviving cell; the
-    // write at L12643-12646 is unguarded, and typed-array writes past the end
-    // are silently dropped. The demand is measured from the buffer itself, not
-    // re-derived from the __caveStats cull counters (a formula that is only
-    // right while the game has exactly those three culls: a new cull counted
-    // anywhere else would read as MORE cells):
+    // _drawFloorCellBuf packs [distSq, x, y] per surviving cell. It starts at
+    // 40,000 cells (01-config-state.js); since audit D25's repair
+    // drawLayersFloor3D grows it, before collecting, to the largest scan
+    // rectangle its view distance and mesh allow. The write itself has no
+    // bounds check, so a pass that skipped the growth would again drop
+    // typed-array writes past the end without a word. The demand is measured
+    // from the buffer itself, not re-derived from the __caveStats cull
+    // counters (a formula that is only right while the game has exactly those
+    // three culls: a new cull counted anywhere else would read as MORE cells):
     //   1. fill the live buffer with NaN, run the pass, count the triples it
     //      wrote (a pass that grows the buffer is re-run on the grown one);
     //   2. only when it filled the buffer to the last slot, re-run the same
     //      view with a 4x NaN scratch buffer to learn how many it WANTED.
     // A pass that writes nothing (did not run, returned early) is reported as
     // empty, never as whatever an earlier pass left in the counters.
+    //
+    // _startFloorLen: a fresh page's start buffer, in floats, read before any
+    // pass can grow it. The buffer is page state that only grows, and
+    // LAB.freshPage does not restore it, so a scenario that measures a mode's
+    // OWN growth (fixed Level 4 after Endless at ultra) starts from it.
+    var _startFloorLen = typeof _drawFloorCellBuf !== "undefined" && _drawFloorCellBuf ? _drawFloorCellBuf.length : 0;
+    var _startFloorCells = Math.floor(_startFloorLen / 3);
     var _bigBuf = null;
     function countWritten(b) { var n = 0; for (var i = 1; i < b.length; i += 3) if (b[i] === b[i]) n++; return n; }
     function floorPass() {
@@ -318,7 +328,7 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
         } finally { aw.restore(); }
         check("perf: Endless floor render buffer never overflows at any quality preset, pitch, dash FOV or heading",
             bufOk, "cells each floor pass wrote into _drawFloorCellBuf (NaN-sentinel count; demand re-measured with a 4x scratch buffer when it filled) vs " +
-            "its capacity (L786, unguarded write L12643-12646), pitch 0/" + CAM_PITCH_MAX + ", FOV base/+dash, 16 headings: " + bufDetail.join("; "));
+            "its capacity (grown by drawLayersFloor3D to its scan rectangle; the write has no bounds check), pitch 0/" + CAM_PITCH_MAX + ", FOV base/+dash, 16 headings: " + bufDetail.join("; "));
         check("perf: applying a quality preset rebuilds the window once when the chunk window changes and never otherwise",
             rbOk, "assembleWindow calls from the Apply click through the rAF and 2 more frames (applySettings L17752-17768): " + rbDetail.join("; "));
         LAB.freshPage();
@@ -332,6 +342,11 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     // ════════════════════════════════════════════════════════════════════
     scenario("perf: fixed level 4", function () {
         LAB.freshPage();
+        // A player who opens Level 4 first has the start buffer. Without this
+        // the Endless scenario's ultra growth (91,204 cells) would already
+        // hold Level 4's 85,801-cell scan rectangle and hide whether Level 4's
+        // own pass grows the buffer.
+        _drawFloorCellBuf = new Float32Array(_startFloorLen);
         LAB.startLevel(4);
         LAB.freezeDay(0.5);
         LAB.releasePad();
@@ -358,7 +373,8 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
             " (over by " + (worst.max - worst.cap) + ") at " + worst.at + "; worst per pitch: " + byPitchText(bp) +
             "; viewDist " + viewDist + " (L7677), mesh " + (floorMesh ? floorMesh.w + "x" + floorMesh.h + " gs " + floorMesh.gridSize : "none") +
             "; " + passes + " passes over a 3x3 grid x pitch 0/" + CAM_PITCH_MAX + " x FOV base/+dash x 8 headings" +
-            (threw ? "; " + threw + " passes threw after buffering (D24, render suite)" : "") + "; buffer L786, unguarded write L12643");
+            (threw ? "; " + threw + " passes threw after buffering (D24, render suite)" : "") +
+            "; from a fresh page's " + _startFloorCells + "-cell start buffer, grown by drawLayersFloor3D to its scan rectangle (the write has no bounds check)");
     });
 
     // ════════════════════════════════════════════════════════════════════
