@@ -90,6 +90,17 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     //      view with a 4x NaN scratch buffer to learn how many it WANTED.
     // A pass that writes nothing (did not run, returned early) is reported as
     // empty, never as whatever an earlier pass left in the counters.
+    // The pass that grows the buffer is a frame of its own (a level's first,
+    // the first after a preset change), and step 1's re-run on the grown
+    // buffer measures the frame after it. So the buffer it replaced, still
+    // NaN-filled, is read as well: the growth must come before the
+    // collection, and a triple left there means the growing frame collected
+    // into the old capacity (as a pass does that reads _drawFloorCellBuf into
+    // a local before growing it) and drops every cell past it whenever its
+    // view wants more. That fails the check whatever the measured view
+    // happened to want. Level 4 starts from the start buffer, so its first
+    // pass is a growing one; in Endless the preset's own frames (applyPreset)
+    // grow the buffer before the sweep.
     //
     // _startFloorLen: a fresh page's start buffer, in floats, read before any
     // pass can grow it. The buffer is page state that only grows, and
@@ -100,12 +111,17 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     var _bigBuf = null;
     function countWritten(b) { var n = 0; for (var i = 1; i < b.length; i += 3) if (b[i] === b[i]) n++; return n; }
     function floorPass() {
-        var threw = false, b = _drawFloorCellBuf, written = 0;
+        var threw = false, b = _drawFloorCellBuf, written = 0, grew = null;
         for (var tries = 0; tries < 3; tries++) {
             b = _drawFloorCellBuf;
             b.fill(NaN);
             try { drawLayersFloor3D(); } catch (e) { threw = true; }
             if (_drawFloorCellBuf === b) { written = countWritten(b); break; }
+            // Replaced: cells left in the buffer it replaced were collected
+            // into the old capacity on the growing frame.
+            if (!grew) grew = { from: Math.floor(b.length / 3), to: 0, stale: 0 };
+            grew.to = Math.floor(_drawFloorCellBuf.length / 3);
+            grew.stale += countWritten(b);
         }
         var cap = Math.floor(b.length / 3), demand = written, saturated = false;
         if (written >= cap && cap > 0) {
@@ -118,20 +134,29 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
             _drawFloorCellBuf = b;
         }
         var formula = __caveStats.floorTotal - __caveStats.floorDistCull - __caveStats.floorFovCull - __caveStats.floorBehind;
-        return { demand: demand, cap: cap, written: written, threw: threw, saturated: saturated, formula: formula };
+        return { demand: demand, cap: cap, written: written, threw: threw, saturated: saturated, formula: formula, grew: grew };
     }
     // Sweep pitch {0, pitchMax} x FOV {base, base + dash punch} x headings;
     // keep the pass closest to (or furthest past) its buffer's capacity.
     function sweepFloor(headings) {
         var pitches = [0, CAM_PITCH_MAX];
         var fovs = [GAME_CONFIG.player.baseFov, GAME_CONFIG.player.baseFov + GAME_CONFIG.player.dashFovPunch];
-        var r = { max: -1, cap: 0, at: "", formula: 0, passes: 0, empty: 0, threw: 0, byPitch: {} };
+        var r = { max: -1, cap: 0, at: "", formula: 0, passes: 0, empty: 0, threw: 0, byPitch: {}, grew: 0, stale: 0, staleAt: "" };
         var sv = { ang: cam.ang, pitch: cam.pitch, fov: cam.fov };
         for (var pi = 0; pi < pitches.length; pi++) for (var fi = 0; fi < fovs.length; fi++) {
             for (var hi = 0; hi < headings; hi++) {
                 cam.pitch = pitches[pi]; cam.fov = fovs[fi]; cam.ang = hi * 2 * Math.PI / headings;
                 var p = floorPass();
                 r.passes++;
+                if (p.grew) {
+                    r.grew++;
+                    if (p.grew.stale > 0) {
+                        if (!r.stale) r.staleAt = "pitch " + fmt(pitches[pi], 2) + (fi ? " +dash" : "") + " heading " + fmt(hi * 360 / headings) +
+                            "deg collected " + p.grew.stale + " of the " + p.demand + (p.saturated ? "+" : "") + " cells it wants into the " +
+                            p.grew.from + "-cell buffer it then replaced with a " + p.grew.to + "-cell one, so every growing frame keeps the old capacity";
+                        r.stale++;
+                    }
+                }
                 if (p.demand <= 0) { r.empty++; continue; }
                 if (p.threw) r.threw++;
                 var pk = "p" + fmt(pitches[pi], 1);
@@ -318,9 +343,11 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
                     LAB.prepCamera();
                     var r = sweepFloor(16);
                     var over = r.max > r.cap;
-                    if (!applied || over || r.empty > 0 || r.max <= 0) bufOk = false;
+                    if (!applied || over || r.empty > 0 || r.max <= 0 || r.stale > 0) bufOk = false;
                     bufDetail.push("s" + seed + " " + name + " vd" + viewDist + " W" + WINDOW_CHUNKS + " demand max " + r.max +
                         (r.sat ? "+" : "") + "/" + r.cap + " @" + r.at +
+                        (r.grew ? " (" + r.grew + " passes grew the buffer)" : "") +
+                        (r.stale ? " COLLECTED BEFORE GROWING in " + r.stale + "/" + r.grew + " growing passes, first at " + r.staleAt : "") +
                         (r.empty ? " PRECONDITION: " + r.empty + "/" + r.passes + " passes wrote no cells" : "") +
                         (r.threw ? " (" + r.threw + " passes threw after buffering)" : ""));
                 });
@@ -328,7 +355,8 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
         } finally { aw.restore(); }
         check("perf: Endless floor render buffer never overflows at any quality preset, pitch, dash FOV or heading",
             bufOk, "cells each floor pass wrote into _drawFloorCellBuf (NaN-sentinel count; demand re-measured with a 4x scratch buffer when it filled) vs " +
-            "its capacity (grown by drawLayersFloor3D to its scan rectangle; the write has no bounds check), pitch 0/" + CAM_PITCH_MAX + ", FOV base/+dash, 16 headings: " + bufDetail.join("; "));
+            "its capacity (grown by drawLayersFloor3D to its scan rectangle, before collecting -- a growing pass is also read in the buffer it replaced; " +
+            "the write has no bounds check), pitch 0/" + CAM_PITCH_MAX + ", FOV base/+dash, 16 headings: " + bufDetail.join("; "));
         check("perf: applying a quality preset rebuilds the window once when the chunk window changes and never otherwise",
             rbOk, "assembleWindow calls from the Apply click through the rAF and 2 more frames (applySettings L17752-17768): " + rbDetail.join("; "));
         LAB.freshPage();
@@ -351,13 +379,15 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
         LAB.freezeDay(0.5);
         LAB.releasePad();
         var pre = worldW === 4320 && worldH === 2880 && !!floorMesh && !!floorMesh.layerCount;
-        var worst = { max: -1, cap: 0, at: "" }, passes = 0, empty = 0, threw = 0, bp = {};
+        var worst = { max: -1, cap: 0, at: "" }, passes = 0, empty = 0, threw = 0, bp = {}, grew = 0, stale = 0, staleAt = "";
         var fr = [1 / 6, 1 / 2, 5 / 6];
         for (var iy = 0; iy < 3; iy++) for (var ix = 0; ix < 3; ix++) {
             pos.x = worldW * fr[ix]; pos.y = worldH * fr[iy];
             LAB.prepCamera();
             var r = sweepFloor(8);
-            passes += r.passes; empty += r.empty; threw += r.threw;
+            passes += r.passes; empty += r.empty; threw += r.threw; grew += r.grew;
+            if (r.stale && !stale) staleAt = "(" + fmt(pos.x) + "," + fmt(pos.y) + ") " + r.staleAt;
+            stale += r.stale;
             for (var k in r.byPitch) bp[k] = Math.max(bp[k] || 0, r.byPitch[k]);
             if (r.max >= 0 && (worst.max < 0 || r.max - r.cap > worst.max - worst.cap)) {
                 worst = { max: r.max, cap: r.cap, sat: r.sat, formula: r.formula, at: "(" + fmt(pos.x) + "," + fmt(pos.y) + ") " + r.at };
@@ -365,16 +395,18 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
         }
         LAB.metric("perf.level4.max_floor_demand_cells", worst.max);
         LAB.metric("perf.level4.view_dist", viewDist);
-        var ok = pre && empty === 0 && worst.max > 0 && worst.max <= worst.cap;
+        var ok = pre && empty === 0 && worst.max > 0 && worst.max <= worst.cap && stale === 0;
         check("perf: fixed Level 4 floor render buffer never overflows at any camera position, pitch, dash FOV or heading", ok,
             (pre ? "" : "PRECONDITION: level 4 world/mesh not built; ") +
             (empty ? "PRECONDITION: " + empty + "/" + passes + " passes wrote no cells into _drawFloorCellBuf; " : "") +
+            (stale ? "COLLECTED BEFORE GROWING in " + stale + "/" + grew + " passes that grew the buffer, first at " + staleAt + "; " : "") +
             "demand " + worst.max + (worst.sat ? "+" : "") + (worst.max > worst.cap ? " > " : " <= ") + "capacity " + worst.cap +
             " (over by " + (worst.max - worst.cap) + ") at " + worst.at + "; worst per pitch: " + byPitchText(bp) +
             "; viewDist " + viewDist + " (L7677), mesh " + (floorMesh ? floorMesh.w + "x" + floorMesh.h + " gs " + floorMesh.gridSize : "none") +
             "; " + passes + " passes over a 3x3 grid x pitch 0/" + CAM_PITCH_MAX + " x FOV base/+dash x 8 headings" +
             (threw ? "; " + threw + " passes threw after buffering (D24, render suite)" : "") +
-            "; from a fresh page's " + _startFloorCells + "-cell start buffer, grown by drawLayersFloor3D to its scan rectangle (the write has no bounds check)");
+            "; from a fresh page's " + _startFloorCells + "-cell start buffer, grown by drawLayersFloor3D to its scan rectangle (growing passes: " + grew +
+            ", each also read in the buffer it replaced; the write has no bounds check)");
     });
 
     // ════════════════════════════════════════════════════════════════════

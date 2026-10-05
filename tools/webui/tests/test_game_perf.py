@@ -6,10 +6,12 @@ What this suite covers (harness: tools/webui/harness/game_perf_harness.js):
     writes into _drawFloorCellBuf (a 40,000-cell start buffer that
     drawLayersFloor3D grows to the largest scan rectangle its view distance and
     mesh allow; the write itself has no bounds check), counted from a
-    NaN-filled buffer, re-read after a pass that grows it, and re-measured with
-    a 4x scratch buffer when the pass fills it -- at every quality preset in
-    Endless and across fixed Level 4 from a fresh page's start buffer, at
-    pitch 0 / pitchMax, base / dash FOV and a full heading sweep;
+    NaN-filled buffer, re-read after a pass that grows it (whose growing frame
+    must leave the buffer it replaced untouched: a cell collected there kept
+    the old capacity), and re-measured with a 4x scratch buffer when the pass
+    fills it -- at every quality preset in Endless and across fixed Level 4
+    from a fresh page's start buffer, at pitch 0 / pitchMax, base / dash FOV
+    and a full heading sweep;
   - window-rebuild budgets (G3), counted with LAB.countCalls("assembleWindow"):
     once per chunk-window change from the settings overlay's own Apply click
     through the rAF and two more frames, none while walking inside one chunk,
@@ -158,6 +160,11 @@ _NO_GROW = (_GROW_IF +
             "    _drawFloorCellBuf = new Float32Array(3 * Math.max(_scanCells,\n"
             "      Math.min(_scanSpan, mesh.w - 1) * Math.min(_scanSpan, mesh.h - 1)));\n"
             "  }\n", "")
+# The pass reads the buffer into its local after that growth; the --stale-local
+# mutation of floor_cell_buffer.js reads it before, so the growing frame still
+# collects into the buffer it replaces.
+_READ = "  var _cellBuf = _drawFloorCellBuf;\n"
+_STALE_LOCAL = [("  var _scanCells = ", _READ + "  var _scanCells = "), (_NO_GROW[0] + _READ, _NO_GROW[0])]
 _LOD_ANCHOR = ("      if (distSq > viewDistSq) { __caveStats.floorDistCull++; continue; }\n"
                "      // \"Under-foot skirt\"")
 
@@ -352,9 +359,15 @@ PROBES: list = [
      _GROW_IF, "  if (ENDLESS_MODE && _drawFloorCellBuf.length < _scanCells * 3) {\n",
      {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
     ("GUARD D25: a 20,000-cell start buffer is grown by the pass, so every view still fits (the harness re-reads "
-     "the grown buffer instead of counting the one it filled with NaN)",
+     "the grown buffer instead of counting the one it filled with NaN, and a pass that grows before collecting "
+     "leaves the buffer it replaced untouched)",
      _BUF_20K[0], _BUF_20K[1],
      {_ENDLESS_BUF: "PASS", _L4: "PASS"}),
+    ("BREAK D25: the pass reads _drawFloorCellBuf into its local before growing it (floor_cell_buffer.js "
+     "--stale-local), so Level 4's growing frame collects into the 40,000-cell buffer it replaces; Endless's "
+     "presets grow the buffer in their own frames and every Endless view fits the start buffer, so it still passes",
+     _STALE_LOCAL, None,
+     {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
 ]
 
 # Checks whose ONLY flipping probe is a FIX of the known bug (no BREAK possible
@@ -362,8 +375,9 @@ PROBES: list = [
 #   _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _JITTER, _SPAM, _RGB
 # each has a FIX above (plus a GUARD where a vacuous pass was possible). _FS is
 # repaired and now has the BREAK probe that reintroduces the viewport size. _L4
-# (D25) is repaired and has BREAK probes that remove the buffer growth or reach
-# it only in Endless, plus a GUARD that it measures real writes, not culls.
+# (D25) is repaired and has BREAK probes that remove the buffer growth, reach
+# it only in Endless or collect before it, plus a GUARD that it measures real
+# writes, not culls.
 
 PerfSuite = suite_testcase("perf", KNOWN_BUGS, min_checks=20)
 PerfProbes = probe_testcase("perf", PROBES)
