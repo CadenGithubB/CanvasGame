@@ -490,14 +490,17 @@ function getWaterStats() { return Object.assign({}, waterStats); }
 // run becomes one river object whose ends reach one point into the lake.
 // A river ends where its water would stand above reserved ground beside it
 // and drains there, at an end the land holds (see _waterRiverKeepOff and
-// _waterRiverDrainFall).
+// _waterRiverDrainFall). A river joins the run that owns its confluence
+// (runs[runOf[cell]]: that run's river object, or null, and whether its water
+// drains into reserved ground, there or further on); see _waterRiverOutlet.
 function buildWaterRivers(mesh, sources, field) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, owner = new Int32Array(n), rivers = [];
+  var runOf = new Int32Array(n).fill(-1), runs = [];
   for (var s = 0; s < sources.length; s++) {
-    var src = sources[s], id = s + 1, c = src.cell, path = [], guard = 0;
+    var src = sources[s], id = s + 1, c = src.cell, path = [], guard = 0, confluence = -1;
     if (c < 0 || !mesh.water[c]) continue;
     while (c >= 0 && guard++ < n) {
-      if (owner[c] && owner[c] !== id) { path.push(c); break; }   // confluence
+      if (owner[c] && owner[c] !== id) { path.push(c); confluence = c; break; }   // confluence
       if (owner[c] === id) break;                                  // loop guard
       owner[c] = id; path.push(c);
       var dx = Math.round(mesh.waterDirX[c]), dy = Math.round(mesh.waterDirY[c]);
@@ -512,8 +515,12 @@ function buildWaterRivers(mesh, sources, field) {
       if (cell >= 0 && !still) { if (!run.length && k > 0) run.push(path[k - 1]); run.push(cell); continue; }
       if (cell >= 0 && run.length) run.push(cell);             // reach one point into the lake
       var last = run.length ? run[run.length - 1] : -1, drains = cell < 0 && last >= 0 && (mesh.waterFlags[last] & WATER_FLAG_DRAIN);
-      var river = run.length >= 3 ? _waterRiverObject(mesh, run, halfWidth, id, rivers.length, run[0] === src.cell, !!drains, field) : null;
+      var outlet = cell < 0 && last >= 0 && last === confluence && runOf[last] >= 0 ? runs[runOf[last]] : null;
+      var fate = {drains: !!drains || !!(outlet && outlet.drains)};
+      var river = run.length >= 3 ? _waterRiverObject(mesh, run, halfWidth, id, rivers.length, run[0] === src.cell, !!drains, field, outlet, fate) : null;
       if (river) rivers.push(river);
+      for (var rc = 0; rc < run.length; rc++) if (owner[run[rc]] === id && mesh.water[run[rc]] === WATER_KIND.flowing) runOf[run[rc]] = runs.length;
+      runs.push({river: river, drains: fate.drains});
       run = [];
     }
   }
@@ -530,9 +537,11 @@ function _waterRiverHalfWidth(strength) {
 // height grid's zigzags into meanders whose bends are wider than the river,
 // so the channel reads as one smooth course and the ribbon's cross-sections
 // do not fold over each other on the inside of a bend. The carve follows
-// the relaxed line, so the channel moves with it.
+// the relaxed line, so the channel moves with it. `outlet` is the run a
+// tributary joins at its end, or null; fate.drains is set when this run's
+// water drains into reserved ground, even if no river object is left.
 var WATER_RIVER_RELAX = 10;
-function _waterRiverObject(mesh, cells, halfWidth, body, index, fromSpring, drains, field) {
+function _waterRiverObject(mesh, cells, halfWidth, body, index, fromSpring, drains, field, outlet, fate) {
   var w = mesh.w, gs = mesh.gridSize, pts = [];
   for (var i = 0; i < cells.length; i++) pts.push([(cells[i] % w) * gs, ((cells[i] / w) | 0) * gs, mesh.waterSurface[cells[i]]]);
   for (var relax = 0; relax < WATER_RIVER_RELAX; relax++) {
@@ -568,10 +577,12 @@ function _waterRiverObject(mesh, cells, halfWidth, body, index, fromSpring, drai
   for (var wI = 0; wI < res.length; wI++) res[wI][4] = halfWidth * (fromSpring ? Math.min(1, 0.4 + 0.12 * wI) : 1);
   var course = {points: res, drains: !!drains, heldBack: 0};
   if (field && field.rimCells && field.rimCells.length) _waterRiverKeepOff(mesh, field, course);
+  if (outlet && outlet.drains && !course.drains) _waterRiverOutlet(mesh, field, course, outlet);
   if (course.drains) _waterRiverDrainFall(mesh, field, course);
+  if (fate && course.drains) fate.drains = true;
   if (course.points.length < 2) return null;
   return {id: index, body: body, halfWidth: halfWidth, depth: WATER_RIVER_BED_DEPTH, points: course.points, drains: course.drains,
-    heldBack: course.heldBack};
+    heldBack: course.heldBack, joins: !!course.joins};
 }
 // No river stands above reserved ground beside its water. Its water is what
 // carveWaterRivers writes: the points within its width of its course, its
@@ -690,11 +701,16 @@ function _waterRiverDrainFall(mesh, field, course) {
     pts.length--;
   }
   if (pts.length < 2) return;
-  var e = pts[pts.length - 1], target = Math.max(end.low, end.floor);
-  course.heldBack = arc - e[3];
+  course.heldBack = arc - pts[pts.length - 1][3];
+  _waterRiverFall(mesh, field, pts, Math.max(end.low, end.floor));
+}
+// Lowers a course's surface over its last WATER_DRAIN_FALL world units to
+// `target` at its end, never below what its channel can hold. The surface
+// never rises downstream, so no point falls below the floor of any point
+// after it.
+function _waterRiverFall(mesh, field, pts, target) {
+  var e = pts[pts.length - 1];
   if (!(target < e[2])) return;
-  // The surface never rises downstream, so no point falls below the floor of
-  // any point after it.
   for (var k = pts.length - 1, floor = -Infinity; k >= 0; k--) {
     var f = (e[3] - pts[k][3]) / WATER_DRAIN_FALL;
     if (f >= 1) break;
@@ -702,6 +718,35 @@ function _waterRiverDrainFall(mesh, field, course) {
     var fall = Math.max(target + (pts[k][2] - target) * f * f * (3 - 2 * f), floor);
     if (fall < pts[k][2]) pts[k][2] = fall;
   }
+}
+// A tributary ends at its confluence, a point of the run it joins (`outlet`).
+// When that run's water drains into reserved ground (outlet.drains: it
+// drains, or the river it joins does, and so on), its surface may have
+// fallen at the confluence, it may have been held back or kept off short of
+// it, or it may have no river left. The tributary then meets that river's
+// water at the last point of its course that lies within that river's
+// width, searching back from its end while it stays within that width, at
+// a surface its own channel can hold there: it ends at that point
+// (course.joins), its surface falling to that river's there as a drained
+// river's falls to its shore. That river's surface covers its end, so it
+// draws no end cap of its own (_waterRibbonCap). Where there is no such
+// point it has lost its outlet: its water drains where that river's went,
+// so it ends as a drained river does, at an end the land holds
+// (_waterRiverDrainFall).
+function _waterRiverOutlet(mesh, field, course, outlet) {
+  var pts = course.points, into = outlet.river ? outlet.river.points : [];
+  for (var j = pts.length - 1; j >= 1; j--) {
+    var p = pts[j], bd = Infinity, S = 0, wide = 0;
+    for (var s = 0; s < into.length - 1; s++) {
+      var a = into[s], b = into[s + 1], sx = b[0] - a[0], sy = b[1] - a[1], l2 = sx * sx + sy * sy;
+      var t = l2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * sx + (p[1] - a[1]) * sy) / l2)) : 0;
+      var d = Math.hypot(p[0] - a[0] - sx * t, p[1] - a[1] - sy * t);
+      if (d < bd) { bd = d; S = a[2] + (b[2] - a[2]) * t; wide = a[4] + (b[4] - a[4]) * t; }
+    }
+    if (!(bd < wide)) break;
+    if (!(S < _waterRiverFloor(mesh, field, p))) { pts.length = j + 1; _waterRiverFall(mesh, field, pts, S); course.joins = true; return; }
+  }
+  course.drains = true;
 }
 
 // The lake point a river end sits on (its nearest height point), or -1.

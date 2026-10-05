@@ -46,6 +46,14 @@
   src=patch(src,': H[v] + WATER_MIN_DEPTH;',': -Infinity;','--no-unshaped-floor');
   // A drained river ending where the land ahead cannot hold its water.
   src=patch(src,'    if (!(end.floor > end.hold)) break;\n','    break;\n','--no-hold');
+  // A tributary of a river that drains left as it was (ending above that
+  // river's lowered tail, or where that river no longer runs); meeting it
+  // without falling to its surface; looking for a point that can hold that
+  // surface only at its end; or, without an outlet, not draining.
+  src=patch(src,'  if (outlet && outlet.drains && !course.drains) _waterRiverOutlet(mesh, field, course, outlet);\n','','--no-outlet');
+  src=patch(src,'{ pts.length = j + 1; _waterRiverFall(mesh, field, pts, S); course.joins = true; return; }','{ pts.length = j + 1; course.joins = true; return; }','--no-outlet-fall');
+  src=patch(src,'    if (!(bd < wide)) break;\n','    if (!(bd < wide) || j < pts.length - 1) break;\n','--no-walk-back');
+  src=patch(src,'course.joins = true; return; }\n  }\n  course.drains = true;\n','course.joins = true; return; }\n  }\n','--lost-outlet-dangles');
   // A drained river's rounded end carved but left without its water (dry holes).
   src=patch(src,'    var mouth = bestEnd[q] ?','    if (bestEnd[q] > 0 && river.drains) continue;\n    var mouth = bestEnd[q] ?','--dry-drained-ends');
   // Levees raised, or channels cut, without bound; or ground cut to the bound
@@ -232,6 +240,34 @@
     check('a river ends where its carved water would first stand above lower reserved ground beside it, and drains there',
       kept.drains&&endX<276&&endX>=276-2*6&&!whole.drains&&whole.points.length===71,{end:endX,drains:kept.drains,control:[whole.points.length,whole.drains]});
 
+    // 13. A tributary of a river whose water drains, on authored flat ground
+    // (height 5, courses every 6 units). The river runs east along y 288, 30
+    // units wide, its surface falling 0.002 a unit (5.0 at x 300). The
+    // tributary runs south down x 300 at 5.4 and ends 6 units north of the
+    // river's centreline, inside its water: it ends there at the river's
+    // surface, 5.0, its own surface falling to it only over its last
+    // WATER_DRAIN_FALL units. With the ground raised to 6.2 at the height
+    // points of the tributary's last three points (y 282, 276 and 270: rows
+    // 23 and 24 of column 25), where a channel cut even as deep as
+    // WATER_MAX_CUT holds no water as low as 5.0, it ends at y 264, the last
+    // point whose channel can, 24 units from the river's centreline, at 5.0.
+    // A river held back to x 198, whose water no longer
+    // comes within its width, or with no river left at all, leaves it no
+    // outlet: it drains (an end the land holds; _waterRiverDrainFall), its
+    // course unchanged here.
+    function outletCase(raised,into){var f=G.createWaterField(W,Hh),mesh={w:W,h:Hh,gridSize:12,water:new Uint8Array(W*Hh)};
+      f.height.fill(5);if(raised)f.height[23*W+25]=f.height[24*W+25]=6.2;var pts=[];for(var k13=0;k13<48;k13++)pts.push([300,k13*6,5.4-k13*0.0001,k13*6,25]);
+      var out13=[];for(var x13=0;x13<=into;x13+=6)out13.push([x13,288,5.6-0.002*x13,x13,30]);
+      var course={points:pts,drains:false,heldBack:0};G._waterRiverOutlet(mesh,f,course,{river:into>=0?{points:out13}:null,drains:true});return course;}
+    function settled(c,endY,S){var P13=c.points,E=P13[P13.length-1],steady=true,falling=true;
+      for(var k=0;k<P13.length;k++){if(E[3]-P13[k][3]>=G.WATER_DRAIN_FALL&&P13[k][2]!==5.4-k*0.0001)steady=false;if(k&&P13[k][2]>P13[k-1][2])falling=false;}
+      return c.joins&&!c.drains&&E[1]===endY&&Math.abs(E[2]-S)<1e-6&&steady&&falling;}
+    var joined=outletCase(false,420),walked=outletCase(true,420),cut=outletCase(false,198),none=outletCase(false,-1);
+    function intact(c){return c.drains&&!c.joins&&c.points.length===48&&c.points[47][2]===5.4-47*0.0001;}
+    check('a tributary of a river that drains ends in its water at its surface, at the last point of its course that can hold that surface, or drains where it has no such point',
+      settled(joined,282,5.0)&&settled(walked,264,5.0)&&intact(cut)&&intact(none),
+      [joined,walked,cut,none].map(function(c){var E=c.points[c.points.length-1];return {n:c.points.length,end:E.slice(0,3),joins:!!c.joins,drains:c.drains};}));
+
     // Real Endless windows through the shipping host (with the same, possibly
     // mutated, water source). World A has springs; world B has legacy pools.
     var host=slurp('tools/game/tests/cave_occlusion_integration.js'),hostEnd=host.indexOf('  function check(name, okay) {');
@@ -317,6 +353,9 @@
     // The structures come from the window's list after assembly and the radii
     // are the generator's authored numbers, not the water code's.
     var FLAT={fortress:1.75,arena:1.25,watchtower:1.55},margin=Math.ceil((G.WATER_RIVER_HALF_WIDTH[1]+G.WATER_RIBBON_OVERLAP)/12)*12;
+    // The solver's water, per point, as the carve receives it (the carve
+    // replaces river points with its own).
+    var realCarve=G.carveWaterRivers;G.carveWaterRivers=function(mesh,field,rivers){G.__solvedBody=new Int32Array(mesh.waterBody);return realCarve(mesh,field,rivers);};
     function enter(seed,cx,cy){world(seed);var home=G.largeStructures.map(function(st){return st.regionX+','+st.regionY;});
       var st1=seed+101,realRandom=Math.random;Math.random=function(){st1=(st1*1103515245+12345)%2147483648;return st1/2147483648;};
       try{G.assembleWindow(cx,cy);}finally{Math.random=realRandom;}return home;}
@@ -335,11 +374,20 @@
     // solver's estimate there, would stand above the arena's reserved ground;
     // seed 9: a drained river down a wall, where the carve leaves the ground
     // under its tail as it is, and its tail ran dry when the fall took no
-    // account of that)
+    // account of that; seed 35: a river held back short of its confluence,
+    // which left its tributary's end on dry ground above its water; seed 1: a
+    // tributary joining a drained river just before its tail falls to its
+    // end)
     var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5'],
-      [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1'],[9,-3,-35,'watchtower','-1,-13']],seen=[];
+      [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1'],[9,-3,-35,'watchtower','-1,-13'],
+      [35,-20,-17,'fortress','-7,-6'],[1,28,-2,'watchtower','9,-1']],seen=[];
     function segDist(a,b,x,y){var sx=b[0]-a[0],sy=b[1]-a[1],l2=sx*sx+sy*sy,t=l2>0?Math.max(0,Math.min(1,((x-a[0])*sx+(y-a[1])*sy)/l2)):0;
       return Math.hypot(x-a[0]-sx*t,y-a[1]-sy*t);}
+    // The nearest point of a course to (x,y): its distance, surface and width.
+    function nearest(P0,x,y){var best={d:Infinity,S:NaN,w:0};
+      for(var k=0;k<P0.length-1;k++){var a=P0[k],b=P0[k+1],sx=b[0]-a[0],sy=b[1]-a[1],l2=sx*sx+sy*sy,t=l2>0?Math.max(0,Math.min(1,((x-a[0])*sx+(y-a[1])*sy)/l2)):0;
+        var d=Math.hypot(x-a[0]-sx*t,y-a[1]-sy*t);if(d<best.d)best={d:d,S:a[2]+(b[2]-a[2])*t,w:a[4]+(b[4]-a[4])*t};}
+      return best;}
     var pair=null;
     fixtures.forEach(function(fx,fi){
       var home=enter(fx[0],fx[1],fx[2]),mm=G.floorMesh,nn=mm.w*mm.h,gs=mm.gridSize,R=mm.waterReserve,rec={fx:fx.join(' '),home:home,stats:G.getWaterStats()};
@@ -363,6 +411,18 @@
           if(g===g&&mm.waterSurface[w1]-g>1e-3)rec.above.push([x1*gs,y1*gs,+(mm.waterSurface[w1]-g).toFixed(3)]);}
         if(near)rec.nearReserve++;}
       rec.rivers=G.waterRivers.length;
+      // River ends, not drained and not in a lake or at the window's border:
+      // those within the width of a river that drains (a tributary of it),
+      // with their surface, that river's surface at the nearest point and
+      // the ground at the end; and those where the solver's water belonged
+      // to another river (a confluence), and whether a river of that body
+      // still runs there.
+      rec.tribs=[];rec.confluences=[];var solved=G.__solvedBody;
+      G.waterRivers.forEach(function(rv){if(rv.drains)return;var E=rv.points[rv.points.length-1],ex=Math.round(E[0]/gs),ey=Math.round(E[1]/gs),v=ey*mm.w+ex;
+        if(ex<=1||ey<=1||ex>=mm.w-2||ey>=mm.h-2||mm.water[v]===G.WATER_KIND.still)return;var into=null;
+        G.waterRivers.forEach(function(o){if(o===rv||!o.drains)return;var s=nearest(o.points,E[0],E[1]);if(s.d<s.w&&(!into||s.d<into.d))into=s;});
+        if(into)rec.tribs.push({r:rv.id,end:[Math.round(E[0]),Math.round(E[1])],S:+E[2].toFixed(4),into:+into.S.toFixed(4),ground:+mm.l0TopZ[v].toFixed(4)});
+        var b=solved[v];if(b&&b!==rv.body)rec.confluences.push({r:rv.id,body:b,within:G.waterRivers.some(function(o){if(o.body!==b)return false;var s=nearest(o.points,E[0],E[1]);return s.d<s.w;})});});
       var courses=G.waterRivers.map(function(r){return {drains:r.drains,hw:r.halfWidth,held:r.heldBack||0,pts:r.points.map(function(p){return p.slice();})};});
       var on={water:new Uint8Array(mm.water),z:new Float32Array(mm.l0TopZ)};rec.keepOn=keepFloors();rec.modelsOn=models();
       if(fi===0){var rA=new Uint8Array(R),oA=[G.windowOriginX,G.windowOriginY],wA=mm.w;}
@@ -422,6 +482,19 @@
       if(r.newWet||r.reshaped||r.springs||r.ribbonsOverFloor)floorsOk=false;});
     check('water keeps off the levelled floor, footprint and margin of a fortress, arena or watchtower: no new water, reshaped ground, spring or river surface there',
       setupOk&&floorsOk&&drains>=2,seen.map(function(r){return brief(r,['target','home','floor','keep','rivers','newWet','reshaped','springs','ribbonsOverFloor']);}).concat([{drains:drains}]));
+    // A tributary of a river that drains (seed 35: a river held back short
+    // of its confluence left its tributary's end on ground above its own
+    // water; seed 1: a drained river's tail, falling to its end, left its
+    // tributary's end 0.45 above it) ends in that river's water at its level:
+    // its surface at its end no higher than that river's at the nearest
+    // point, over ground below that surface. No river that ends at a
+    // confluence, and does not drain itself, is left where the river it
+    // joined no longer runs.
+    var tribOk=true,tribs=0,confluences=0;
+    seen.forEach(function(r){r.tribs.forEach(function(t){tribs++;if(!(t.S<=t.into+1e-3&&t.ground<t.into))tribOk=false;});
+      r.confluences.forEach(function(c){confluences++;if(!c.within)tribOk=false;});});
+    check('a tributary of a river that drains ends in its water at its level, and no tributary is left where the river it joined no longer runs',
+      tribOk&&tribs>=2&&confluences>=1,seen.map(function(r){return brief(r,['tribs','confluences']);}));
     // Past its end a drained river ends like any open end: its rounded end is
     // carved and holds water, ground there cut below the surface is never dry,
     // and the dry ground at the rim of the rounded end stands at or above the

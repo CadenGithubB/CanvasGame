@@ -1,11 +1,11 @@
-"""Water rendering geometry: covered lakes and rivers, unfolded ribbons, no floating edges, held drained ends, lit beds."""
+"""Water rendering geometry: covered lakes and rivers, unfolded ribbons, no floating edges or caps, held drained ends, lit beds."""
 
 from pathlib import Path
 import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-CHECK_COUNT = 41
+CHECK_COUNT = 48
 PASS_RESULT = f"WATER_RENDER_RESULT PASS {CHECK_COUNT}"
 HARNESS = Path(__file__).with_name("water_render.js")
 DRAINED_END = ("a river that drains into reserved ground ends where the land holds its water: "
@@ -69,6 +69,10 @@ class WaterRenderTests(unittest.TestCase):
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_end_caps_that_stop_at_the_channel_edge(self) -> None:
         self.assert_rejected("--short-caps", "world 3 at 6,46: " + DRAINED_END)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributary_caps_over_a_drained_river_tail(self) -> None:
+        self.assert_rejected("--joined-caps", "world 1 at 31,-1: river ribbon edges never hang above dry open ground")
 
 
 if __name__ == "__main__":

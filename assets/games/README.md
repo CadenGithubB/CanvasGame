@@ -819,7 +819,20 @@ drawing and a lookup.
   most 198 (43 before); 20 have no river left, and spring-fed water outside
   reserved ground fell by 0.2%. A drained river's water may sit up to
   `WATER_DRAIN_SINK` below the land along its tail, in a channel that holds
-  it.
+  it. A tributary of a river that drains (`_waterRiverOutlet`) meets that
+  river's water even where its surface fell at the confluence or where it
+  was held back or kept off short of it: the tributary ends at the last
+  point of its course that lies within that river's width and whose channel
+  can hold that river's surface there, searching back from its end while it
+  stays within that width, and its own surface falls to that river's over
+  its last `WATER_DRAIN_FALL` (`joins` on its object). That river's surface
+  covers its end, so it draws no end cap of its own. A tributary with no
+  such point has lost its outlet and drains, ending as a drained river does.
+  Before this, seed 1's tributary ended 0.45 above the falling tail of the
+  river it joined, and seed 35's was left 14 units from a river held back
+  30 units short of its confluence, on ground 0.09 above that river's
+  water; in a 1,966-window survey (40 seeds) four tributaries change, each
+  now ending in the water of the river it joins.
   Markets, shrines, ruin pads and the spawn clearing are not reserved; the
   transition ring beyond the margin, where the levelled floor blends back
   into natural terrain, stays open ground.
@@ -867,7 +880,9 @@ drawing and a lookup.
   the ribbon it stops at the bend's centre (a fan, not a fold that paints
   twice). Every open end, one that drains into reserved ground included, gets
   one extra section straight on that reaches into the land past the rounded
-  end the way a side reaches into its bank. Each frame culls, sorts far to
+  end the way a side reaches into its bank. The end of a tributary that ends
+  in the water of a river that drains has no cap: that river's surface
+  covers it. Each frame culls, sorts far to
   near and fills translucent through the scene-depth clip (no depth writes),
   with depth-tinted colour, a little distance sky, lake shimmer, river streaks
   and lake glints.
@@ -903,27 +918,35 @@ the expected cells, a weak spring, a walled gap, a flat plateau, the bowl
 with a reserved patch on its slope, strictly below every open cell not yet
 flooded, that it fills exactly up to, a river that drains into lower
 reserved ground beside it, a river as wide as carving makes it that drains
-where its width first reaches a band two rows from its course, and a river
+where its width first reaches a band two rows from its course, a river
 course that ends within a section of where its carved water would first
-reach a reserved band) and on real seeded
+reach a reserved band, and a tributary of a river that drains, which ends
+in that river's water at its surface, at the last point of its course whose
+channel can hold that surface, or drains where that river's water no
+longer comes within its width or there is no river) and on real seeded
 windows (legacy lakes, no water on closed ground, surfaces never rising
 downstream along cells or river objects, carved channels measured on the
 rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system). Eight structure windows are entered from the home
+without the system). Ten structure windows are entered from the home
 window, as a walk-in is, and compared with themselves rebuilt with the
 system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
 used to cross, the seed 3 fortress with a footprint chunk recorded by a
 neighbouring watchtower, two watchtowers (seeds 10 and 8) beside the
 generator's terrain steps, the seed 22 arena and fortress sharing chunks
 (a channel cut to the bound at a terrain step), the seed 14 arena
-(carved water wider than the solver's estimate of it) and the seed 9
+(carved water wider than the solver's estimate of it), the seed 9
 watchtower (a drained river down a wall, whose tail once ran dry where the
-carve cannot cut). Their levelled
-floors, footprints and margins get no new water, reshaped ground, spring
-or river surface; keep props, structure floors and structure models stand
-the same; no water stands more than 0.001 above a reserved neighbour's
+carve cannot cut), the seed 35
+fortress (a river held back short of its confluence) and the seed 1
+watchtower (a tributary joining a drained river's falling tail). Their
+levelled floors, footprints and margins get no new water, reshaped ground,
+spring or river surface; keep props, structure floors and structure models
+stand the same; each tributary of a river that drains ends within that
+river's width, at no higher a surface, over ground below it, and no river
+that ends at a confluence is left where the river it joined no longer runs;
+no water stands more than 0.001 above a reserved neighbour's
 ground, while water comes within two points of reserved ground and every
 drained river ends within its width, a section and a point and a half of
 it, or is held back from there by no more than its `heldBack` (at least one
@@ -934,20 +957,23 @@ within its end's shore and no more than the cut bound less the bed depth
 below the natural ground at its end (at least one sinks), with water along
 its last 16 sections; both carving bounds bind and hold, and no ground cut
 to the bound is dry; and a point is reserved the same way in a window one
-region over. The suite has 24 mutation controls (including no carving,
+region over. The suite has 28 mutation controls (including no carving,
 banks without the levee, no reserve, a reserve read from the stale
 `largeStructures` list, no margin, no basin or river drain, a drain level or
 reach left out, no keep-off, no fall, no hold-back or too deep a sink at a
 drained end, no floor beside ground the carve leaves as it is, a drained
-end carved but left dry, unbounded carving and dry
-pits or bank notches at the cut bound). `water_movement.js`
+end carved but left dry, unbounded carving, dry pits or bank notches at the
+cut bound, and a tributary of a river that drains left as it was, meeting
+it without falling to its surface, searching only its own end, or not
+draining without an outlet). `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
 controls. `water_render.js` checks the built tiles in two seeded windows
-and four windows beside structures where rivers drain into reserved ground
-(seed 6 at 36,26, seed 14 at 22,23, seed 8 at -15,102 and seed 3 at 6,46):
+and five windows beside structures where rivers drain into reserved ground
+(seed 6 at 36,26, seed 14 at 22,23, seed 8 at -15,102, seed 3 at 6,46 and
+seed 1 at 31,-1, where a tributary joins a drained river's falling tail):
 every floor square touching lake water carries a lake surface, lakes never
 hang above lower dry ground, ribbons never fold, every point of river water
 lies under a water surface, no corner of a ribbon piece (the last section
@@ -955,12 +981,12 @@ included) hangs above dry open ground, no bed under water is near-black, a
 river that drains into reserved ground ends where the land holds its water
 (across the middle half of its last drawn section, no rendered ground 1 to
 12 units past it lies more than 0.01 below its surface), and the toggle
-restores every ground colour, with eleven mutation controls
+restores every ground colour, with twelve mutation controls
 (one-square-per-point coverage, unclamped lake edges, dark natural beds,
 half-width ribbons, unrelaxed courses, no bend fan, banks without the
 levee, a drained end cut off at a straight edge as it once was, no fall or
-no hold-back at a drained end, and end caps that stop at the channel
-edge). `cave_surface_material.js` skips the river-bank
+no hold-back at a drained end, end caps that stop at the channel edge, and
+a tributary of a river that drains drawing its own end cap). `cave_surface_material.js` skips the river-bank
 points the water system lists in `mesh.waterCarveColors`, as it already
 accepts shoreline tint. Browser, one local run in the app's browser: a window
 solve including carving took 6-23 ms and building the tiles 1-4 ms, once per

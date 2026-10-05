@@ -30,13 +30,17 @@
   // rounded end carved past its last point and no cap drawn there, so its
   // full-depth channel stops at a straight edge (the historical defect).
   patch('src/06-water.js','    var ground = H[q];\n    if (_waterCarvable(mesh, H, q)) {','    if (bestEnd[q] > 0 && river.drains) continue;\n    var ground = H[q];\n    if (_waterCarvable(mesh, H, q)) {','--uncapped-drained-ends');
-  patch('src/13-render-water.js','capB = _waterRibbonCap(mesh, pts, pts.length - 1)','capB = rv.drains ? null : _waterRibbonCap(mesh, pts, pts.length - 1)','--uncapped-drained-ends');
+  patch('src/13-render-water.js','capB = rv.joins ? null :','capB = rv.joins || rv.drains ? null :','--uncapped-drained-ends');
   // A drained river's surface left where the solver put it, or its end not
   // held back where the land ahead of it cannot hold its water.
   patch('src/06-water.js','  if (course.drains) _waterRiverDrainFall(mesh, field, course);\n','','--no-drain-fall');
   patch('src/06-water.js','    if (!(end.floor > end.hold)) break;\n','    break;\n','--no-hold');
   // End caps that stop at the channel edge instead of reaching into the bank.
   patch('src/13-render-water.js','  var reach = _waterRibbonReach(mesh, p[0], p[1], dx / len, dy / len, hw, p[2]);\n','  var reach = hw;\n','--short-caps');
+  // A tributary that ends in the water of a river that drains given an end
+  // cap at its own level, as any other end, over the lower tail of the river
+  // it joins.
+  patch('src/13-render-water.js','capB = rv.joins ? null :','capB =','--joined-caps');
   G.__waterSources=sources;
   (0,eval)(host.slice(0,hostEnd).replace(loadLine,"manifest.parts.MAIN.forEach(function (path) { (0, eval)(G.__waterSources[path] || slurp('assets/games/' + path)); });")+'G.__waterErrors=errors; }());');
   function loadWorld(seed,walk){var st0=seed,realRandom=Math.random;Math.random=function(){st0=(st0*1103515245+12345)%2147483648;return st0/2147483648;};
@@ -51,9 +55,10 @@
   // drain into reserved ground: seed 6 beside a fortress (its region 11,8;
   // one river there is held back), seed 14 beside an arena and seed 8 beside
   // a watchtower (the two drained ends that used to stop at a straight edge
-  // above lower ground), and seed 3, whose end meets land that only the
-  // cap's reach into the bank covers.
-  [[11],[33],[6,[36,26]],[14,[22,23]],[8,[-15,102]],[3,[6,46]]].forEach(function(win){
+  // above lower ground), seed 3, whose end meets land that only the cap's
+  // reach into the bank covers, and seed 1, where a tributary joins a river
+  // just before that river's surface falls to its drained end.
+  [[11],[33],[6,[36,26]],[14,[22,23]],[8,[-15,102]],[3,[6,46]],[1,[31,-1]]].forEach(function(win){
     var seed=win[0],m=loadWorld(seed,win[1]),w=m.w,h=m.h,gs=m.gridSize,tiles=G.buildWaterTiles(m),label='world '+seed+(win[1]?' at '+win[1]:'')+': ';
     var lakes=tiles.filter(function(t){return t.kind===1;}),ribbons=tiles.filter(function(t){return t.ribbon;});
     // Independent enumeration of floor squares with any lake corner.

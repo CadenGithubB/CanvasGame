@@ -48,8 +48,9 @@ function _waterRibbonReach(mesh, x, y, nx, ny, hw, surface) {
 // that drains into reserved ground) gets one more section straight on,
 // covering the rounded end of its carved channel and reaching into the land
 // past it as a side reaches into its bank (_waterRibbonReach), so the depth
-// test draws the waterline there too. An end inside a lake needs none: the
-// lake's own surface covers it.
+// test draws the waterline there too. An end inside a lake needs none (the
+// lake's own surface covers it), nor does the end of a river that ends in
+// another river's water (river.joins; see buildWaterTiles).
 function _waterRibbonCap(mesh, pts, q) {
   var p = pts[q], o = pts[q === 0 ? 1 : q - 1];
   if (!o || _waterLakeAt(mesh, p) >= 0) return null;
@@ -117,7 +118,7 @@ function buildWaterTiles(mesh) {
   var rivers_ = typeof waterRivers !== 'undefined' ? waterRivers : [];
   for (var r = 0; r < rivers_.length; r++) {
     var rv = rivers_[r], pts = rv.points, half = 0, sections = [];
-    var capA = _waterRibbonCap(mesh, pts, 0), capB = _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
+    var capA = _waterRibbonCap(mesh, pts, 0), capB = rv.joins ? null : _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
     if (capA || capB) { pts = pts.slice(); if (capA) pts.unshift(capA); if (capB) pts.push(capB); }
     for (var b0 = 0; b0 < pts.length; b0++) bend.push(_waterBend(pts, b0));
     for (var q = 0; q < pts.length; q++) {

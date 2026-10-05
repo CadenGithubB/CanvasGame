@@ -5,12 +5,14 @@ import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-CHECK_COUNT = 32
+CHECK_COUNT = 34
 PASS_RESULT = f"WATER_SYSTEM_RESULT PASS {CHECK_COUNT}"
 HARNESS = Path(__file__).with_name("water_system.js")
 DRAINED_END = ("a river that drains ends in a rounded end that holds its water: no dry hole past its end, "
                "and the land at its rim stands at or above the water")
 DRY_CUT = "ground cut as deep as WATER_MAX_CUT allows always holds water: no dry pit or notch"
+TRIBUTARY = ("a tributary of a river that drains ends in its water at its surface, at the last point of its course "
+             "that can hold that surface, or drains where it has no such point")
 
 
 class WaterSystemTests(unittest.TestCase):
@@ -113,6 +115,24 @@ class WaterSystemTests(unittest.TestCase):
     def test_regression_rejects_dry_holes_past_a_drained_end(self) -> None:
         # The rounded end carved but left without its water, as once happened.
         self.assert_rejected("--dry-drained-ends", DRAINED_END)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_left_above_or_beside_a_drained_river(self) -> None:
+        # Seed 35's tributary left on dry ground where the river it joined was held back; seed 1's 0.45 above its tail.
+        self.assert_rejected("--no-outlet", "a tributary of a river that drains ends in its water at its level, "
+                             "and no tributary is left where the river it joined no longer runs")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_meeting_a_drained_river_above_its_surface(self) -> None:
+        self.assert_rejected("--no-outlet-fall", TRIBUTARY)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_that_only_try_their_own_end(self) -> None:
+        self.assert_rejected("--no-walk-back", TRIBUTARY)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_without_an_outlet_that_do_not_drain(self) -> None:
+        self.assert_rejected("--lost-outlet-dangles", TRIBUTARY)
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_dry_pits_at_the_cut_bound(self) -> None:
