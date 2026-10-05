@@ -878,11 +878,16 @@ drawing and a lookup.
   edge into the bank (the depth test draws the waterline) but not out over
   ground clearly lower than the water. On the inside of a bend tighter than
   the ribbon it stops at the bend's centre (a fan, not a fold that paints
-  twice). Every open end, one that drains into reserved ground included, gets
-  one extra section straight on that reaches into the land past the rounded
-  end the way a side reaches into its bank. The end of a tributary that ends
-  in the water of a river that drains has no cap: that river's surface
-  covers it. Each frame culls, sorts far to
+  twice). Every open end gets one extra section straight on that covers its
+  rounded end to the channel's edge, where the carve brings the ground up to
+  the water. A drained end's reaches on into the land past it the way a side
+  reaches into its bank, so the waterline is drawn where its falling surface
+  meets that land; other ends stop at the edge, since the square cap's
+  corners lie on the bank beside the rounded end, which is probed only along
+  the centre line (letting every end reach on drew spring heads over lower
+  ground beside them, in structure-free windows too). The end of a tributary
+  that ends in the water of a river that drains has no cap: that river's
+  surface covers it. Each frame culls, sorts far to
   near and fills translucent through the scene-depth clip (no depth writes),
   with depth-tinted colour, a little distance sky, lake shimmer, river streaks
   and lake glints.
@@ -971,9 +976,11 @@ NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
 controls. `water_render.js` checks the built tiles in two seeded windows
-and five windows beside structures where rivers drain into reserved ground
-(seed 6 at 36,26, seed 14 at 22,23, seed 8 at -15,102, seed 3 at 6,46 and
-seed 1 at 31,-1, where a tributary joins a drained river's falling tail):
+and six windows beside structures where rivers drain into reserved ground
+(seed 6 at 36,26, seed 14 at 22,23, seed 8 at -15,102, seed 3 at 6,46,
+seed 10 at 17,12, where a spring's head sits by a step at the edge of a
+watchtower's levelled ground, and seed 1 at 31,-1, where a tributary joins
+a drained river's falling tail):
 every floor square touching lake water carries a lake surface, lakes never
 hang above lower dry ground, ribbons never fold, every point of river water
 lies under a water surface, no corner of a ribbon piece (the last section
@@ -981,12 +988,13 @@ included) hangs above dry open ground, no bed under water is near-black, a
 river that drains into reserved ground ends where the land holds its water
 (across the middle half of its last drawn section, no rendered ground 1 to
 12 units past it lies more than 0.01 below its surface), and the toggle
-restores every ground colour, with twelve mutation controls
+restores every ground colour, with thirteen mutation controls
 (one-square-per-point coverage, unclamped lake edges, dark natural beds,
 half-width ribbons, unrelaxed courses, no bend fan, banks without the
 levee, a drained end cut off at a straight edge as it once was, no fall or
-no hold-back at a drained end, end caps that stop at the channel edge, and
-a tributary of a river that drains drawing its own end cap). `cave_surface_material.js` skips the river-bank
+no hold-back at a drained end, drained ends' caps that stop at the channel
+edge, every cap reaching on into the bank, and a tributary of a river that
+drains drawing its own end cap). `cave_surface_material.js` skips the river-bank
 points the water system lists in `mesh.waterCarveColors`, as it already
 accepts shoreline tint. Browser, one local run in the app's browser: a window
 solve including carving took 6-23 ms and building the tiles 1-4 ms, once per
@@ -999,7 +1007,9 @@ The generator levels a structure's surroundings only in chunks that record
 the structure, and a chunk records one structure, so steps of up to about 3
 height units stand at the edges of some levelled floors (older than the
 water system); the carving bounds keep rivers beside them from building dams
-or trenches. Outside structure floors, carving and lakes leave generated
+or trenches, so there a bank can stand below the water and a ribbon's edge
+or cap corner hang over it (seed 15's spring on top of such a step, at
+-8,-5: a cap corner 0.42 above the lower ground). Outside structure floors, carving and lakes leave generated
 objects (floor props, chests, shrines) where chunk generation put them, so
 some stand in water, a few deep under it (seeds 1, 15, 29 and 31: 6 of 69
 chests and 1 of 6 shrine pedestals fully submerged, up to 42 units deep).

@@ -35,8 +35,11 @@
   // held back where the land ahead of it cannot hold its water.
   patch('src/06-water.js','  if (course.drains) _waterRiverDrainFall(mesh, field, course);\n','','--no-drain-fall');
   patch('src/06-water.js','    if (!(end.floor > end.hold)) break;\n','    break;\n','--no-hold');
-  // End caps that stop at the channel edge instead of reaching into the bank.
-  patch('src/13-render-water.js','  var reach = _waterRibbonReach(mesh, p[0], p[1], dx / len, dy / len, hw, p[2]);\n','  var reach = hw;\n','--short-caps');
+  // Drained ends' caps that stop at the channel edge instead of reaching
+  // into the land past it; or every cap reaching on into the bank, a spring's
+  // or a confluence's too, as they once did.
+  patch('src/13-render-water.js','  var reach = drained ? _waterRibbonReach(','  var reach = false ? _waterRibbonReach(','--short-caps');
+  patch('src/13-render-water.js','  var reach = drained ? _waterRibbonReach(','  var reach = true ? _waterRibbonReach(','--long-caps');
   // A tributary that ends in the water of a river that drains given an end
   // cap at its own level, as any other end, over the lower tail of the river
   // it joins.
@@ -56,9 +59,12 @@
   // one river there is held back), seed 14 beside an arena and seed 8 beside
   // a watchtower (the two drained ends that used to stop at a straight edge
   // above lower ground), seed 3, whose end meets land that only the cap's
-  // reach into the bank covers, and seed 1, where a tributary joins a river
-  // just before that river's surface falls to its drained end.
-  [[11],[33],[6,[36,26]],[14,[22,23]],[8,[-15,102]],[3,[6,46]],[1,[31,-1]]].forEach(function(win){
+  // reach into the bank covers, seed 10 beside a watchtower, where a
+  // spring's head sits by the step at the edge of its levelled ground (a cap
+  // reaching on into the bank there hangs over it), and seed 1, where a
+  // tributary joins a river just before that river's surface falls to its
+  // drained end.
+  [[11],[33],[6,[36,26]],[14,[22,23]],[8,[-15,102]],[3,[6,46]],[10,[17,12]],[1,[31,-1]]].forEach(function(win){
     var seed=win[0],m=loadWorld(seed,win[1]),w=m.w,h=m.h,gs=m.gridSize,tiles=G.buildWaterTiles(m),label='world '+seed+(win[1]?' at '+win[1]:'')+': ';
     var lakes=tiles.filter(function(t){return t.kind===1;}),ribbons=tiles.filter(function(t){return t.ribbon;});
     // Independent enumeration of floor squares with any lake corner.
