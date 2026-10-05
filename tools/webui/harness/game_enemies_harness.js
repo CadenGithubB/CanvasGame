@@ -39,9 +39,20 @@ LAB.check("enemies: game script evaluates without throwing", LAB.load(__argv[0])
 //   so spyOn below is local.)
 //
 // HOW ENEMIES ARE STEPPED
-//   enemyTick() runs the enemy-facing lines of gameUpdate (L19404, L19406-19407):
+//   enemyTick() runs the enemy-facing lines of gameUpdate (17-input-lighting-
+//   update.js), with the virtual clock advanced one 60 Hz frame first: the
+//   prologue `spatialSimulationTick++; npcNavigationTick();`, then
 //   updateDayNight(dt) (it computes playerUnderground), updateEnemies(dt), then
-//   separateEnemies(), with the virtual clock advanced one 60 Hz frame first.
+//   separateEnemies(). The prologue matters: the bounded route planner
+//   (10-npc-navigation.js npcNavigationTick) expands queued route jobs only
+//   once per simulation tick, when spatialSimulationTick has changed, so a
+//   loop that skips it leaves every route request 'pending' forever and
+//   enemies that need a route never move. The patrol-progress loop below
+//   splits the same tick to measure only the enemy's own movement and runs
+//   the same prologue. alone() returns an enemy's shared brain (e.npc: target,
+//   memory, route) to the no-memory, no-route state of a freshly built enemy
+//   when it restores the enemy's own fields, so one trial's route or target
+//   never carries into the next use of the same enemy.
 //   The AI reads only pos.x/pos.y, shopMarker and fortressAllies from the
 //   player side, so the reference player can be put anywhere in the window
 //   (setPlayerAt: on a chosen layer) without re-centring it. The player's own
@@ -88,6 +99,8 @@ if (LAB.loaded) (function () {
     function enemyTick(n) {
         for (var i = 0; i < n; i++) {
             LAB.advance(LAB.FRAME_MS);
+            spatialSimulationTick++;
+            npcNavigationTick();
             updateDayNight(LAB.FIXED_DT);
             updateEnemies(LAB.FIXED_DT);
             separateEnemies();
@@ -147,7 +160,7 @@ if (LAB.loaded) (function () {
         var s = snapE(e), list0 = enemies, P0 = { x: pos.x, y: pos.y, fz: pos.floorZ }, shop0 = shopMarker;
         enemies = [e];
         try { return fn(); }
-        finally { restE(e, s); enemies = list0; pos.x = P0.x; pos.y = P0.y; pos.floorZ = P0.fz; vel.x = 0; vel.y = 0; shopMarker = shop0; health = HEALTH_MAX; }
+        finally { restE(e, s); if (e.npc) { npcCancelAction(e); npcForgetTarget(e); } enemies = list0; pos.x = P0.x; pos.y = P0.y; pos.floorZ = P0.fz; vel.x = 0; vel.y = 0; shopMarker = shop0; health = HEALTH_MAX; }
     }
     // Find the live enemy object at a WORLD position (objects are rebuilt by
     // assembleWindow, so identity does not survive a re-centre).
@@ -323,6 +336,8 @@ if (LAB.loaded) (function () {
                 // (updateEnemies) counts as walking -- being shoved by
                 // separateEnemies() is not patrolling.
                 LAB.advance(LAB.FRAME_MS);
+                spatialSimulationTick++;
+                npcNavigationTick();
                 updateDayNight(LAB.FIXED_DT);
                 st.forEach(function (s) { s.px = s.e.x; s.py = s.e.y; });
                 updateEnemies(LAB.FIXED_DT);
@@ -393,20 +408,48 @@ if (LAB.loaded) (function () {
     });
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 3b. Back to patrol after a chase past a wall [F2: no wall slide in patrol, L11307]
+    // 3b. Back to patrol after a chase past a wall [F2; route planning on slopes]
     // ═════════════════════════════════════════════════════════════════════════
     // The player stands 60-160 u away where the game's LOS (a centre line) is
     // clear but the enemy's own footprint grazes a wall on the way, so the
-    // chase has to slide along it (L11447-11449). Once it reaches attack
-    // windup, the player steps into a market safe zone (L11420): the enemy
-    // stops chasing and patrols. It must get back to its route -- within the
-    // game's arrival radius of one of its waypoints -- within 20 s. Only
-    // well-formed patrols are used (every waypoint on an open cell and in view
-    // of the spawn point, what generatePatrolWaypoints L11211 guarantees), and
-    // no enemy embedded at spawn, so F1/F3 are not what is measured.
-    var F2 = { trials: 0, ok: 0, noReach: 0, noDisplace: 0, noSpot: 0, fails: [], perWorld: {} };
+    // chase has to slide along it. Once it reaches attack windup, the player
+    // steps into a market safe zone: the enemy stops chasing (after its
+    // remembered-target search, NPC_PROFILES.enemy.memoryMs) and patrols. It
+    // must get back to its route -- within the game's arrival radius of one of
+    // its waypoints -- inside its OWN walking budget:
+    //   memoryMs + 1.5 x (chase path length + spawn-to-nearest-waypoint) /
+    //   (speed x PATROL_FACTOR x slowest water factor on the chase path).
+    // Retracing the chase and walking the spawn's clear sight line to the route
+    // is a physical return path; 1.5x allows slides and route-planning delay.
+    // Only well-formed patrols are used (every waypoint on an open cell and in
+    // view of the spawn point), no enemy embedded at spawn, and every subject
+    // must pass a positive control: unchased, from its spawn point, it reaches
+    // its route inside the same budget. Every trial must return: the trial set
+    // is fixed by the seeds and does not vary with the clock phase.
+    var PATROL_FACTOR = NaN;
+    function measurePatrolFactor(e) {           // one patrol tick toward a far waypoint, 8 directions, median
+        return alone(e, function () {
+            var f = [];
+            for (var k = 0; k < 8; k++) {
+                var x0 = e.x, y0 = e.y, th = k * Math.PI / 4;
+                e.vx = 0; e.vy = 0; e.stunUntil = 0; e.aggroAt = 0; e.attackState = "idle";
+                e.patrolWaypoints = [{ x: x0 + 200 * Math.cos(th), y: y0 + 200 * Math.sin(th) }, { x: x0 - 200 * Math.cos(th), y: y0 - 200 * Math.sin(th) }];
+                e.patrolIdx = 0;
+                pos.x = x0; pos.y = y0 + 30; shopMarker = { x: pos.x, y: pos.y };
+                npcForgetTarget(e);
+                enemyTick(1);
+                f.push(Math.hypot(e.x - x0, e.y - y0) / (e.speed * LAB.FIXED_DT));
+                e.x = x0; e.y = y0;
+            }
+            f.sort(function (a, b) { return a - b; });
+            return f[4];
+        });
+    }
+    var F2 = { trials: 0, ok: 0, noReach: 0, noDisplace: 0, noSpot: 0, noControl: 0, fails: [], used: [], perWorld: {} };
+    var MEMORY_S = NPC_PROFILES.enemy.memoryMs / 1000;
     forWorlds("return to patrol after a chase", null, function (W) {
         var n = 0, pw = F2.perWorld[W.label] = [0, 0];
+        if (isNaN(PATROL_FACTOR) && enemies.length) PATROL_FACTOR = measurePatrolFactor(enemies[0]);
         enemies.slice().forEach(function (e) {
             if (n >= 40) return;
             var wps = e.patrolWaypoints || [], R = moveRad(e);
@@ -424,23 +467,44 @@ if (LAB.loaded) (function () {
             if (!P) { F2.noSpot++; return; }
             var from = fmtW(e);
             alone(e, function () {
-                var sx = e.x, sy = e.y;
+                var snap0 = snapE(e), sx = e.x, sy = e.y, len = 0, wade = 1, reached = false, t, px, py;
                 setPlayerAt(P.x, P.y, e.underground);
-                var reached = false, t;
-                for (t = 0; t < 600 && !reached; t++) { enemyTick(1); if (e.attackState && e.attackState !== "idle") reached = true; }
-                if (!reached) { F2.noReach++; return; }
-                // The critic's F2 observable is recovery after a real chase
-                // displacement, not ordinary patrol from the spawn point.
-                if (Math.hypot(e.x - sx, e.y - sy) < 40) { F2.noDisplace++; return; }
-                shopMarker = { x: pos.x, y: pos.y };
-                var best = Infinity;
-                for (t = 0; t < 1200 && !(best < ARRIVAL); t++) {
+                for (t = 0; t < 600 && !reached; t++) {
+                    px = e.x; py = e.y;
                     enemyTick(1);
-                    e.patrolWaypoints.forEach(function (w) { best = Math.min(best, Math.hypot(w.x - e.x, w.y - e.y)); });
+                    len += Math.hypot(e.x - px, e.y - py);
+                    if (typeof waterActorSpeedFactor === "function") wade = Math.min(wade, waterActorSpeedFactor(e));
+                    if (e.attackState && e.attackState !== "idle") reached = true;
                 }
+                if (!reached) { F2.noReach++; return; }
+                if (Math.hypot(e.x - sx, e.y - sy) < 40) { F2.noDisplace++; return; }
+                var dw = Infinity;
+                e.patrolWaypoints.forEach(function (w) { dw = Math.min(dw, Math.hypot(w.x - sx, w.y - sy)); });
+                var budgetS = MEMORY_S + 1.5 * (len + dw) / (e.speed * PATROL_FACTOR * wade), frames = Math.ceil(budgetS * 60);
+                function walkBack() {
+                    var r = { best: Infinity, t: 0, failed: 0, pending: 0, flips: 0 }, idx = e.patrolIdx;
+                    for (r.t = 0; r.t < frames && !(r.best < ARRIVAL); r.t++) {
+                        enemyTick(1);
+                        e.patrolWaypoints.forEach(function (w) { r.best = Math.min(r.best, Math.hypot(w.x - e.x, w.y - e.y)); });
+                        var nav = e.npc && e.npc.navigation;
+                        if (nav && nav.status === "failed") r.failed++;
+                        if (nav && nav.status === "pending") r.pending++;
+                        if (e.patrolIdx !== idx) { r.flips++; idx = e.patrolIdx; }
+                    }
+                    return r;
+                }
+                shopMarker = { x: pos.x, y: pos.y };
+                var tr = walkBack();
+                // Positive control: the same enemy, unchased, from its spawn point.
+                restE(e, snap0); if (e.npc) { npcCancelAction(e); npcForgetTarget(e); }
+                setPlayerAt(sx + 30, sy, e.underground); shopMarker = { x: pos.x, y: pos.y };
+                var ctl = walkBack();
+                if (!(ctl.best < ARRIVAL)) { F2.noControl++; return; }
                 F2.trials++; n++; pw[1]++;
-                if (best < ARRIVAL) { F2.ok++; pw[0]++; }
-                else F2.fails.push(W.label + " " + kindOf(e) + "." + e.enemyType.id + "@" + from + " stopped " + LAB.fx(best, 1) + "u from its nearest waypoint");
+                if (tr.best < ARRIVAL) { F2.ok++; pw[0]++; F2.used.push(tr.t / frames); }
+                else F2.fails.push(W.label + " " + kindOf(e) + "." + e.enemyType.id + "@" + from + " stopped " + LAB.fx(tr.best, 1) +
+                    "u from its nearest waypoint after " + LAB.fx(budgetS, 1) + " s (route failed " + Math.round(100 * tr.failed / tr.t) + "% / pending " +
+                    Math.round(100 * tr.pending / tr.t) + "% of frames, " + tr.flips + " waypoint flips)");
             });
         });
     });
@@ -1007,15 +1071,21 @@ if (LAB.loaded) (function () {
         LAB.metric("enemies.chase.success", CH.ok);
 
         // [F2] back to patrol after a chase
-        LAB.check("enemies: after chasing the player past a wall an enemy gets back to its patrol route within 20 s (>= 95% of trials)",
-            F2.trials >= 30 && arrOk && F2.ok >= 0.95 * F2.trials,
-            (F2.trials < 30 || !arrOk ? "PRECONDITION FAILED: " + F2.trials + " trials (no grazing spot " + F2.noSpot + ", chase never reached windup " + F2.noReach +
-                ", chase moved < 40 u " + F2.noDisplace + "), arrival radius " + LAB.fx(ARRIVAL, 2) + "; " : "") +
-            F2.ok + "/" + F2.trials + " (" + pct(F2.ok, F2.trials) + ") returned to within the arrival radius of a waypoint" +
-            (F2.fails.length ? "; stuck: " + head(F2.fails, 4) : "") +
-            " (shared patrol/chase slide; historical patrol rejected the entire diagonal and alternated blocked waypoints)");
+        F2.used.sort(function (a, b) { return a - b; });
+        var pfOk = PATROL_FACTOR > 0;
+        LAB.check("enemies: after chasing the player past a wall an enemy gets back to its patrol route within its own walking budget (every trial)",
+            F2.trials >= 30 && arrOk && pfOk && F2.ok === F2.trials,
+            (F2.trials < 30 || !arrOk || !pfOk ? "PRECONDITION FAILED: " + F2.trials + " trials (no grazing spot " + F2.noSpot + ", chase never reached windup " + F2.noReach +
+                ", chase moved < 40 u " + F2.noDisplace + ", unchased control missed its route " + F2.noControl + "), arrival radius " + LAB.fx(ARRIVAL, 2) +
+                ", patrol factor " + LAB.fx(PATROL_FACTOR, 3) + "; " : "") +
+            F2.ok + "/" + F2.trials + " returned to within the arrival radius of a waypoint inside memory " + LAB.fx(MEMORY_S, 1) +
+            " s + 1.5 x (chase path + spawn-to-route) at speed x " + LAB.fx(PATROL_FACTOR, 3) + " (slowest water on the path)" +
+            "; excluded: no grazing spot " + F2.noSpot + ", no windup " + F2.noReach + ", moved < 40 u " + F2.noDisplace + ", control missed " + F2.noControl +
+            "; budget used max " + LAB.fx(F2.used[F2.used.length - 1], 2) + " median " + LAB.fx(F2.used[F2.used.length >> 1], 2) +
+            (F2.fails.length ? "; stuck: " + head(F2.fails, 4) : ""));
         LAB.metric("enemies.return_to_patrol.trials", F2.trials);
         LAB.metric("enemies.return_to_patrol.stuck", F2.trials - F2.ok);
+        LAB.metric("enemies.return_to_patrol.patrol_factor", PATROL_FACTOR);
         perWorld("enemies.return_to_patrol.ok_of_trials", F2.perWorld);
 
         // [F4] separation into walls

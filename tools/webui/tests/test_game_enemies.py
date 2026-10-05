@@ -18,7 +18,17 @@ and checks, aggregated over them:
     enemy pipeline only -- no push-back; landing hits in play is physics' N2
     check) reaches attack windup within 10 s in >= 95% of trials;
   - return after a chase (F2): an enemy that chased the player past a wall gets
-    back to its patrol route within 20 s in >= 95% of trials;
+    back to its patrol route within its OWN walking budget in every trial. The
+    budget is the enemy's remembered-target search (NPC_PROFILES.enemy.memoryMs)
+    plus 1.5 x (the chase path it walked + its spawn's distance to the nearest
+    waypoint) at its patrol speed (speed x PATROL_FACTOR, measured from the
+    game's own patrol step) slowed by the slowest water on the chase path:
+    retracing the chase and walking the spawn's clear sight line to the route
+    is a physical return path, and 1.5x allows slides and route-planning delay.
+    Every subject must also pass a positive control (unchased, from its spawn
+    point, it reaches its route inside the same budget). The trial set is
+    fixed by the seeds, so a percentage threshold would buy no noise tolerance
+    and would only hide permanently stuck enemies;
   - separation: separateEnemies() never leaves an enemy with a wall in its
     footprint (sites taken next to real enemies);
   - collision parity, both ways: a surface enemy can follow a path a surface
@@ -48,6 +58,11 @@ its audit finding and header lines, plus a regex its FAIL detail must match so
 a known bug failing for another reason (a PRECONDITION, a new mechanism) is not
 "expected". A known bug that starts passing fails test_known_bugs_still_fail --
 delete its entry, keep the check.
+
+The harness steps enemies with gameUpdate's prologue (spatialSimulationTick++
+and npcNavigationTick()) and resets an enemy's shared brain (e.npc) between
+uses; without the prologue the route planner never advances and every enemy
+that needs a route stays frozen (harness defect fixed in October 2026).
 
     python3 -m unittest tools.webui.tests.test_game_enemies -v
     HW1_GAME_PROBES=1 python3 -m unittest tools.webui.tests.test_game_enemies -v   # + mutation probes
@@ -84,7 +99,7 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"[1-9]\d*/\d+ enemies have a waypoint inside a wall cell \{\"surface\":"),
     "enemies: every patrolling enemy keeps walking (> 20 u travelled per 10 s of patrol)": (
         "audit F1 + F3 + no wall slide at L11307: degenerate waypoint pairs (L11295-11297), wall hits that only "
-        "advance patrolIdx, and embedded Brutes leave 73/340 patrolling enemies walking <= 20 u (most 0.0 u); "
+        "advance patrolIdx, and embedded Brutes leave 91/414 patrolling enemies walking <= 20 u (110/414 before the harness tick fix; most 0.0 u); "
         "every part of the F1+F3+slide FIX probe is needed (reviewer: F1+slide 2, F3+slide 78, F1+F3 3)",
         r"[1-9]\d*/\d+ frozen .*excluded: chased 0, left 350 u 0, died 0.* walked 0\.0"),
     "enemies: the first physics tick after a Cave Test start neither re-centres the window nor clears cave enemies' underground flag": (
@@ -92,13 +107,47 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "Underground flags now survive; this remaining startup-work finding is not the old flag-loss bug. "
         "The lab calls the reset API, not the newer UI preview path.",
         r"first tick re-centred the window [1-9]\d* times?; still underground: (\d+)/\1; .*re-centred the window 1 time"),
+    "enemies: after chasing the player past a wall an enemy gets back to its patrol route within its own walking budget (every trial)": (
+        "R1 + R2, route planning on slopes. R1: Endless patrol waypoints are plain {x,y} with no height "
+        "(05-endless-world.js chunk spawns), so _patrolEnemy passes wpFeet = entityFeetSpatialZ(e), the enemy's "
+        "CURRENT feet height (11-enemies.js), as the goal storey; the planner's final connection needs "
+        "|feetZ - requiredZ| <= .01 (10-npc-navigation.js npcNavProbe), so it can never connect to a waypoint on "
+        "ground at another height, and npcNavigateToward discards the route whenever that 'goal' height changes as "
+        "the enemy walks. R2: npcNavProbe rejects any hop that changes height unless it is axis-aligned, and the "
+        "first hop from the enemy's off-grid position to a neighbouring cell centre never is, so on a slope every "
+        "request fails after expanding only its root (69 requests, 69 nodes expanded, 0 routes; a 60000-node "
+        "budget changes nothing). While the route is 'failed', _patrolEnemy flips patrolIdx every frame and the "
+        "enemy stands still: endless 777000 cave Brute@-5250,738 (43.8 u from its route, 1030 flips, route failed "
+        "93% of frames, still stuck after 60 s) and endless 777 cave Scout@16446,-702 (route failed 39% / pending "
+        "42% of frames); both reach their route unchased from spawn. The FIX R1+R2 probe passes it; R1 alone leaves "
+        "the Brute stuck and R2 alone leaves 3 stuck. The navigation code is unchanged since main, which shows the "
+        "same stuck subjects",
+        r"[1-9]\d*/\d+ returned .*stuck: .*after \d+\.\d s \(route failed [1-9]\d*% / pending \d+% of frames, "
+        r"[1-9]\d* waypoint flips\)"),
 }
 
 # Reusable probe sites.
+# F1 fix as the fixed levels do it, made storey-aware: generatePatrolWaypoints
+# (open cell, line of sight, >= 0.18*chaseRange apart) keeping only waypoints
+# within 1 h of the spawn's own support, and patrolIdx reset (the generator
+# returns 2-4 points, so a saved index can point past the end).
 _F1_VALIDATED_WAYPOINTS = (
     "          patrolWaypoints: en.patrolWaypoints.map(function(wp) {\n"
-    "            return {x: wp.x - windowOriginX, y: wp.y - windowOriginY};\n          }),",
-    "          patrolWaypoints: generatePatrolWaypoints(en.x - windowOriginX, en.y - windowOriginY, en.chaseRange),")
+    "            return {x: wp.x - windowOriginX, y: wp.y - windowOriginY};\n"
+    "          }),\n"
+    "          patrolIdx: en.patrolIdx,",
+    "          patrolWaypoints: (function () {\n"
+    "            var _sx = en.x - windowOriginX, _sy = en.y - windowOriginY;\n"
+    "            function _h(x, y) { var i = meshCellAt(x, y), b = NaN; if (i < 0) return NaN;\n"
+    "              for (var li = 0; li < floorMesh.layerCount[i]; li++) { var t = meshLayerType(floorMesh, i, li); "
+    "if (t !== 1 && t !== 3 && t !== 4) continue;\n"
+    "                var z = meshLayerHeight(floorMesh, i, li); if (isNaN(b) || (en.underground ? z < b : z > b)) b = z; } "
+    "return b; }\n"
+    "            var _h0 = _h(_sx, _sy);\n"
+    "            return generatePatrolWaypoints(_sx, _sy, en.chaseRange).filter(function (w) { "
+    "return Math.abs(_h(w.x, w.y) - _h0) <= 1; });\n"
+    "          })(),\n"
+    "          patrolIdx: 0,")
 _F3_BRUTE_SIZE = (
     "tank:   {id:'tank',  name:'Brute',   color:'#cc0000',size:1.4,",
     "tank:   {id:'tank',  name:'Brute',   color:'#cc0000',size:1.2,")
@@ -111,7 +160,18 @@ _RUIN_ORDER = (
 _D19_SAVE_FLAG = (
     "      patrolIdx: e.patrolIdx || 0, facing: e.facing || 0\n    });",
     "      patrolIdx: e.patrolIdx || 0, facing: e.facing || 0, underground: e.underground || false\n    });")
-_CHASE_COND = "var chasing = !inMarketSafe && dist < e.chaseRange && dist > 10 && enemyCanSeePlayer(e);"
+# Fix sites R1 and R2 for the F2 route-planning bug (see KNOWN_BUGS).
+_R1_WAYPOINT_FEET = (
+    "  if (npcNavigateToward(e,wp.x,wp.y,wpFeet,e.speed*.38,dt===undefined?.08:dt,eRad*.6,0)) return 1;",
+    "  var _navFeet=wpFeet;\n"
+    "  if(!Number.isFinite(wp.feetZ)){var _wb=spatialActorBody(e,eRad*.6),_ws=spatialQuerySupport({x:wp.x,y:wp.y,"
+    "feetZ:_wb.feetZ,radius:_wb.radius,height:_wb.height,stepHeight:1000,trackFloor:_wb.trackFloor},wp.x,wp.y);"
+    "if(_ws.status==='walk')_navFeet=_ws.feetZ;}\n"
+    "  if (npcNavigateToward(e,wp.x,wp.y,_navFeet,e.speed*.38,dt===undefined?.08:dt,eRad*.6,0)) return 1;")
+_R2_ROOT_HOP = (
+    "  if(Math.abs(body.feetZ-from.z)>.01 && Math.abs(x-from.x)>.00001 && Math.abs(y-from.y)>.00001)return null;\n",
+    "  if(from.parent && Math.abs(body.feetZ-from.z)>.01 && Math.abs(x-from.x)>.00001 && Math.abs(y-from.y)>.00001)return null;\n")
+_PATROL_NAV = _R1_WAYPOINT_FEET[0]
 
 _ROOF = "enemies: a cave enemy does not chase a player standing on the cave roof"
 _RROOF = "enemies: a surface enemy does not chase a player standing in the cave below it"
@@ -122,7 +182,8 @@ _EMBED = "enemies: no enemy on an open cell spawns with a wall inside its footpr
 _SPAN = "enemies: every enemy's patrol waypoints span at least twice the game's waypoint arrival radius"
 _WPWALL = "enemies: no patrol waypoint lies inside a wall cell"
 _PATROL = "enemies: every patrolling enemy keeps walking (> 20 u travelled per 10 s of patrol)"
-_F2 = "enemies: after chasing the player past a wall an enemy gets back to its patrol route within 20 s (>= 95% of trials)"
+_F2 = ("enemies: after chasing the player past a wall an enemy gets back to its patrol route within its own walking "
+       "budget (every trial)")
 _N6 = "enemies: the first physics tick after a Cave Test start neither re-centres the window nor clears cave enemies' underground flag"
 _FLOOR_BEFORE = "enemies: a cave enemy chasing through its cave stands on the cave floor under it"
 _FLOOR_AFTER = "enemies: after a window re-centre a cave enemy chasing through its cave still stands on the cave floor"
@@ -144,10 +205,15 @@ MOTION_PROBES: list[tuple] = [
      "function moveSpatialActor(entity,dx,dy,radius) {\n"
      "  if (isInGridWall(entity.x+dx,entity.y+dy,radius)) return {hitX:true,hitY:true,status:'blocked'};\n",
      {_TRV: "FAIL", _TRV_REV: "PASS"}),
-    ("BREAK F2: patrol rejects the full diagonal before the shared solver can slide",
-     "  moveSpatialActor(e,pnx-e.x,pny-e.y,eRad*0.6);",
-     "  if (!spatialBodyBlocked(spatialActorBody(e,eRad*0.6),pnx,pny)) "
-     "moveSpatialActor(e,pnx-e.x,pny-e.y,eRad*0.6);",
+    # The F2 check fails at baseline on R1/R2, so a BREAK that only expects FAIL
+    # would be vacuous: the historical patrol is put back on top of FIX R2 (the
+    # FIX R1+R2 probe in PROBES is its PASS control).
+    ("BREAK F2 (on top of FIX R2): patrol has no route and no slide, rejects the whole step and flips waypoints",
+     [_R2_ROOT_HOP,
+      (_PATROL_NAV,
+       "  var _st=Math.min(wpDist,e.speed*.38*(dt===undefined?.08:dt)),_nx=e.x+wpDx/wpDist*_st,_ny=e.y+wpDy/wpDist*_st;\n"
+       "  if (!spatialBodyBlocked(spatialActorBody(e,eRad*.6),_nx,_ny)) { moveSpatialActor(e,_nx-e.x,_ny-e.y,eRad*.6); return 1; }\n"
+       "  e.patrolIdx = ((e.patrolIdx || 0) + 1) % e.patrolWaypoints.length; return 0;")], None,
      {_F2: "FAIL", _TRV: "PASS"}),
 ]
 
@@ -178,19 +244,23 @@ PROBES: list[tuple] = [
                               for dy in (-1, 0, 1) for dx in (-1, 0, 1)) + ") {",
      {_EMBED: "PASS"}),
     # The harness observes the radius passed to the shared movement adapter.
-    ("FIX F3 in the movement code: every enemy wall test at eRad*0.5 (Brute 5.6 u < the 6 u half-cell)",
-     [("  moveSpatialActor(e,pnx-e.x,pny-e.y,eRad*0.6);", "  moveSpatialActor(e,pnx-e.x,pny-e.y,eRad*0.5);"),
+    ("FIX F3 in the movement code: every enemy body/wall radius at eRad*0.5 (Brute 5.6 u < 6 u half-cell)",
+     [(_PATROL_NAV, _PATROL_NAV.replace("eRad*.6", "eRad*.5")),
       ("      moveSpatialActor(e,kbx-e.x,kby-e.y,eRad*0.6);", "      moveSpatialActor(e,kbx-e.x,kby-e.y,eRad*0.5);"),
-      ("      var eWallRad = eRad * 0.6;", "      var eWallRad = eRad * 0.5;")], None,
+      ("if(npcNavigateToward(e,pursuit.x,pursuit.y,pursuit.feetZ,moveSpeed,dt,eRad*.6,10))moved++;",
+       "if(npcNavigateToward(e,pursuit.x,pursuit.y,pursuit.feetZ,moveSpeed,dt,eRad*.5,10))moved++;"),
+      ("    var eBody=spatialActorBody(e,eRad*0.6);", "    var eBody=spatialActorBody(e,eRad*0.5);")], None,
      {_EMBED: "PASS"}),
     ("FIX ruin order: drop chunk enemies a ruin wall was stamped onto",
      [_RUIN_ORDER], None,
      {"enemies: no enemy spawns on a wall cell": "PASS"}),
     # Recreate the actual historical height-blind consumer; the same-floor
-    # control must keep working while both roof-separated cases fail.
-    ("BREAK F7: restore height-blind enemy-player awareness",
-     _CHASE_COND,
-     _CHASE_COND.replace("enemyCanSeePlayer(e)", "hasLineOfSight(e.x, e.y, pos.x, pos.y)"),
+    # control must keep working while both roof-separated cases fail. Player
+    # perception now runs through npcTargetGeometry's 3D spatialRaycast; the
+    # probe hands the player case back to the 2D hasLineOfSight.
+    ("BREAK F7: restore height-blind enemy-player awareness (player perception uses the 2D hasLineOfSight)",
+     "  return spatialRaycast(a,b).status==='clear';\n}",
+     "  return target===pos ? hasLineOfSight(actor.x,actor.y,target.x,target.y) : spatialRaycast(a,b).status==='clear';\n}",
      {_ROOF: "FAIL", _RROOF: "FAIL", _CHASE: "PASS"}),
     # Endless chunks get two raw random waypoints; the fixed levels already use the
     # validated generator (open cell, LOS, >= 0.18*chaseRange apart). Swap it in where
@@ -198,19 +268,28 @@ PROBES: list[tuple] = [
     # + the ruin-order fix: generatePatrolWaypoints makes the spawn point the first
     # waypoint, so the endless-55555 Wolf standing on a ruin wall would keep a
     # waypoint in a wall.
-    ("FIX F1: Endless enemies get validated waypoints from generatePatrolWaypoints (+ ruin order)",
+    ("FIX F1: Endless enemies get storey-aware validated waypoints from generatePatrolWaypoints, patrolIdx "
+     "reset (+ ruin order)",
      [_F1_VALIDATED_WAYPOINTS, _RUIN_ORDER], None,
      {_SPAN: "PASS", _WPWALL: "PASS"}),
-    ("FIX patrol freeze: F1 validated waypoints + F3 Brute size + ruin order (shared movement supplies wall slide)",
+    # F2 is covered by the FIX R1+R2 probe below, not by this one.
+    ("FIX patrol freeze: F1 storey-aware validated waypoints, patrolIdx reset + F3 Brute size + ruin order "
+     "(shared movement supplies wall slide)",
      [_F1_VALIDATED_WAYPOINTS, _F3_BRUTE_SIZE, _RUIN_ORDER], None,
-     {_PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS", _F2: "PASS"}),
+     {_PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS"}),
     ("BREAK chase: enemies never close in",
-     "      var moveSpeed = e.speed * 0.08;",
-     "      var moveSpeed = 0;",
+     "      var moveSpeed=e.speed;\n",
+     "      var moveSpeed=0;\n",
      {_CHASE: "FAIL"}),
-    ("BREAK chase: enemies close in but stop 25 u out, short of the 6+8*size attack reach",
-     _CHASE_COND,
-     _CHASE_COND.replace("dist > 10", "dist > 25"),
+    # The chase stop distance is the pursuit call's last argument and the reach
+    # is meleeRange = 16+8*size; route following walks to the goal node with
+    # stop 0, so the stop must also hold inside npcNavigateToward.
+    ("BREAK chase: enemies close in but stop 3 u outside their own melee reach (direct steering and routes)",
+     [("if(npcNavigateToward(e,pursuit.x,pursuit.y,pursuit.feetZ,moveSpeed,dt,eRad*.6,10))moved++;",
+       "if(npcNavigateToward(e,pursuit.x,pursuit.y,pursuit.feetZ,moveSpeed,dt,eRad*.6,meleeRange+3))moved++;"),
+      ("function npcNavigateToward(actor,x,y,feetZ,speed,dt,radius,stopDistance) {\n  npcNavigationTick();\n",
+       "function npcNavigateToward(actor,x,y,feetZ,speed,dt,radius,stopDistance) {\n  npcNavigationTick();\n"
+       "  if(stopDistance && Math.hypot(x-actor.x,y-actor.y)<=stopDistance)return false;\n")], None,
      {_CHASE: "FAIL"}),
     ("BREAK re-centre: saveEnemyStateToChunks drops z",
      "      x: worldX, y: worldY, z: e.z || 0,",
@@ -223,9 +302,9 @@ PROBES: list[tuple] = [
     # An over-permissive collision fix: patrol ignores walls. The forward parity
     # check turns PASS (the enemy walks through the cave-wall cell) -- which is why
     # the reverse check exists: it must catch this.
-    ("BREAK collision: patrol steps ignore walls",
-     "  moveSpatialActor(e,pnx-e.x,pny-e.y,eRad*0.6);",
-     "  e.x=pnx; e.y=pny;",
+    ("BREAK collision: patrol steps ignore walls (positions stepped directly)",
+     _PATROL_NAV,
+     "  var _st=Math.min(wpDist,e.speed*.38*(dt===undefined?.08:dt)); e.x+=wpDx/wpDist*_st; e.y+=wpDy/wpDist*_st; return 1;",
      {_TRV_REV: "FAIL", _TRV: "PASS"}),
     ("BREAK floor tracking: an underground enemy's z follows the TOP walkable layer (the roof)",
      "  var feet=entityFeetSpatialZ(entity);",
@@ -237,6 +316,17 @@ PROBES: list[tuple] = [
       ("  if (support.status==='walk') body.feetZ=support.feetZ;",
        "  /* mutation: floor tracking lost during actor preparation */")], None,
      {_FLOOR_BEFORE: "FAIL", _FLOOR_AFTER: "FAIL"}),
+    # F2 (KNOWN_BUGS): both route-planning fixes are needed, and each alone is not enough.
+    ("FIX R1+R2: patrol plans to its waypoint's own support height; the planner root may change height on its "
+     "first off-grid hop",
+     [_R2_ROOT_HOP, _R1_WAYPOINT_FEET], None,
+     {_F2: "PASS"}),
+    ("PARTIAL FIX R1 only (witness that R2 is needed): the Brute on the slope stays stuck",
+     [_R1_WAYPOINT_FEET], None,
+     {_F2: "FAIL"}),
+    ("PARTIAL FIX R2 only (witness that R1 is needed): enemies whose waypoints stand at another height stay stuck",
+     [_R2_ROOT_HOP], None,
+     {_F2: "FAIL"}),
 ]
 
 EnemiesSuite = suite_testcase("enemies", KNOWN_BUGS, min_checks=18)
