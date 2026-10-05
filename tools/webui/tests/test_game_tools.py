@@ -31,8 +31,12 @@ Tools covered (header lines):
                               types' must)
 
 Worlds: Cave Test seed 12345 (every entrance; --seeds overrides); the
-debugCaveAt check also runs seed 1, where the real smoothed surface falls below
-the 2.0 the tool hard-codes.
+debugCaveAt check also runs seed 1, where the real smoothed surface fell below
+the 2.0 the tool once hard-coded. That historical risk is gone: debugCaveAt now
+passes getEndlessNaturalSurfaceH(wx, wy), and the core floor and ceiling no
+longer depend on the surface argument at all (putting 2.0 back flips nothing,
+0/1064 core cells). The check's live risk is a tool that queries a different
+point than the one it was given; its BREAK probe samples half a mesh cell east.
 
 Thresholds, and why ANY correct implementation meets them:
 
@@ -185,8 +189,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"DEBUG_TEXTURE surface .*identical.*underground .*identical"),
 }
 
-# (description, anchor, replacement, {check id: "PASS" | "FAIL"}). Anchors occur
-# exactly once in game_lab.game_js(); every probe was run and seen to flip.
+# (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"}).
+# Anchors occur exactly once in game_lab.game_js(); every probe was run in the
+# October 2026 refresh and seen to flip exactly the checks it declares.
 _WALKABLE_FH = (
     "      var fh = floorMesh.l0TopZ[idx];\n"
     "      for (var _q = 0; _q < floorMesh.layerCount[idx]; _q++) { "
@@ -241,14 +246,16 @@ PROBES: list = [
      "    originX: windowOriginX, originY: windowOriginY, playerFloorZ: pos.floorZ, camAng: cam.ang,",
      {_XY: "PASS", _HEIGHT: "PASS", _YAW: "PASS"}),
     ("FIX: every frame writes window.__caveDebugLast",
-     "  if (CAVE_TEST_MODE) drawCaveControlMap();",
-     "  if (CAVE_TEST_MODE) drawCaveControlMap();\n"
-     "  window.__caveDebugLast = { x: pos.x, y: pos.y, floorZ: pos.floorZ, underground: playerUnderground };",
+     "  if (caveControlMapVisible()) _pt('caveControlMap', function(){ drawCaveControlMap(); });\n",
+     "  if (caveControlMapVisible()) _pt('caveControlMap', function(){ drawCaveControlMap(); });\n"
+     "  window.__caveDebugLast = { x: pos.x, y: pos.y, floorZ: pos.floorZ, underground: playerUnderground };\n",
      {_SNAP: "PASS"}),
-    ("FIX: count floor layer-stitch misses in floorOutsideBlend",
-     "if (_z1 !== _z1) _z1 = _clampNeighborZ(idx1, _z0);",
-     "if (_z1 !== _z1) { __caveStats.floorOutsideBlend++; _z1 = _clampNeighborZ(idx1, _z0); }",
-     {_OUTSIDE: "PASS"}),
+    # The old FIX for a never-incremented outsideBlend ships (the floor pass
+    # counts layer-stitch misses), so its risk is now covered by a BREAK.
+    ("BREAK: the floor pass stops counting layer-stitch misses (outsideBlend goes dead)",
+     "          __caveStats.floorOutsideBlend++;\n          continue;\n",
+     "          continue;\n",
+     {_OUTSIDE: "FAIL"}),
     ("FIX: count blendRange at most once per cell",
      "__caveStats.floorBlendRange++;",
      "if (li === 0) __caveStats.floorBlendRange++;",
@@ -268,23 +275,13 @@ PROBES: list = [
      "      var fh = floorMesh.l0TopZ[idx];\n      var _ovmLc",
      _WALKABLE_FH,
      {_MAP: "PASS"}),
-    ("FIX: debugCaveAt passes the stamper's chunk-clipped 21x21 smoothed-surface maximum",
-     "    var r = queryCaveGeometry(wx, wy, nets, 2.0);",
-     "    var _ss = 2.0;\n"
-     "    if (typeof floorMesh !== 'undefined' && floorMesh && floorMesh.surfaceH) {\n"
-     "      var _g = floorMesh.gridSize, _cw = Math.ceil(CHUNK_SIZE / _g);\n"
-     "      var _gx = Math.round((wx - windowOriginX) / _g), _gy = Math.round((wy - windowOriginY) / _g);\n"
-     "      var _x0 = Math.floor(_gx / _cw) * _cw, _y0 = Math.floor(_gy / _cw) * _cw, _m = -Infinity;\n"
-     "      for (var _dy = -10; _dy <= 10; _dy++) for (var _dx = -10; _dx <= 10; _dx++) {\n"
-     "        var _nx = _gx + _dx, _ny = _gy + _dy;\n"
-     "        if (_nx < _x0 || _nx >= _x0 + _cw || _ny < _y0 || _ny >= _y0 + _cw) continue;\n"
-     "        if (_nx < 0 || _ny < 0 || _nx >= floorMesh.w || _ny >= floorMesh.h) continue;\n"
-     "        var _v = floorMesh.surfaceH[_ny * floorMesh.w + _nx]; if (_v > _m) _m = _v;\n"
-     "      }\n"
-     "      if (_m !== -Infinity) _ss = _m < 1.0 ? 1.0 : _m;\n"
-     "    }\n"
-     "    var r = queryCaveGeometry(wx, wy, nets, _ss);",
-     {_DCA: "PASS"}),
+    # The old FIX (pass the stamper's 21x21 surface maximum instead of a
+    # hard-coded 2.0) ships in another form, and the core cells no longer
+    # depend on the surface argument; the live risk is a coordinate offset.
+    ("BREAK: debugCaveAt samples half a mesh cell east of the point it was given",
+     "    var r = queryCaveGeometry(wx, wy, nets, getEndlessNaturalSurfaceH(wx, wy));",
+     "    var r = queryCaveGeometry(wx + 6, wy, nets, getEndlessNaturalSurfaceH(wx + 6, wy));",
+     {_DCA: "FAIL"}),
     ("FIX: caveGaps samples the face vertices themselves (no 1 u offset past the face)",
      "var off = 1.0;",
      "var off = 0.0;",
@@ -322,11 +319,17 @@ PROBES: list = [
      "var __caveStats = {",
      "window.__caveDebugLast = { stale: true };\nvar __caveStats = {",
      {_SNAP: "FAIL"}),
-    ("BREAK: remove floorOutsideBlend while leaving the per-layer blendRange over-count",
+    # Deleting the field makes the stitch-miss increment produce NaN, so both
+    # checks void on their non-numeric statistics gate: a setup failure, not a
+    # pass. Detection of a dead counter is the outsideBlend BREAK above; _HIST
+    # already fails at baseline (KNOWN_BUGS), so a FAIL expectation here would
+    # be vacuous.
+    ("BREAK aimed at the stats gate: deleting the floorOutsideBlend field makes the walk statistics "
+     "non-numeric, a setup failure rather than a pass",
      [("  floorBlendRange: 0, floorOutsideBlend: 0,", "  floorBlendRange: 0,"),
       ("  __caveStats.floorOutsideBlend = 0; // repurposed: layer-stitch misses\n", "")],
      None,
-     {_OUTSIDE: "FAIL", _HIST: "FAIL"}),
+     {_OUTSIDE: "PRECONDITION", _HIST: "PRECONDITION"}),
     ("BREAK: rename skipLowCeil while it still reports non-zero work in a ceiling-free window",
      "      visited: ct, skipLowCeil: cs.ceilSkipLowCeil, skipEntrRange: cs.ceilSkipEntrRange,",
      "      visited: ct, skipLowCeiling: cs.ceilSkipLowCeil, skipEntrRange: cs.ceilSkipEntrRange,",

@@ -29,7 +29,7 @@ LAB.check("tools: game script evaluates without throwing", LAB.load(__argv[0]),
 if (LAB.loaded) {
     var P = "tools: ";
     var SEEDS = LAB.seeds([12345]);          // Cave Test worlds for every scenario
-    var XSEEDS = LAB.seeds([12345, 1]);      // debugCaveAt: seed 1 is where the real smoothed surface is < 2.0
+    var XSEEDS = LAB.seeds([12345, 1]);      // debugCaveAt: seed 1 is where the real smoothed surface fell below the 2.0 the tool once hard-coded
     if (XSEEDS.indexOf(1) < 0) XSEEDS = XSEEDS.concat([1]); // a custom sweep must not drop the reproducing seed
     var INSIDE = -100;                       // along: 100 u inside the entrance, under roof + cap
     var H_TOL = 0.05;                        // h: a reported height must match the real one this closely
@@ -508,10 +508,10 @@ if (LAB.loaded) {
         LAB.check(P + "caveDiag().lastTransitionSnapshot is populated after walking from the surface into the cave",
             !pre && W.snapBad.length === 0,
             pre + W.snapBad.length + "/" + W.reached.length + " walks that reached the cave floor left lastTransitionSnapshot null or unchanged from before the walk" +
-            (W.snapBad.length ? ": " + W.snapBad.slice(0, 3).join("; ") : "") + " (window.__caveDebugLast is read at L1419, never written)" + skipped);
+            (W.snapBad.length ? ": " + W.snapBad.slice(0, 3).join("; ") : "") + " (window.__caveDebugLast is read by caveDiag, 01-config-state.js, and never written)" + skipped);
         LAB.check(P + "caveCapture's outsideBlend counter changes somewhere on a walk from the surface into the cave",
             !pre && W.obFrames > 0,
-            pre + "__caveStats.floorOutsideBlend non-zero in " + W.obFrames + "/" + W.frames + " rendered frames (reset at L12471, never incremented); " + W.reached.slice(0, 2).join("; ") + skipped);
+            pre + "__caveStats.floorOutsideBlend non-zero in " + W.obFrames + "/" + W.frames + " rendered frames (reset at the start of each floor pass and incremented when a floor cell's layer stitch misses, 13-render-floors-ceilings.js); " + W.reached.slice(0, 2).join("; ") + skipped);
         var displayBad = W.display.filter(function (d) { return d.invalid.length || d.rows < 3 || d.sum > 100.1; });
         LAB.check(P + "the floor-rejection histogram's buckets never add up to more than its total",
             !pre && W.display.length > 0 && displayBad.length === 0,
@@ -653,7 +653,7 @@ if (LAB.loaded) {
         LAB.check(P + "debugCaveAt reports the assembled mesh's cave floor and ceiling wherever it reports full cave influence",
             core > 0 && badN === 0,
             (core === 0 ? "PRECONDITION: no core cave cell || " : "") + badN + "/" + core + " core cells differ by > 0.25 h (worst " + f2(worst) +
-            " h; seeds " + XSEEDS.join(",") + "; L4802 passes smoothedSurface 2.0, the stamper passes the real 21x21 max, L5594-5606): " + bad.join("; "));
+            " h; seeds " + XSEEDS.join(",") + "; debugCaveAt queries the point it was given with getEndlessNaturalSurfaceH there, 05-endless-world.js): " + bad.join("; "));
         LAB.metric("tools.debugcaveat.core_cells", core);
         LAB.metric("tools.debugcaveat.core_mismatch", badN);
         LAB.metric("tools.debugcaveat.feather_cells", feather);
