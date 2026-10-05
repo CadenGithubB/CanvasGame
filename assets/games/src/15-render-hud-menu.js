@@ -3185,7 +3185,9 @@ function drawMenuOverlay() {
 
 
 function applySettings() {
-  viewDist = settings.viewDist;
+  // A classic level keeps its map-size view distance, as a restart would
+  // (Ultra used to cut the Expanse from 2304 u to 1800 until the next level).
+  viewDist = ENDLESS_MODE ? settings.viewDist : classicLevelViewDist();
   AMBIENT_MAX = settings.particles;
   if (WINDOW_CHUNKS !== settings.chunkWindow) {
     WINDOW_CHUNKS = settings.chunkWindow;

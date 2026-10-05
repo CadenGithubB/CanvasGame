@@ -252,6 +252,18 @@ function drawLayersFloor3D() {
   // or cosAng changed sign (camera rotating past axis boundaries) —
   // previously caused overlapping quads to swap paint order, producing
   // the pop-on-turn artifact at cave boundaries.
+  // Every scanned cell stores at most one triple, so the scan rectangle
+  // bounds this frame's count. A full buffer used to drop the last rows
+  // scanned without a word (Level 4's 2304 u view wanted 46,596 cells of
+  // 40,000). Grow to the largest rectangle this view distance and mesh allow:
+  // a reallocation only when either grows, never per frame, never a shrink,
+  // and no bounds check in the write loop.
+  var _scanCells = Math.max(0, gxMax - gxMin + 1) * Math.max(0, gyMax - gyMin + 1);
+  if (_drawFloorCellBuf.length < _scanCells * 3) {
+    var _scanSpan = Math.ceil(2 * viewRad) + 2;
+    _drawFloorCellBuf = new Float32Array(3 * Math.max(_scanCells,
+      Math.min(_scanSpan, mesh.w - 1) * Math.min(_scanSpan, mesh.h - 1)));
+  }
   var _cellBuf = _drawFloorCellBuf;
   var _cellCnt = 0;
   for (var y = gyMin; y <= gyMax; y++) {

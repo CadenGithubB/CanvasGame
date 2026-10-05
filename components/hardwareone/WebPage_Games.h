@@ -922,11 +922,21 @@ function entityVisible3D(wx, wy, wz, C, opts) {
 //   ctx    = canvas context
 //   now    = gameTimeNow() (computed once, shared)
 
-// Pre-allocated sort buffers for renderEntities3D (shared across all callers)
-var _reIdxBuf  = new Uint16Array(512);
+// Sort buffers for renderEntities3D, shared across all callers. They start at
+// 512 entries and double when one call keeps more (Endless floor scatter at
+// the Ultra preset keeps up to ~700). A fixed 512 cap used to drop every
+// entity after the 512th visible one in array order, not the farthest, and
+// without a word. Uint32 indices keep arrays past 65,535 entries exact.
+var _reIdxBuf  = new Uint32Array(512);
 var _reDistBuf = new Float32Array(512);
 var _reVisBuf  = new Array(512);
 for (var _ri = 0; _ri < 512; _ri++) _reVisBuf[_ri] = null;
+function growRenderEntityBuffers() {
+  var n = _reIdxBuf.length * 2, idx = new Uint32Array(n), dist = new Float32Array(n);
+  idx.set(_reIdxBuf); dist.set(_reDistBuf);
+  for (var i = _reVisBuf.length; i < n; i++) _reVisBuf.push(null);
+  _reIdxBuf = idx; _reDistBuf = dist;
+}
 
 function renderEntities3D(arr, visOpts, drawFn) {
   if (!arr || !arr.length) return;
@@ -948,7 +958,7 @@ function renderEntities3D(arr, visOpts, drawFn) {
     if (!vis) continue;
     if (visOpts.groundAnchor) vis.floorZ = wz;
     if (vis.dist < minDist) continue;
-    if (count >= 512) break; // safety cap
+    if (count === _reIdxBuf.length) growRenderEntityBuffers();
     _reIdxBuf[count] = i;
     _reDistBuf[count] = vis.dist;
     _reVisBuf[count] = vis;
@@ -1394,9 +1404,10 @@ function inEntranceReserve(wx, wy) {
   }
   return false;
 }
-// Pre-allocated buffer for distance-sorted floor cell render. Packs
-// [distSq, x, y] triples. Max size = (2 * viewDist/gs + 2)^2 ~ 200^2 at
-// high viewDist; 40000*3 = 120000 Float32 entries = ~480KB. One-time alloc.
+// Reused buffer for the distance-sorted floor cell render. Packs
+// [distSq, x, y] triples. Starts at 40,000 cells (~480KB); drawLayersFloor3D
+// grows it before collecting when its scan rectangle needs more (Level 4's
+// 2304 u view: up to 359x239 cells, ~1MB). It is replaced, never shrunk.
 var _drawFloorCellBuf = new Float32Array(120000);
 // Wall projection scratch buffers — reused across frames by drawWalls3D/renderFace.
 // 4 corners per quad: 0=bottom-left, 1=bottom-right, 2=top-right, 3=top-left.
@@ -8996,6 +9007,15 @@ function resetEndlessMode() {
   }
 }
 
+// A classic level's view distance: the Render Distance setting, but at least
+// 0.8 of the map's shorter side so large maps keep their reach (Level 4, the
+// Expanse: 2304 u). resetLevel and applySettings both use it, so applying
+// settings mid-level gives what a restart would; Endless and the cave test
+// view the assembled window at the setting itself (assembleWindow).
+function classicLevelViewDist() {
+  return Math.max(settings.viewDist, Math.min(worldW, worldH) * 0.8);
+}
+
 function resetLevel(lv) {
   if (typeof cancelPendingMissileCasts === 'function') cancelPendingMissileCasts(false);
   regenBoostUntil = 0; armorBoostUntil = 0; lastRegenTick = 0;
@@ -9027,7 +9047,7 @@ function resetLevel(lv) {
   worldW = cfg.w || 720;
   worldH = cfg.h || 480;
   // View distance scales with map size — ensures large maps feel appropriately vast
-  viewDist = Math.max(settings.viewDist, Math.min(worldW, worldH) * 0.8);
+  viewDist = classicLevelViewDist();
 
   // ── MAP SIZING DIAGNOSTICS ────────────────────────────────────────────────
   var _area       = worldW * worldH;
@@ -25170,6 +25190,18 @@ function drawLayersFloor3D() {
   // or cosAng changed sign (camera rotating past axis boundaries) —
   // previously caused overlapping quads to swap paint order, producing
   // the pop-on-turn artifact at cave boundaries.
+  // Every scanned cell stores at most one triple, so the scan rectangle
+  // bounds this frame's count. A full buffer used to drop the last rows
+  // scanned without a word (Level 4's 2304 u view wanted 46,596 cells of
+  // 40,000). Grow to the largest rectangle this view distance and mesh allow:
+  // a reallocation only when either grows, never per frame, never a shrink,
+  // and no bounds check in the write loop.
+  var _scanCells = Math.max(0, gxMax - gxMin + 1) * Math.max(0, gyMax - gyMin + 1);
+  if (_drawFloorCellBuf.length < _scanCells * 3) {
+    var _scanSpan = Math.ceil(2 * viewRad) + 2;
+    _drawFloorCellBuf = new Float32Array(3 * Math.max(_scanCells,
+      Math.min(_scanSpan, mesh.w - 1) * Math.min(_scanSpan, mesh.h - 1)));
+  }
   var _cellBuf = _drawFloorCellBuf;
   var _cellCnt = 0;
   for (var y = gyMin; y <= gyMax; y++) {
@@ -33868,7 +33900,9 @@ function drawMenuOverlay() {
 
 
 function applySettings() {
-  viewDist = settings.viewDist;
+  // A classic level keeps its map-size view distance, as a restart would
+  // (Ultra used to cut the Expanse from 2304 u to 1800 until the next level).
+  viewDist = ENDLESS_MODE ? settings.viewDist : classicLevelViewDist();
   AMBIENT_MAX = settings.particles;
   if (WINDOW_CHUNKS !== settings.chunkWindow) {
     WINDOW_CHUNKS = settings.chunkWindow;

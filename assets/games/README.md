@@ -944,6 +944,15 @@ depth. Beam endpoint glow can be unioned through `extraPolygons` in one depth
 clip; do not nest clips. Ground effects follow actual terrain triangles rather
 than placing one flat screen ellipse over varying terrain.
 
+`renderEntities3D()` draws every entity `entityVisible3D` keeps. Its shared
+index/distance/visibility buffers start at 512 entries and double when one call
+keeps more, so they allocate only while growing; indices are Uint32. A former
+fixed 512 cap stopped at the 512th visible entity in array order and dropped
+Endless floor scatter at the Ultra preset (up to ~700 sprites in view)
+without a word; `tools/game/tests/render_entities_capacity.js` covers it,
+including that growth only doubles and that later frames and calls that fit
+keep the same buffers.
+
 `sampleEntitySupportRenderZ(x, y, referenceZ, underground, requireTriangle)`
 samples the same semantic layer and diagonal as the floor renderer. A finite
 reference height selects the nearest support; otherwise underground selects the
@@ -1045,6 +1054,37 @@ and object bookkeeping; a full cache falls back to uncached calculation without
 reducing detail. Mesh/dimension changes and `buildWalkCandZ()` invalidate it.
 Future in-place geometry edits must rebuild that derived data or explicitly
 delete `mesh._floorRenderStitches` before rendering again.
+
+The floor pass collects one `[distSq, x, y]` triple per surviving cell into the
+shared `_drawFloorCellBuf` (Float32), then comb-sorts far to near and draws.
+Every scanned cell writes at most one triple, so before collecting it checks
+the frame's scan rectangle and, when that exceeds capacity, grows the buffer to
+the largest rectangle its view distance and mesh allow:
+`min(ceil(2*viewDist/gridSize)+2, mesh.w-1) * min(same, mesh.h-1)` cells. It
+reallocates only when the view distance or mesh grows, never per frame, and
+never shrinks; the write loop has no bounds check. The buffer starts at 40,000
+cells. Level 4 (Expanse, 2304 u view, 360x240 mesh) grows it to 85,801 cells
+(about 1 MB); Endless grows it to 47,961 at the High preset and 91,204 at
+Ultra (9x9 window) and keeps 40,000 at Low and Medium. Before this (audit
+D25) a full buffer silently dropped the last rows scanned, which blanked the
+whole floor at steep pitch on Level 4. Hosts that load
+`13-render-floors-ceilings.js` without `01-config-state.js` must seed
+`_drawFloorCellBuf` with a typed array; the pass replaces it when too small.
+`tools/game/tests/floor_cell_buffer.js` compares real Level 4 frames with an
+unconstrained reference copy of the pass, walks in from the map corner (a
+larger scan rectangle at every stop) to check that the 40,000-cell start
+buffer is replaced once rather than at every larger rectangle, and has an
+opt-in `--sweep`.
+
+A classic level views at least 0.8 of its map's shorter side:
+`classicLevelViewDist()` returns `max(settings.viewDist, 0.8 * min(worldW,
+worldH))` (768 u on Level 1, 1152 u on Levels 2-3, 2304 u on Level 4).
+`resetLevel` and the settings panel's **Apply** (`applySettings`) both use it,
+so applying settings mid-level gives what a restart would; Endless and the
+cave test view at the setting itself. Apply used to assign the raw setting,
+which cut the Expanse from 2304 u to 1800 u at Ultra (400 u at 400) until the
+next level. `tools/game/tests/level_view_distance.js` applies through the O key
+and panel clicks and compares with restarts and real Level 4 floor quads.
 
 This is a manual game/UI preview with local substitutes for device services. It
 has no hardware backend, sensors, or device network connection, and cannot verify

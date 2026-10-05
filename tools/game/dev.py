@@ -494,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
                            "tools.game.tests.test_perf_cadence",
                            "tools.game.tests.test_browser_profile", "tools.game.tests.test_scene_depth_coalescing",
                            "tools.game.tests.test_floor_stitch_cache", "tools.game.tests.test_classic_floor_render",
+                           "tools.game.tests.test_floor_cell_buffer", "tools.game.tests.test_render_entities_capacity",
+                           "tools.game.tests.test_level_view_distance",
                            "tools.game.tests.test_material_palette",
                            "tools.game.tests.test_sky_render",
                            "tools.game.tests.test_effect_registry", "tools.game.tests.test_particle_engine",
