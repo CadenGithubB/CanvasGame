@@ -384,7 +384,11 @@ var LAB = (function () {
     L.frame = function () { return L.frameAt(L.FRAME_MS); };
     // tick(): physics only -- what loop() does minus renderFrame, plus the two
     // side effects of draw() that physics depends on: camera follow (18951)
-    // and the per-frame floor-height cache invalidation (18967).
+    // and the per-frame floor-height cache invalidation (18967). It does NOT
+    // call advanceGameClock: before the simulation clock has an origin,
+    // gameTimeNow() follows the Date.now() that L.advance moves; once a real
+    // loop() frame (or prepareGameRun) has started the clock, tick() leaves
+    // gameplay time where it is until freshPage() restores the page-load clock.
     L.tick = function (n) {
         n = n || 1;
         for (var i = 0; i < n; i++) {
@@ -586,10 +590,15 @@ var LAB = (function () {
     // inherits it from scenario N-1. freshPage() restores the values captured
     // right after LAB.load, i.e. what a reloaded page would have. It is opt-in:
     // a suite TESTING such leaks must not call it before measuring them.
+    // That includes the simulation clock (02-simulation-clock.js): a reloaded
+    // page has no clock origin, so gameTimeNow() follows Date.now() until the
+    // first loop() frame (or prepareGameRun) captures one. Without restoring
+    // it, a scenario after any real-loop scenario inherits a frozen origin, and
+    // LAB.setClock / LAB.tick no longer move gameplay time at all.
     var PAGE_KEYS = ["jumpAirborne", "jumpVelZ", "settings", "pendingSettings", "WINDOW_CHUNKS", "_ptErrors",
                      "_rgbCache", "spells", "fortressAllies", "completedFortresses", "CONTROL_MODE", "gpLast",
                      "lastSelectDown", "lastStartMenuDown", "menuOpen", "settingsOpen", "dayTime", "daySpeed", "_physicsAccum",
-                     "lastUpdate", "phoenixFeatherUsed", "stats"];
+                     "lastUpdate", "phoenixFeatherUsed", "stats", "_gameClockOriginMs", "_gameClockElapsedMs"];
     var _pageSnap = null;
     function _clone(v) { return (v && typeof v === "object") ? JSON.parse(JSON.stringify(v)) : v; }
     L._snapshotPage = function () {
