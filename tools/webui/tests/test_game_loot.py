@@ -64,15 +64,20 @@ _RESERVE = "loot: chests inside a cave entrance reserve are filtered out of the 
 # One walk's detail (walkIn, game_loot_harness.js) when that walk fails ONLY on
 # the near-chest prompt: it reached the chest (a STUCK clause would sit between
 # 'fps' and '; end at'), stands on the chest cell's floor underground (the
-# harness's own onFloor: |h - floor| < 0.5 and playerUnderground), rests inside
-# 22 u, is offered the chest, draws no prompt and logs 0 render errors. Every
-# field is pinned inside each walk, so one walk cannot vouch for another.
+# harness's own onFloor: |h - floor| < 0.5 and playerUnderground), rests under
+# 18 u, is offered the chest, draws no prompt with the camera at the game's full
+# downward pitch (chestPrompt reports the pitch the chest pass drew with) and
+# logs 0 render errors. Every field is pinned inside each walk, so one walk
+# cannot vouch for another. 18 u is the measured full-pitch cutoff of the
+# shortest (2-line gold) label in the lab canvas: hidden at 18.0 u, drawn from
+# 18.25 u. A no-prompt rest further out, or a read below CAM_PITCH_MAX, is not
+# this defect: at pitch 1 the same label is hidden out to 21.75 u.
 _NUM = r"-?\d+\.\d+"
 _WALK_ONLY_PROMPT = (
     rf"\w+: entrance \({_NUM},{_NUM}\) -> chest \({_NUM},{_NUM}\) \d+ corridor nodes, {_NUM} u, \d+ frames at 30 fps; "
     rf"end at \({_NUM},{_NUM}\) h={_NUM} chest-cell floor {_NUM} underground=true onFloor=true "
-    rf"airborne frames \d+ min h {_NUM}; rest (?:1?\d|2[01])\.\d u from the chest; "
-    r"offered=true prompt no prompt drawn; render errors 0")
+    rf"airborne frames \d+ min h {_NUM}; rest (?:1[0-7]|\d)\.\d u from the chest; "
+    rf"offered=true prompt no prompt drawn at camera pitch {_NUM} = CAM_PITCH_MAX; render errors 0")
 
 # check id -> (why it fails today, regex its FAIL detail must match). The regex
 # pins the documented mechanism, so a known bug that starts failing for another
@@ -96,12 +101,15 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
     _WALK: (
         "NEW (loot lab walk, not in the audit index; present since the 0.0 snapshot): an offered chest can have no "
         "visible prompt. The only prompt is the floating label drawTreasureChestLabel (07-decorations-lighting.js) "
-        "draws above the chest (legacy pass floorZ+bodyH+lidH+8, chest-model pass its 'label' anchor); within "
-        "~18-22 u of the chest it projects wholly below the canvas even at full downward pitch, so "
-        "withSceneDepthBillboard culls it, while updateTreasureChests still offers the chest (dist < 90 && "
-        "canReachChest) and A/E loots it. The walker releases W ~70 u out at ~120 u/s and cave damping (0.975 per "
-        "60 Hz step) slides it to 6-17 u from the chest: offered=true, no prompt. The check needs at least 2 "
-        "walks, and every walk must fail only this way (_WALK_ONLY_PROMPT).",
+        "draws above the chest (legacy pass floorZ+bodyH+lidH+8, chest-model pass its 'label' anchor); closer "
+        "than ~18 u it projects wholly below the canvas even at the game's full downward pitch (CAM_PITCH_MAX "
+        "1.4, which the walk's prompt read uses), so withSceneDepthBillboard culls it, while updateTreasureChests "
+        "still offers the chest (dist < 90 && canReachChest) and A/E loots it. Measured in the lab canvas on the "
+        "walks' 2-line gold labels, the shortest label: hidden at 18.0 u and drawn from 18.25 u at CAM_PITCH_MAX "
+        "(at pitch 1 hidden out to 21.75 u, so 18-22 u is the camera's choice, not this defect). The walker "
+        "releases W ~70 u out at ~120 u/s and cave damping (0.975 per 60 Hz step) slides it to 6-17 u from the "
+        "chest: offered=true, no prompt at CAM_PITCH_MAX. The check needs at least 2 walks, and every walk must "
+        "fail only this way (_WALK_ONLY_PROMPT).",
         rf"^0/(?:[2-9]|[1-9]\d+) walks at 30 fps [^:|]*: {_WALK_ONLY_PROMPT}(?: \| {_WALK_ONLY_PROMPT})+$"),
 }
 
@@ -270,7 +278,10 @@ class WalkKnownBugDetailTests(unittest.TestCase):
     Test 12345/424242/777). Each negative control changes one walk the way the
     harness would report one more failure condition of the walk check
     (rec.ok = reached && onFloor && offered && drawn && errs === 0, and at
-    least 2 walks), while the other walks stay the documented defect.
+    least 2 walks), or one way the "no prompt" could come from the fixture's
+    camera instead of the game (a read below CAM_PITCH_MAX, or a rest of 18 u
+    or more, at or past the label's full-pitch cutoff), while the other walks
+    stay the documented defect.
     """
 
     HEAD = ("walks at 30 fps (real loop) reached the chest, stood on its cave floor underground, were offered it "
@@ -278,13 +289,16 @@ class WalkKnownBugDetailTests(unittest.TestCase):
     WALKS = [
         "cavetest12345: entrance (865.3,426.9) -> chest (699.5,978.0) 8 corridor nodes, 570.7 u, 181 frames at "
         "30 fps; end at (704.8,962.0) h=-4.77 chest-cell floor -4.77 underground=true onFloor=true airborne "
-        "frames 0 min h -4.77; rest 16.8 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+        "frames 0 min h -4.77; rest 16.8 u from the chest; offered=true prompt no prompt drawn at camera pitch 1.40 = "
+        "CAM_PITCH_MAX; render errors 0",
         "cavetest424242: entrance (1028.4,604.1) -> chest (615.6,785.5) 6 corridor nodes, 452.2 u, 150 frames at "
         "30 fps; end at (616.9,779.3) h=-6.45 chest-cell floor -6.45 underground=true onFloor=true airborne "
-        "frames 0 min h -6.45; rest 6.3 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+        "frames 0 min h -6.45; rest 6.3 u from the chest; offered=true prompt no prompt drawn at camera pitch 1.40 = "
+        "CAM_PITCH_MAX; render errors 0",
         "cavetest777: entrance (545.3,916.0) -> chest (934.4,576.1) 7 corridor nodes, 521.9 u, 168 frames at "
         "30 fps; end at (928.3,576.0) h=-7.57 chest-cell floor -7.57 underground=true onFloor=true airborne "
-        "frames 0 min h -7.57; rest 6.1 u from the chest; offered=true prompt no prompt drawn; render errors 0",
+        "frames 0 min h -7.57; rest 6.1 u from the chest; offered=true prompt no prompt drawn at camera pitch 1.40 = "
+        "CAM_PITCH_MAX; render errors 0",
     ]
 
     def detail(self, walks, ok=0):
@@ -296,6 +310,9 @@ class WalkKnownBugDetailTests(unittest.TestCase):
     def test_the_documented_defect_matches(self):
         self.assertTrue(self.matches(self.detail(self.WALKS)))
         self.assertTrue(self.matches(self.detail(self.WALKS[:2])), "2 walks satisfy the check's W.length >= 2")
+        edge = [self.WALKS[0], self.WALKS[1].replace("rest 6.3 u", "rest 17.9 u"), self.WALKS[2]]
+        self.assertNotEqual(edge[1], self.WALKS[1], "the substitution did not apply")
+        self.assertTrue(self.matches(self.detail(edge)), "17.9 u is inside the 18.0 u full-pitch cutoff")
 
     def test_too_few_walks_or_a_passing_walk_do_not_match(self):
         self.assertFalse(self.matches(self.detail(self.WALKS[:1])), "0/1: the check also fails on W.length < 2")
@@ -319,7 +336,16 @@ class WalkKnownBugDetailTests(unittest.TestCase):
             "not offered": w.replace("offered=true", "offered=false"),
             "a prompt drawn": w.replace("prompt no prompt drawn", "prompt '[E] Take / +12 Gold'"),
             "render errors": w.replace("render errors 0", "render errors 2"),
-            "at rest 22 u or more out": w.replace("rest 6.3 u", "rest 22.0 u"),
+            # 18.0 u is still hidden at full pitch, but r1 prints 17.95-18.05 u as
+            # 18.0 and the label is drawn from 18.25 u, so the regex stops below
+            # 18.0. From 18.25 to 21.75 u only the old pitch-1 cap hid the label.
+            **{f"at rest {d} u": w.replace("rest 6.3 u", f"rest {d} u")
+               for d in ("18.0", "18.2", "19.0", "19.5", "20.0", "20.5", "21.0", "21.9", "22.0", "35.0")},
+            "read below the full downward pitch": w.replace("at camera pitch 1.40 = CAM_PITCH_MAX",
+                                                            "at camera pitch 1.00 vs CAM_PITCH_MAX 1.40"),
+            "the chest pass did not draw in the read frame": w.replace("at camera pitch 1.40 = CAM_PITCH_MAX",
+                                                                       "at camera pitch null vs CAM_PITCH_MAX 1.40"),
+            "the detail no longer reports the pitch": w.replace(" at camera pitch 1.40 = CAM_PITCH_MAX", ""),
             "a walk without a route": "cavetest424242: PRECONDITION: cavetest424242: no corridor path from an "
                                       "entrance to a chamber holding a window chest",
         }

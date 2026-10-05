@@ -160,28 +160,35 @@ if (LAB.loaded) {
     // 0.3 open for the text, 9374) and the last one is recorded. Only fillText
     // calls made while drawTreasureChests3D is on the stack are kept: draw()
     // calls the pass by bare name (18975), so wrapping the global sees it.
+    // p.pitch is the camera pitch that pass drew with.
     function chestPrompt(ch, frames) {
         cam.ang = Math.atan2(ch.y - pos.y, ch.x - pos.x);
         // Aim at the chest, not horizontally over a nearby floor object. The
         // scene-depth billboard now correctly clips prompts outside the view.
-        cam.pitch = Math.min(1, (60 + 25 * LAB.h() - getEntityRenderFloorZ(ch) - 20) /
+        // When the chest is too close to centre, the read uses the game's own
+        // full downward pitch (CAM_PITCH_MAX, the clamp of every pitch input):
+        // more pitch only lifts the label, so a prompt missing there is missing
+        // at every pitch a player can reach. (A cap of 1 hid labels the game
+        // draws 18-22 u from the chest.)
+        cam.pitch = Math.min(CAM_PITCH_MAX, (60 + 25 * LAB.h() - getEntityRenderFloorZ(ch) - 20) /
             Math.max(1, Math.hypot(ch.x - pos.x, ch.y - pos.y)));
         lastUpdate = LAB.clock;             // the next frame runs one physics step, not a catch-up burst
-        var orig = G.drawTreasureChests3D, spans = [], errs = 0, rec = null, c0 = 0;
+        var orig = G.drawTreasureChests3D, spans = [], errs = 0, rec = null, c0 = 0, drawPitch = null;
         G.drawTreasureChests3D = function () {
             var s = LAB.ctxCounters.fillText;
+            drawPitch = cam.pitch;
             try { return orig.apply(this, arguments); }
             finally { spans.push([s, LAB.ctxCounters.fillText]); }
         };
         try {
             for (var i = 0; i < (frames || 4) - 1; i++) errs += LAB.frame();
-            spans = [];
+            spans = []; drawPitch = null;
             c0 = LAB.ctxCounters.fillText;
             rec = LAB.record(function () { errs += LAB.frame(); }, { texts: true });
         } finally { G.drawTreasureChests3D = orig; }
         var lines = [];
         spans.forEach(function (sp) { rec.texts.slice(sp[0] - c0, sp[1] - c0).forEach(function (t) { lines.push(t.text); }); });
-        var p = { lines: lines, errs: errs, action: null, gold: null, name: lines.length ? lines[0] : null };
+        var p = { lines: lines, errs: errs, action: null, gold: null, name: lines.length ? lines[0] : null, pitch: drawPitch };
         lines.forEach(function (s) {
             var m = /^\+(\d+) Gold$/.exec(s);
             if (m) p.gold = +m[1];
@@ -500,7 +507,9 @@ if (LAB.loaded) {
             (stuckAt ? "; STUCK " + r1(stuckAt.d) + " u short of node " + stuckAt.k + " at (" + r1(stuckAt.w.x) + "," + r1(stuckAt.w.y) + ")" : "") +
             "; end at (" + r1(w2.x) + "," + r1(w2.y) + ") h=" + r2(LAB.h()) + " chest-cell floor " + (fl ? r2(fl.z) : "none") +
             " underground=" + !!playerUnderground + " onFloor=" + rec.onFloor + " airborne frames " + air + " min h " + r2(minH) +
-            "; rest " + r1(restD) + " u from the chest; offered=" + rec.offered + " prompt " + fmtPrompt(pr) + "; render errors " + errs;
+            "; rest " + r1(restD) + " u from the chest; offered=" + rec.offered + " prompt " + fmtPrompt(pr) +
+            (pr ? " at camera pitch " + r2(pr.pitch) + (pr.pitch === CAM_PITCH_MAX ? " = CAM_PITCH_MAX" : " vs CAM_PITCH_MAX " + r2(CAM_PITCH_MAX)) : "") +
+            "; render errors " + errs;
         A.walk.push(rec);
     }
 
