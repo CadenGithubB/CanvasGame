@@ -489,7 +489,8 @@ function getWaterStats() { return Object.assign({}, waterStats); }
 // edge or where its water stops. Runs through lakes split it: each flowing
 // run becomes one river object whose ends reach one point into the lake.
 // A river ends where its water would stand above reserved ground beside it
-// and drains there (see _waterRiverKeepOff and _waterRiverDrainFall).
+// and drains there, at an end the land holds (see _waterRiverKeepOff and
+// _waterRiverDrainFall).
 function buildWaterRivers(mesh, sources, field) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, owner = new Int32Array(n), rivers = [];
   for (var s = 0; s < sources.length; s++) {
@@ -565,21 +566,24 @@ function _waterRiverObject(mesh, cells, halfWidth, body, index, fromSpring, drai
   // Width per point (index 4): a river that starts at its spring widens over
   // its first few sections instead of opening at full width.
   for (var wI = 0; wI < res.length; wI++) res[wI][4] = halfWidth * (fromSpring ? Math.min(1, 0.4 + 0.12 * wI) : 1);
-  var course = {points: res, drains: !!drains};
+  var course = {points: res, drains: !!drains, heldBack: 0};
   if (field && field.rimCells && field.rimCells.length) _waterRiverKeepOff(mesh, field, course);
+  if (course.drains) _waterRiverDrainFall(mesh, field, course);
   if (course.points.length < 2) return null;
-  if (course.drains) _waterRiverDrainFall(mesh, field, course.points);
-  return {id: index, body: body, halfWidth: halfWidth, depth: WATER_RIVER_BED_DEPTH, points: course.points, drains: course.drains};
+  return {id: index, body: body, halfWidth: halfWidth, depth: WATER_RIVER_BED_DEPTH, points: course.points, drains: course.drains,
+    heldBack: course.heldBack};
 }
 // No river stands above reserved ground beside its water. Its water is what
 // carveWaterRivers writes: the points within its width of its course, its
-// rounded ends included unless an end opens into a lake or drains, wet where
-// the surface stands above the ground. The carve never reshapes a point next
-// to reserved ground (field.rim), so such a point keeps its own height. The
+// rounded ends included unless an end opens into a lake, wet where the
+// surface stands above the ground. The carve never reshapes a point next to
+// reserved ground (field.rim), so such a point keeps its own height. The
 // river ends at the start of the first stretch whose water would stand above
 // reserved ground beside it, and drains there; water standing above it only
-// past its end means it drains with no water past its end; at its very start
-// it means there is no river (course.points shorter than 2).
+// past its end means it drains; at its very start it means there is no river
+// (course.points shorter than 2). A drained river's end is not tested here:
+// its surface falls there to no higher than the reserved ground within its
+// end's shore (_waterRiverDrainFall), which covers its rounded end.
 function _waterRiverKeepOff(mesh, field, course) {
   var pts = course.points, gs = mesh.gridSize, w = mesh.w, H = field.height, rim = field.rim, cells = field.rimCells;
   var startLake = _waterLakeAt(mesh, pts[0]) >= 0;
@@ -613,40 +617,90 @@ function _waterRiverKeepOff(mesh, field, course) {
     if (first < last) pts.length = first + 1;
   }
 }
-// A drained river's surface falls over its last WATER_DRAIN_FALL world units
-// to where it ends: the reserved ground it drains into (the lowest within its
-// width of its end), but never below the ground at its end, and nowhere below
-// the ground under its course, so its tail neither stands above the reserved
-// ground nor sinks below the land into a dry trench where the reserved ground
-// lies below a step.
+// A drained river ends in a rounded end like any other open end: the carve
+// shapes it and writes its water, and the ribbon draws its cap. Its end must
+// be one the land holds. The end's shore is the ground ahead of it within its
+// half-width, its levee's width (WATER_LEVEE_WIDTH) and one height-grid step,
+// and the reserved ground within that distance. The river's surface
+// falls over its last WATER_DRAIN_FALL world units to the lowest ground of
+// that shore, so its water meets the land there instead of stopping above it,
+// but never below what its channel can hold (_waterRiverFloor). Where the
+// shore cannot hold even that (_waterDrainEnd), the river ends a section
+// earlier, until it can.
 var WATER_DRAIN_FALL = 36;
-function _waterGroundNear(mesh, x, y) {
-  var gs = mesh.gridSize, w = mesh.w, h = mesh.h;
-  var gx = Math.max(0, Math.min(w - 1, Math.round(x / gs))), gy = Math.max(0, Math.min(h - 1, Math.round(y / gs)));
-  return _waterPlainGround(mesh, gy * w + gx);
+// How far a drained river's surface may sink below the ground under its
+// course where the carve shapes that ground: its channel, cut no deeper than
+// WATER_MAX_CUT, still holds WATER_RIVER_BED_DEPTH of water there.
+var WATER_DRAIN_SINK = WATER_MAX_CUT - WATER_RIVER_BED_DEPTH;
+// Whether the carve may reshape height point v (it is open, as are its eight
+// neighbours, and it is not on the window's border).
+function _waterCarvable(mesh, H, v) {
+  var w = mesh.w, x = v % w, y = (v / w) | 0;
+  if (x < 1 || y < 1 || x >= w - 1 || y >= mesh.h - 1) return false;
+  for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+    var o = v + oy * w + ox;
+    if (!(H[o] === H[o])) return false;
+  }
+  return true;
 }
-function _waterRiverDrainFall(mesh, field, pts) {
-  var e = pts[pts.length - 1], gs = mesh.gridSize, w = mesh.w, h = mesh.h, sink = field ? field.sink : null;
+// The lowest surface a river can hold at course point p, from the ground at
+// its nearest height point: WATER_DRAIN_SINK below it where the carve shapes
+// that point, the ground itself where the carve leaves it as it is, and
+// -Infinity off open ground or on a lake (no river water is written there).
+function _waterRiverFloor(mesh, field, p) {
+  var gs = mesh.gridSize, w = mesh.w, H = field.height;
+  var gx = Math.max(0, Math.min(w - 1, Math.round(p[0] / gs))), gy = Math.max(0, Math.min(mesh.h - 1, Math.round(p[1] / gs))), v = gy * w + gx;
+  if (!(H[v] === H[v]) || mesh.water[v] === WATER_KIND.still) return -Infinity;
+  return _waterCarvable(mesh, H, v) ? H[v] - WATER_DRAIN_SINK : H[v];
+}
+// The shore of the course's current end: its lowest ground (a lake there
+// counts at its surface), and the highest surface it holds. Reserved ground
+// and ground the carve leaves as it is hold water up to their own height; no
+// water stands above them. Ground the carve shapes holds it up to
+// WATER_MAX_FILL - WATER_BANK_LIP higher, where a levee as high as carving
+// may raise it still stands WATER_BANK_LIP above the water.
+function _waterDrainEnd(mesh, field, pts) {
+  var e = pts[pts.length - 1], o = pts[pts.length - 2], gs = mesh.gridSize, w = mesh.w, h = mesh.h, H = field.height, sink = field.sink;
+  var dx = e[0] - o[0], dy = e[1] - o[1];
   var ex = Math.max(0, Math.min(w - 1, Math.round(e[0] / gs))), ey = Math.max(0, Math.min(h - 1, Math.round(e[1] / gs)));
-  var reach = e[4] + gs * Math.SQRT2, r = Math.ceil(reach / gs), low = NaN;
-  for (var dy = -r; sink && dy <= r; dy++) {
-    for (var dx = -r; dx <= r; dx++) {
-      var x = ex + dx, y = ey + dy;
-      if (x < 0 || y < 0 || x >= w || y >= h || Math.hypot(x * gs - e[0], y * gs - e[1]) > reach) continue;
-      var z = sink[y * w + x];
-      if (z === z && !(z >= low)) low = z;
+  var reach = e[4] + WATER_LEVEE_WIDTH + gs, r = Math.ceil(reach / gs), low = Infinity, hold = Infinity;
+  for (var oy = -r; oy <= r; oy++) {
+    for (var ox = -r; ox <= r; ox++) {
+      var x = ex + ox, y = ey + oy;
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      var px = x * gs - e[0], py = y * gs - e[1];
+      if (Math.hypot(px, py) > reach) continue;
+      var v = y * w + x, reserved = sink[v] === sink[v], z = reserved ? sink[v] : H[v];
+      if (!(z === z) || !(reserved || px * dx + py * dy > 0)) continue;
+      var still = mesh.water[v] === WATER_KIND.still;
+      if (still && mesh.waterSurface[v] > z) z = mesh.waterSurface[v];
+      if (z < low) low = z;
+      var held = reserved || still || !_waterCarvable(mesh, H, v) ? z : z + WATER_MAX_FILL - WATER_BANK_LIP;
+      if (held < hold) hold = held;
     }
   }
-  var ground = _waterGroundNear(mesh, e[0], e[1]), target = ground === ground ? (low > ground ? low : ground) : low;
+  return {low: low, hold: hold, floor: _waterRiverFloor(mesh, field, e)};
+}
+function _waterRiverDrainFall(mesh, field, course) {
+  var pts = course.points, end = null, arc = pts.length ? pts[pts.length - 1][3] : 0;
+  while (pts.length >= 2) {
+    end = _waterDrainEnd(mesh, field, pts);
+    if (!(end.floor > end.hold)) break;
+    pts.length--;
+  }
+  if (pts.length < 2) return;
+  var e = pts[pts.length - 1], target = Math.max(end.low, end.floor);
+  course.heldBack = arc - e[3];
   if (!(target < e[2])) return;
-  for (var k = pts.length - 1; k >= 0; k--) {
+  // The surface never rises downstream, so no point falls below the floor of
+  // any point after it.
+  for (var k = pts.length - 1, floor = -Infinity; k >= 0; k--) {
     var f = (e[3] - pts[k][3]) / WATER_DRAIN_FALL;
     if (f >= 1) break;
-    var fall = target + (pts[k][2] - target) * f * f * (3 - 2 * f), under = _waterGroundNear(mesh, pts[k][0], pts[k][1]);
-    if (under > fall) fall = under;
+    floor = Math.max(floor, _waterRiverFloor(mesh, field, pts[k]));
+    var fall = Math.max(target + (pts[k][2] - target) * f * f * (3 - 2 * f), floor);
     if (fall < pts[k][2]) pts[k][2] = fall;
   }
-  for (var m = 1; m < pts.length; m++) if (pts[m][2] > pts[m - 1][2]) pts[m][2] = pts[m - 1][2];
 }
 
 // The lake point a river end sits on (its nearest height point), or -1.
@@ -710,15 +764,15 @@ function _waterRiverShores(mesh, H, rivers, bestD, bestW, bestR, bestK) {
 // ground, and a levee shelf WATER_BANK_LIP above S that falls back to lower
 // natural ground only after WATER_LEVEE_WIDTH. The shelf is wider than the
 // height grid's spacing, so the rendered ground next to the water always
-// stands above it and the river never hangs over a falling slope. Walls,
-// caves, reserved ground, lakes, points next to closed ground and the ground
-// past an end that drains into reserved ground are left unchanged, and no
-// ground rises more than WATER_MAX_FILL above or sinks more than
-// WATER_MAX_CUT below its natural height (the bounds bind only at terrain
-// steps, where the water may stand above a bank or run dry; a channel point
-// that the cut bound would leave dry is not cut at all). Then river water is
-// written from the channel: level across, falling downstream. Returns the
-// points carved.
+// stands above it and the river never hangs over a falling slope. Every
+// open end, one that drains into reserved ground included, is rounded the
+// same way. Walls, caves, reserved ground, lakes and points next to closed
+// ground are left unchanged, and no ground rises more than WATER_MAX_FILL
+// above or sinks more than WATER_MAX_CUT below its natural height (the bounds
+// bind only at terrain steps, where the water may stand above a bank or run
+// dry; a point that the cut bound would leave dry is not cut at all). Then
+// river water is written from the channel: level across, falling downstream.
+// Returns the points carved.
 function carveWaterRivers(mesh, field, rivers) {
   var w = mesh.w, h = mesh.h, gs = mesh.gridSize, n = w * h, H = field.height;
   // Rivers replace the solver's per-point river marks.
@@ -756,19 +810,11 @@ function carveWaterRivers(mesh, field, rivers) {
     if (ri < 0 || !(H[q] === H[q]) || mesh.water[q] === WATER_KIND.still) continue;
     var river = rivers[ri], hw = bestW[q], d2 = bestD[q], S = bestS[q];
     if (d2 >= hw + WATER_BANK_REACH) continue;
-    // Past an end that drains into reserved ground there is no channel, bank
-    // or water: the ground stays as it is.
-    if (bestEnd[q] > 0 && river.drains) continue;
-    var qx = q % w, qy = (q / w) | 0, open = qx > 0 && qy > 0 && qx < w - 1 && qy < h - 1;
     // Points next to walls, caves or reserved ground keep their height (wall
     // caps and cave mouths are derived from it, and _waterRiverKeepOff counts
     // on it); points beside lakes may be shaped.
-    for (var oy = -1; open && oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
-      var o = q + oy * w + ox;
-      if (!(H[o] === H[o])) { open = false; break; }
-    }
     var ground = H[q];
-    if (open) {
+    if (_waterCarvable(mesh, H, q)) {
       var edgeSlope = 2 * river.depth / hw;   // mesh units per world unit where the bed meets the surface
       if (d2 < hw) { var u = d2 / hw; ground = S - river.depth * (1 - u * u); }
       else {
@@ -782,10 +828,10 @@ function carveWaterRivers(mesh, field, rivers) {
       if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;
       if (ground < H[q] - WATER_MAX_CUT) {
         ground = H[q] - WATER_MAX_CUT;
-        // A channel cut as deep as the bound allows that still holds no
-        // water here is not cut at all: no dry pit where the water runs
-        // below a terrain step.
-        if (d2 < hw && !(S - ground > WATER_WET_EPS)) ground = H[q];
+        // Ground cut as deep as the bound allows that still holds no water
+        // here (a channel point, or a bank above the water) is not cut at
+        // all: no dry pit or notch where the water runs below a terrain step.
+        if (!(S - ground > WATER_WET_EPS)) ground = H[q];
       }
       if (ground !== H[q]) {
         saved[q] = mesh.l0TopZ[q];

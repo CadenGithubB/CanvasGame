@@ -44,16 +44,19 @@ function _waterRibbonReach(mesh, x, y, nx, ny, hw, surface) {
   }
   return hw + WATER_RIBBON_OVERLAP;
 }
-// A river's open end (its spring, a confluence, the window edge) gets one
-// more section straight on, covering the rounded end of its carved channel.
-// An end inside a lake needs none: the lake's own surface covers it, and an
-// end that drains into reserved ground has no water past it.
+// A river's open end (its spring, a confluence, the window edge, or an end
+// that drains into reserved ground) gets one more section straight on,
+// covering the rounded end of its carved channel and reaching into the land
+// past it as a side reaches into its bank (_waterRibbonReach), so the depth
+// test draws the waterline there too. An end inside a lake needs none: the
+// lake's own surface covers it.
 function _waterRibbonCap(mesh, pts, q) {
   var p = pts[q], o = pts[q === 0 ? 1 : q - 1];
   if (!o || _waterLakeAt(mesh, p) >= 0) return null;
-  var dx = p[0] - o[0], dy = p[1] - o[1], len = Math.hypot(dx, dy), reach = p[4];
-  if (!(len > 0) || !(reach > 0)) return null;
-  return [p[0] + dx / len * reach, p[1] + dy / len * reach, p[2], q === 0 ? p[3] - reach : p[3] + reach, reach];
+  var dx = p[0] - o[0], dy = p[1] - o[1], len = Math.hypot(dx, dy), hw = p[4];
+  if (!(len > 0) || !(hw > 0)) return null;
+  var reach = _waterRibbonReach(mesh, p[0], p[1], dx / len, dy / len, hw, p[2]);
+  return [p[0] + dx / len * reach, p[1] + dy / len * reach, p[2], q === 0 ? p[3] - reach : p[3] + reach, hw];
 }
 // Signed curvature of a river centreline at point q (1 / radius; positive
 // when the river turns toward its left, the ribbon's first side).
@@ -114,7 +117,7 @@ function buildWaterTiles(mesh) {
   var rivers_ = typeof waterRivers !== 'undefined' ? waterRivers : [];
   for (var r = 0; r < rivers_.length; r++) {
     var rv = rivers_[r], pts = rv.points, half = 0, sections = [];
-    var capA = _waterRibbonCap(mesh, pts, 0), capB = rv.drains ? null : _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
+    var capA = _waterRibbonCap(mesh, pts, 0), capB = _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
     if (capA || capB) { pts = pts.slice(); if (capA) pts.unshift(capA); if (capB) pts.push(capB); }
     for (var b0 = 0; b0 < pts.length; b0++) bend.push(_waterBend(pts, b0));
     for (var q = 0; q < pts.length; q++) {

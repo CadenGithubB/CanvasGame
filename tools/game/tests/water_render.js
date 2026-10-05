@@ -1,10 +1,10 @@
 // Water rendering geometry in real seeded windows: lakes cover every floor
 // square they touch without hanging over lower ground; river ribbons cover
 // their channel, do not fold over themselves, and never hang over dry land;
-// a river that drains into a structure's reserved ground ends at its last
-// point; no near-black beds under water; switching the system off restores
-// every ground colour. Geometry contracts on the built tiles; browser pixels
-// are checked separately.
+// a river that drains into a structure's reserved ground ends where the land
+// holds its water; no near-black beds under water; switching the system off
+// restores every ground colour. Geometry contracts on the built tiles;
+// browser pixels are checked separately.
 (function () {
   var G=(0,eval)('this'),checks=0,out=(__engine==='node'||__engine==='deno')?console.log.bind(console):__out;
   function check(name,ok,detail){if(!ok){if(detail!==undefined)out('DETAIL '+JSON.stringify(detail));throw Error(name);}checks++;out('PASS '+name);}
@@ -26,10 +26,17 @@
   patch('src/06-water.js','var WATER_RIVER_RELAX = 10;','var WATER_RIVER_RELAX = 0;','--no-relax');
   // Ribbon edges reaching out over the bank without the levee under them.
   patch('src/06-water.js','ground = Math.max(cut, levee);','ground = cut;','--perched-bank');
-  // Water left past the end of a river that drains into reserved ground.
-  patch('src/06-water.js','    if (bestEnd[q] > 0 && river.drains) continue;\n','','--water-past-drains');
-  // An end cap drawn past the end of a river that drains into reserved ground.
-  patch('src/13-render-water.js','capB = rv.drains ? null : _waterRibbonCap(mesh, pts, pts.length - 1)','capB = _waterRibbonCap(mesh, pts, pts.length - 1)','--cap-past-drains');
+  // A river that drains into reserved ground ending as it used to: no
+  // rounded end carved past its last point and no cap drawn there, so its
+  // full-depth channel stops at a straight edge (the historical defect).
+  patch('src/06-water.js','    var ground = H[q];\n    if (_waterCarvable(mesh, H, q)) {','    if (bestEnd[q] > 0 && river.drains) continue;\n    var ground = H[q];\n    if (_waterCarvable(mesh, H, q)) {','--uncapped-drained-ends');
+  patch('src/13-render-water.js','capB = _waterRibbonCap(mesh, pts, pts.length - 1)','capB = rv.drains ? null : _waterRibbonCap(mesh, pts, pts.length - 1)','--uncapped-drained-ends');
+  // A drained river's surface left where the solver put it, or its end not
+  // held back where the land ahead of it cannot hold its water.
+  patch('src/06-water.js','  if (course.drains) _waterRiverDrainFall(mesh, field, course);\n','','--no-drain-fall');
+  patch('src/06-water.js','    if (!(end.floor > end.hold)) break;\n','    break;\n','--no-hold');
+  // End caps that stop at the channel edge instead of reaching into the bank.
+  patch('src/13-render-water.js','  var reach = _waterRibbonReach(mesh, p[0], p[1], dx / len, dy / len, hw, p[2]);\n','  var reach = hw;\n','--short-caps');
   G.__waterSources=sources;
   (0,eval)(host.slice(0,hostEnd).replace(loadLine,"manifest.parts.MAIN.forEach(function (path) { (0, eval)(G.__waterSources[path] || slurp('assets/games/' + path)); });")+'G.__waterErrors=errors; }());');
   function loadWorld(seed,walk){var st0=seed,realRandom=Math.random;Math.random=function(){st0=(st0*1103515245+12345)%2147483648;return st0/2147483648;};
@@ -40,9 +47,13 @@
     var z0=m.l0TopZ[i],z1=m.l0TopZ[i+1],z2=m.l0TopZ[i+m.w],z3=m.l0TopZ[i+m.w+1];return u>=v?z0+(z1-z0)*u+(z3-z1)*v:z0+(z3-z2)*u+(z2-z0)*v;}
   function inQuad(q,x,y){var s=0;for(var i=0;i<4;i++){var a=q[i],b=q[(i+1)%4],c=(b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0]);if(c>0)s|=1;else if(c<0)s|=2;}return s!==3;}
   function area(p,q,r){return (q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);}
-  // Two home windows, and a window entered beside a fortress (seed 6, its
-  // region 11,8) where rivers drain into the fortress's reserved ground.
-  [[11],[33],[6,[36,26]]].forEach(function(win){
+  // Two home windows, and windows entered beside structures where rivers
+  // drain into reserved ground: seed 6 beside a fortress (its region 11,8;
+  // one river there is held back), seed 14 beside an arena and seed 8 beside
+  // a watchtower (the two drained ends that used to stop at a straight edge
+  // above lower ground), and seed 3, whose end meets land that only the
+  // cap's reach into the bank covers.
+  [[11],[33],[6,[36,26]],[14,[22,23]],[8,[-15,102]],[3,[6,46]]].forEach(function(win){
     var seed=win[0],m=loadWorld(seed,win[1]),w=m.w,h=m.h,gs=m.gridSize,tiles=G.buildWaterTiles(m),label='world '+seed+(win[1]?' at '+win[1]:'')+': ';
     var lakes=tiles.filter(function(t){return t.kind===1;}),ribbons=tiles.filter(function(t){return t.ribbon;});
     // Independent enumeration of floor squares with any lake corner.
@@ -70,24 +81,36 @@
       for(var sy=ry-1;sy<=ry&&!hit;sy++)for(var sx=rx-1;sx<=rx;sx++)if(sx>=0&&sy>=0&&covered[sy*w+sx])hit=true;
       if(!hit)uncovered.push(r);}
     check(label+'every point of river water lies under a water surface',riverPoints>150&&uncovered.length===0,{points:riverPoints,uncovered:uncovered.slice(0,8)});
-    // A ribbon edge over dry, open ground rests on or inside the bank.
+    // A ribbon edge over dry, open ground rests on or inside the bank: every
+    // corner of every piece, the last section of each river included.
     function openDry(x,y){var gx=Math.floor(x/gs),gy=Math.floor(y/gs);if(gx<1||gy<1||gx>=w-2||gy>=h-2)return false;
       for(var dy=-1;dy<=2;dy++)for(var dx=-1;dx<=2;dx++){var v=(gy+dy)*w+gx+dx,b=G._waterWindowBed(m,v);if(!(b===b))return false;if(dy>=0&&dy<=1&&dx>=0&&dx<=1&&m.water[v])return false;}return true;}
     var edges=0,hanging=[];
-    ribbons.forEach(function(t){[t.quad[0],t.quad[3]].forEach(function(p){if(!openDry(p[0],p[1]))return;edges++;var g=groundAt(m,p[0],p[1]),S=p[2]/25;if(g<S-0.01)hanging.push(+(S-g).toFixed(3));});});
+    ribbons.forEach(function(t){t.quad.forEach(function(p){if(!openDry(p[0],p[1]))return;edges++;var g=groundAt(m,p[0],p[1]),S=p[2]/25;if(g<S-0.01)hanging.push(+(S-g).toFixed(3));});});
     check(label+'river ribbon edges never hang above dry open ground',edges>50&&hanging.length===0,{edges:edges,hanging:hanging.slice(0,6)});
     // Ground seen through water is never near-black.
     var beds=0,darkest=255;
     for(var y2=0;y2<h-1;y2++)for(var x2=0;x2<w-1;x2++){var j=y2*w+x2;if(m.water[j]&&m.water[j+1]&&m.water[j+w]&&m.water[j+w+1]&&typeof m.l0Color[j]==='string'){beds++;darkest=Math.min(darkest,luma(m.l0Color[j]));}}
     check(label+'ground under water is a lit lakebed, never near-black',beds>50&&darkest>=35,{beds:beds,darkest:darkest});
-    // A river that drains into reserved ground ends at its last point: no
-    // surface is drawn past it (no end cap) and no water is left there.
-    if(win[1]){var drained=G.waterRivers.filter(function(r){return r.drains;}),past=[],wetPast=0;
-      drained.forEach(function(r){var end=r.points[r.points.length-1][3];ribbons.forEach(function(t){if(t.body===r.body&&t.arc1>end+1e-6)past.push([r.id,+t.arc1.toFixed(1),+end.toFixed(1)]);});
-        var P0=r.points[r.points.length-2],P1=r.points[r.points.length-1],tx=P1[0]-P0[0],ty=P1[1]-P0[1],L=Math.hypot(tx,ty)||1;
-        for(var v=0;v<w*h;v++){if(!m.water[v]||m.waterBody[v]!==r.body)continue;var dx=(v%w)*gs-P1[0],dy=((v/w)|0)*gs-P1[1];
-          if((dx*tx+dy*ty)/L>gs*0.5&&Math.hypot(dx,dy)<P1[4]+gs)wetPast++;}});
-      check(label+'rivers that drain into reserved ground draw and leave no water past their end',drained.length>=1&&past.length===0&&wetPast===0,{drained:drained.length,past:past.slice(0,6),wetPast:wetPast});}
+    // A river that drains into reserved ground ends where the land holds its
+    // water: across the middle half of its last drawn section, the rendered
+    // ground 1 to 12 units past that section stands at or above the section's
+    // surface (the tolerance of the edge check above). Samples over squares
+    // that touch closed ground, a lake or another river's water are left out;
+    // this river's own water past its drawn end counts as ground below it.
+    if(win[1]){var drained=G.waterRivers.filter(function(r){return r.drains;}),samples=0,low=[],unsampled=[];
+      drained.forEach(function(r){var own=ribbons.filter(function(t){return Math.floor(t.cell/4096)===r.id;});
+        if(!own.length){unsampled.push(r.id);return;}
+        var last=own.reduce(function(a,b){return b.arc1>a.arc1?b:a;}),L=last.quad[1],R=last.quad[2],z=L[2]/25;
+        var P=r.points,E=P[P.length-1],O=P[P.length-2],dx=E[0]-O[0],dy=E[1]-O[1],len=Math.hypot(dx,dy);dx/=len;dy/=len;
+        var mx=(L[0]+R[0])/2,my=(L[1]+R[1])/2,before=samples;
+        for(var li=-4;li<=4;li++)for(var a=1;a<=12;a++){var x=mx-dy*E[4]/2*li/4+dx*a,y=my+dx*E[4]/2*li/4+dy*a,gx=Math.floor(x/gs),gy=Math.floor(y/gs),ok=gx>=0&&gy>=0&&gx<w-1&&gy<h-1;
+          for(var cy=0;cy<=1&&ok;cy++)for(var cx=0;cx<=1&&ok;cx++){var c=(gy+cy)*w+gx+cx,g0=G._waterPlainGround(m,c);
+            if(!(g0===g0)||(m.water[c]&&(m.water[c]!==G.WATER_KIND.flowing||m.waterBody[c]!==r.body)))ok=false;}
+          if(!ok)continue;samples++;var g=groundAt(m,x,y);if(g<z-0.01)low.push([r.id,li,a,+(z-g).toFixed(3)]);}
+        if(samples===before)unsampled.push(r.id);});
+      check(label+'a river that drains into reserved ground ends where the land holds its water: no ground within 12 units past its drawn end lies below it',
+        drained.length>=1&&!unsampled.length&&samples>=50*drained.length&&low.length===0,{drained:drained.length,samples:samples,unsampled:unsampled,low:low.slice(0,6)});}
   });
   // The toggle restores every ground colour of a world generated without the system.
   G.WATER_SYSTEM_ENABLED=false;var pristine=loadWorld(11).l0Color.slice();G.WATER_SYSTEM_ENABLED=true;
