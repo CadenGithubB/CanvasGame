@@ -115,7 +115,8 @@ def main(argv: list[str]) -> int:
             if was is None or was == ok:
                 continue
             flips.append({"check": cid, "to": "PASS" if ok else "FAIL",
-                          "expected": cid in expect and expect[cid] == ("PASS" if ok else "FAIL")})
+                          "expected": cid in expect and
+                          {"PRECONDITION": "FAIL"}.get(expect[cid], expect[cid]) == ("PASS" if ok else "FAIL")})
         missing = [cid for cid in expect if s == ps and cid not in now]
         collateral_breaks = [f for f in flips if not f["expected"] and f["to"] == "FAIL"]
         regressions += len(collateral_breaks)

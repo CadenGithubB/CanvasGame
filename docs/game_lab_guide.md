@@ -45,7 +45,11 @@ HW1_GAME_JOBS=1 HW1_GAME_PROBES=1 \
 
 A target reporting `PRECONDITION` or a scenario crash is rejected as mutation
 evidence even when a probe expects `FAIL`. Missing subjects are not successful
-detection of the intended gameplay defect.
+detection of the intended gameplay defect. A probe whose purpose is to void a
+check -- a GUARD that removes its subjects, or a BREAK aimed at a precondition
+gate -- declares `PRECONDITION` instead of `FAIL`: the check must then fail
+with the `PRECONDITION` marker in its detail, and a marker-free failure or a
+pass does not satisfy it.
 
 The common seed arguments have one meaning everywhere: `--seeds` supplies Cave
 Test worlds and `--endless-seeds` supplies normal Endless worlds. A readable

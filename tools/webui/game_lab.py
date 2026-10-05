@@ -334,14 +334,19 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
     test_harness_detects_regressions.py). Each probe edits a COPY of the game
     JS in a temp dir -- never the header -- and states which checks must flip:
 
-        (description, anchor, replacement, {check_id: "PASS" | "FAIL"})
+        (description, anchor, replacement, {check_id: "PASS" | "FAIL" | "PRECONDITION"})
         (description, [(anchor, replacement), ...], None, {check_id: ...})   # multi-site
 
 
       - a FIX probe removes the cause of a known bug; its check must go PASS
         (proves the check fails for the reason the audit gave, not another);
       - a BREAK probe injects a bug; a passing check must go FAIL
-        (proves the check is not vacuous).
+        (proves the check is not vacuous). A FAIL whose detail carries
+        PRECONDITION is rejected: missing subjects are not detection;
+      - "PRECONDITION" is for a probe whose purpose is to void a check (a GUARD
+        that removes the check's subjects, or a BREAK aimed at a precondition
+        gate): the check must FAIL and its detail must carry the PRECONDITION
+        marker. A FAIL without the marker, or a PASS, does not satisfy it.
 
     `anchor` must occur exactly once in the extracted game JS, so a page edit
     that moves the code fails loudly instead of silently mutating nothing.
@@ -379,10 +384,16 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
             wrong = []
             for cid, want in expect.items():
                 got = ("PASS" if by_id[cid].ok else "FAIL") if cid in by_id else "MISSING"
-                if got != want:
-                    wrong.append(f"{cid}: expected {want}, got {got}" + (f"  [{by_id[cid].detail}]" if cid in by_id else ""))
-                elif want == "FAIL" and "PRECONDITION" in by_id[cid].detail.upper():
-                    wrong.append(f"{cid}: setup failed instead of detecting the intended defect  [{by_id[cid].detail}]")
+                pre = cid in by_id and "PRECONDITION" in by_id[cid].detail.upper()
+                detail = f"  [{by_id[cid].detail}]" if cid in by_id else ""
+                if want == "PRECONDITION":
+                    if got != "FAIL" or not pre:
+                        wrong.append(f"{cid}: expected a FAIL on its PRECONDITION, got {got}" +
+                                     ("" if pre or got != "FAIL" else " (detected without a PRECONDITION)") + detail)
+                elif got != want:
+                    wrong.append(f"{cid}: expected {want}, got {got}" + detail)
+                elif want == "FAIL" and pre:
+                    wrong.append(f"{cid}: setup failed instead of detecting the intended defect{detail}")
             self.assertEqual([], wrong, f"probe '{desc}' did not flip the checks it should:\n  " + "\n  ".join(wrong))
         test.__name__ = f"test_probe_{i:02d}"
         test.__doc__ = desc

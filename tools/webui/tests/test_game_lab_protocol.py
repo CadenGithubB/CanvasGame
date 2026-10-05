@@ -8,7 +8,7 @@ from tools.webui import game_lab
 
 
 class MutationVerdictTests(unittest.TestCase):
-    def grade(self, checks):
+    def grade(self, checks, want="FAIL"):
         run = game_lab.HarnessRun("protocol", [], 0, 0, checks=checks,
                                   verdicts=["HARNESS_RESULT FAIL 1"])
         future = Future()
@@ -20,7 +20,7 @@ class MutationVerdictTests(unittest.TestCase):
                 patch.object(game_lab, "game_js", return_value="fixture"), \
                 patch.object(game_lab, "submit", return_value=future):
             cls = game_lab.probe_testcase("protocol", [
-                ("BREAK contact", "fixture", "mutated", {"contact": "FAIL"})])
+                ("BREAK contact", "fixture", "mutated", {"contact": want})])
             result = unittest.TestResult()
             unittest.defaultTestLoader.loadTestsFromTestCase(cls).run(result)
         self.assertEqual(1, result.testsRun)
@@ -35,6 +35,24 @@ class MutationVerdictTests(unittest.TestCase):
         result = self.grade([game_lab.Check("contact", False, "PRECONDITION: no projectile spawned")])
         self.assertEqual(1, len(result.failures))
         self.assertIn("setup failed", result.failures[0][1])
+
+    def test_precondition_expectation_accepts_a_voided_check(self):
+        # A GUARD probe that removes a check's subjects declares "PRECONDITION".
+        result = self.grade([game_lab.Check("contact", False, "PRECONDITION: no projectile spawned")],
+                            want="PRECONDITION")
+        self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
+
+    def test_precondition_expectation_rejects_a_detected_defect(self):
+        result = self.grade([game_lab.Check("contact", False, "projectile crossed the wall")],
+                            want="PRECONDITION")
+        self.assertEqual(1, len(result.failures))
+        self.assertIn("detected without a PRECONDITION", result.failures[0][1])
+
+    def test_precondition_expectation_rejects_a_pass(self):
+        result = self.grade([game_lab.Check("contact", True, "PRECONDITION: no projectile spawned")],
+                            want="PRECONDITION")
+        self.assertEqual(1, len(result.failures))
+        self.assertIn("expected a FAIL on its PRECONDITION, got PASS", result.failures[0][1])
 
     def test_crashed_scenario_cannot_masquerade_as_detection(self):
         result = self.grade([game_lab.Check("contact", False, "projectile crossed the wall"),
