@@ -21,8 +21,12 @@ window at the nearest cave network). What it checks:
   - a window shift keeps the player and the ground under them where they were
     (regression guard); getFloorHeightAt never serves a stale cached height
     across the shift; wallFaceBase built during the shift, or when a new world
-    is started after another, matches a rebuild with the cache invalidated
-                                                                    [D15]
+    is started after another, matches a rebuild with the cache invalidated.
+    The wallFaceBase checks use a deterministic fixture: the old window's
+    floor is read at every mesh cell just before the shift / after the
+    previous world's last frame, so the cache is full of old heights under
+    the same local keys (>= 100 of them must disagree with the new window,
+    else PRECONDITION)                                              [D15]
   - walking into ordinary surface walls never puts the player inside one
     (regression guard)
   - a lethal enemy hit ends the game within 2 s                    [D21]
@@ -104,6 +108,11 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
 _D21_FIX = ("  health = Math.min(HEALTH_MAX, health + (HEALTH_REGEN_PER_S + hpRegenBonus) * dt);",
             "  if (health > 0) health = Math.min(HEALTH_MAX, health + (HEALTH_REGEN_PER_S + hpRegenBonus) * dt);")
 
+# D15 sites: the two floor-height cache invalidations on a window replacement.
+_D15_MESH = ("  if (_floorCacheMesh !== mesh) {", "  if (false && _floorCacheMesh !== mesh) {")
+_D15_EPOCH = ("  if (typeof _floorCacheTick === 'number') _floorCacheTick = (_floorCacheTick + 1) | 0;",
+              "  if (false) _floorCacheTick = (_floorCacheTick + 1) | 0;")
+
 # Probes grouped by the harness scenario that holds their checks; each group
 # runs with `--only <scenario>` (scenarios are isolated: every world is built
 # from a reloaded-page state), so a probe costs one scenario, not a full run.
@@ -141,19 +150,32 @@ PROBE_GROUPS: dict[str, list[tuple]] = {
          {N4: "FAIL"}),
     ],
     "C": [
-        # Both invalidations are off: the mesh-identity check and the epoch bump
-        # noteWorldGeometryEdit makes at the end of assembleWindow. C2 detects
-        # it through its primed read of the player's old cell. C3 and C4 are
-        # not claimed: since the 3D integration the renderer no longer leaves
-        # colliding cache entries for the wallFaceBase precompute to read, so
-        # their stale-face sensitivity is unproven here and needs a
-        # deterministic wallFaceBase fixture (a known gap, not coverage).
+        # D15. Two invalidations retire the floor-height cache when a window is
+        # replaced: getFloorHeightAt's mesh-identity check (on the first read
+        # of the new floorMesh) and the epoch bump noteWorldGeometryEdit makes
+        # at the END of assembleWindow. C2 detects a surviving cache through
+        # its primed read of the player's old cell and every read during and
+        # after the shift. C3 and C4 detect it through the harness's
+        # deterministic cache fixture: since the 3D integration the renderer
+        # no longer leaves entries the wallFaceBase precompute happens to read,
+        # so just before the shift (C3) and after the previous world's last
+        # frame (C4) the harness reads the old window's floor at every mesh
+        # cell, last row first; the precompute on the new window is then
+        # served those old heights unless the cache is retired. The precompute
+        # runs inside assembleWindow, before the epoch bump, so the
+        # mesh-identity check alone guards it: switching that check off alone
+        # is enough, and switching only the epoch bump off is a control.
         ("BREAK D15: preserve the old mesh cache across window replacement (mesh-identity check and the "
          "window-assembly epoch bump both off)",
-         [("  if (_floorCacheMesh !== mesh) {", "  if (false && _floorCacheMesh !== mesh) {"),
-          ("  if (typeof _floorCacheTick === 'number') _floorCacheTick = (_floorCacheTick + 1) | 0;",
-           "  if (false) _floorCacheTick = (_floorCacheTick + 1) | 0;")], None,
-         {C2: "FAIL"}),
+         [_D15_MESH, _D15_EPOCH], None,
+         {C2: "FAIL", C3: "FAIL", C4: "FAIL"}),
+        ("BREAK D15, mesh-identity check alone off (the epoch bump runs only after the wallFaceBase precompute)",
+         [_D15_MESH], None,
+         {C2: "FAIL", C3: "FAIL", C4: "FAIL"}),
+        ("CONTROL D15: only the window-assembly epoch bump off (the mesh-identity check still retires the old "
+         "window's entries on the first read of the new one)",
+         [_D15_EPOCH], None,
+         {C2: "PASS", C3: "PASS", C4: "PASS"}),
         ("BREAK rebase: assembleWindow rebases pos.x 12 u short -- the shift check must notice",
          "    pos.x -= shiftX;",
          "    pos.x -= shiftX + 12;",

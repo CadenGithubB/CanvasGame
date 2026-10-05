@@ -25,9 +25,12 @@
 // Isolation: every world is built from a reloaded-page state (LAB.freshPage,
 // LAB.releasePad), with Math.random seeded BEFORE the start (resetEndlessMode
 // draws from it) and the floor-height cache invalidated before the start, so a
-// scenario never depends on the ones before it. That last step hides one real
-// bug everywhere except in the check that measures it: "a new world's
-// wallFaceBase ... after another world was played" (scenario C).
+// scenario never depends on the ones before it. That last step would hide a
+// cache that survives a world start (D15) everywhere except in the check that
+// measures it: "a new world's wallFaceBase ... after another world was played"
+// (scenario C). Both wallFaceBase checks of scenario C fill the cache with the
+// old window's heights first (a deterministic fixture, see
+// primeFloorCacheFromWindow), so a cache that is not retired is observable.
 //
 // usage (via tools/webui/game_lab.py):
 //   <extracted game js> [--seeds a,b] [--endless-seeds a,b] [--only A,C]
@@ -82,6 +85,55 @@ if (LAB.loaded) (function () {
         return out;
     }
     function bumpFloorCache() { _floorCacheTick = (_floorCacheTick + 1) | 0; }
+    // D15 fixture. Since the 3D integration the renderer no longer leaves
+    // floor-height cache entries that the next window's wallFaceBase
+    // precompute happens to read, so what the real frames leave in the cache
+    // cannot show a stale wall face on its own. primeFloorCacheFromWindow()
+    // reads the CURRENT window's floor at every mesh cell centre through the
+    // real getFloorHeightAt, last row first, so that the entries left in the
+    // 1024-slot cache are this window's FIRST rows under their local keys --
+    // the rows the wallFaceBase precompute reads first when the next window
+    // (or world) is assembled. primedRead() then tells, for a read on the new
+    // window, whether an old-window entry for the same key is still in the
+    // cache, at the primed tick, with a height that differs from a guaranteed
+    // miss on the new window: a read the cache WOULD answer with a stale
+    // height unless something retires it. The game's own mesh-identity check
+    // and noteWorldGeometryEdit epoch bump are what retire it; the count of
+    // such reads is the fixture's precondition (it must reach the defect's
+    // state), and whether any stale height reaches wallFaceBase is what the
+    // checks judge. Keys are the cache's own (gridX << 16 | gridY), read back
+    // from its arrays, never recomputed slot by slot.
+    function primeFloorCacheFromWindow(gfh) {
+        var m = floorMesh, n = 0;
+        for (var gy = m.h - 1; gy >= 0; gy--) for (var gx = m.w - 1; gx >= 0; gx--) { gfh((gx + 0.5) * GS, (gy + 0.5) * GS); n++; }
+        var P = { reads: n, mesh: m, tick: _floorCacheTick, slotOf: new Map(), val: Float32Array.from(_floorCacheVal), live: 0, hits: 0, stale: 0 };
+        for (var s = 0; s < _floorCacheKey.length; s++) if (_floorCacheTickArr[s] === P.tick) { P.slotOf.set(_floorCacheKey[s], s); P.live++; }
+        return P;
+    }
+    // Call BEFORE the game's own read of (x, y): that read may overwrite the slot.
+    function primedRead(P, x, y, cold) {
+        var m = floorMesh;
+        if (!P || !m || m === P.mesh) return;
+        var gx = Math.floor(x / m.gridSize), gy = Math.floor(y / m.gridSize);
+        if (gx < 0 || gy < 0 || gx >= m.w || gy >= m.h) return;
+        var key = (gx << 16) | (gy & 0xffff), s = P.slotOf.get(key);
+        if (s === undefined || _floorCacheKey[s] !== key || _floorCacheTickArr[s] !== P.tick) return;
+        P.hits++;
+        if (cold(x, y) !== P.val[s]) P.stale++;
+    }
+    var D15_MIN_STALE = 20;                    // reads per run the primed cache would answer with an old height
+    // The real getFloorHeightAt (gfh) with a guaranteed cache miss: private
+    // cache arrays are swapped in for the call and the live cache is left
+    // untouched.
+    function coldReader(gfh) {
+        var SK = new Int32Array(1024), SV = new Float32Array(1024), ST = new Int32Array(1024), refTick = -7;
+        return function (x, y) {
+            var k = _floorCacheKey, v = _floorCacheVal, t = _floorCacheTickArr, tk = _floorCacheTick, mm = _floorCacheMesh;
+            _floorCacheKey = SK; _floorCacheVal = SV; _floorCacheTickArr = ST; _floorCacheTick = refTick--;
+            try { return gfh(x, y); }
+            finally { _floorCacheKey = k; _floorCacheVal = v; _floorCacheTickArr = t; _floorCacheTick = tk; _floorCacheMesh = mm; }
+        };
+    }
     // LAB.scenario plus a wall-clock METRIC (informational, never a verdict).
     function scenario(letter, name, fn) {
         if (!want(letter)) return;
@@ -527,13 +579,14 @@ if (LAB.loaded) (function () {
         // another world cell. A cache that survives the window replacement
         // serves the old window's height there. This does not depend on which
         // other keys the renderer happened to leave in the cache.
-        var PR = null;
+        var PR = null, PRIMED = null, primedStale = [], primedLow = [];
         var gfhWrapper = function (x, y) {
             if (inAW && PR && !PR.done && floorMesh !== PR.mesh) {
                 PR.done = true;
                 var pv = origGFH(PR.x, PR.y), pw = coldGFH(PR.x, PR.y);
                 PR.res = (pv !== pw ? "STALE " : "fresh ") + f2(pv) + " vs " + f2(pw);
             }
+            if (inAW) primedRead(PRIMED, x, y, coldGFH);
             var v = origGFH(x, y), m = floorMesh;
             if (RD && m) {
                 var gx = Math.floor(x / m.gridSize), gy = Math.floor(y / m.gridSize);
@@ -548,6 +601,9 @@ if (LAB.loaded) (function () {
         var wrapAW = function (cx, cy) {
             var o0x = windowOriginX, o0y = windowOriginY, w0 = LAB.worldPos(), h0 = LAB.h();
             var pk0 = getWalkableLayerTopAt(pos.x, pos.y, h0).topH, ls0 = LAB.fmtLayers(LAB.layersAt(pos.x, pos.y));
+            // The fixture's full-window priming first, then C2's primed read of
+            // the player's old cell last, so that read is still in the cache.
+            if (!cap && RD) PRIMED = primeFloorCacheFromWindow(origGFH);
             if (!cap && RD) { PR = { x: pos.x, y: pos.y, mesh: floorMesh, done: false, res: "PRECONDITION FAILED: no read on the new window inside assembleWindow" }; origGFH(PR.x, PR.y); }
             if (!cap && RD) inAW = true;
             var r;
@@ -562,7 +618,8 @@ if (LAB.loaded) (function () {
                 var got = origGFH((gx + 0.5) * GS, (gy + 0.5) * GS), want = coldGFH((gx + 0.5) * GS, (gy + 0.5) * GS);
                 if (got !== want) { stale++; if (gy * floorMesh.w + gx === pi) pStale = true; if (!ex) ex = "cell(" + gx + "," + gy + ") " + f2(got) + " vs " + f2(want); }
             }
-            cap = { prime: PR ? PR.res : "PRECONDITION FAILED: not primed", w0: w0, w1: w1, pk0: pk0, pk1: pk1, ls0: ls0, ls1: ls1, h0: h0, wfb: wfb, stale: stale, ex: ex, pStale: pStale, cx: cx, cy: cy };
+            var pd = PRIMED ? { live: PRIMED.live, hits: PRIMED.hits, stale: PRIMED.stale } : { live: 0, hits: 0, stale: 0 };
+            cap = { prime: PR ? PR.res : "PRECONDITION FAILED: not primed", w0: w0, w1: w1, pk0: pk0, pk1: pk1, ls0: ls0, ls1: ls1, h0: h0, wfb: wfb, stale: stale, ex: ex, pStale: pStale, cx: cx, cy: cy, pd: pd };
             return r;
         };
         G.assembleWindow = wrapAW;
@@ -585,7 +642,7 @@ if (LAB.loaded) (function () {
                     }
                     if (!line) { c1.push(tag + ": PRECONDITION FAILED no wall-free line across a chunk line"); c1Bad++; c2Bad++; c3Bad++; return; }
                     LAB.placeWorld(line.wx, line.wy, "top"); dropEnemies();
-                    cap = null;
+                    cap = null; PRIMED = null;
                     RD = { aw: { n: 0, stale: 0, ex: null }, after: { n: 0, stale: 0, ex: null } };
                     G.getFloorHeightAt = gfhWrapper;
                     var frames = 0, hBefore = 0, dhShift = 0, post = -1, err0 = LAB.errorCount, rErr = 0;
@@ -635,15 +692,20 @@ if (LAB.loaded) (function () {
                         }
                     }
                     if (ctl) ctlBad++;
-                    if (diff !== 0 || ctl || rErr || cErr) c3Bad++;
+                    var lowPrime = cap.pd.stale < D15_MIN_STALE;
+                    if (lowPrime) primedLow.push(tag + " " + cap.pd.stale);
+                    primedStale.push(cap.pd.stale);
+                    if (diff !== 0 || ctl || rErr || cErr || lowPrime) c3Bad++;
                     if (diff > 0) staleFaces += diff;
-                    c3.push(tag + " " + diff + " stale faces (max " + f2(maxd) + "h)" + (ctl ? " CONTROL MISMATCH " + ctl : "") + (fex ? " e.g. " + fex : "") + errTxt);
+                    c3.push(tag + " " + diff + " stale faces (max " + f2(maxd) + "h)" + (ctl ? " CONTROL MISMATCH " + ctl : "") + (fex ? " e.g. " + fex : "") +
+                        ", fixture: " + cap.pd.stale + " reads inside assembleWindow found an old-window height still cached for their key (" + cap.pd.hits + " found the key, " + cap.pd.live + " primed)" + errTxt);
                     LAB.dropTimers();
                 });
             });
         } finally { G.assembleWindow = orig; G.getFloorHeightAt = origGFH; }
         LAB.metric("physics.wallfacebase_stale_faces", staleFaces);
         LAB.metric("physics.stale_floor_height_reads", staleReads);
+        LAB.metric("physics.shift_fixture_stale_able_reads_min", primedStale.length ? Math.min.apply(null, primedStale) : -1);
         LAB.metric("physics.shift_walk_render_errors", renderErrs + consoleErrs);
         var pre = shifted > 0 ? "" : "PRECONDITION FAILED: no world produced a window shift; ";
         LAB.check("physics: a window shift leaves the player's world position and the ground under them unchanged",
@@ -652,8 +714,10 @@ if (LAB.loaded) (function () {
             shifted > 0 && c2Bad === 0, pre + "reads of getFloorHeightAt (7804) that differ from an uncached call of the same function, from the walk up to 30 frames after the shift: " + c2.join("; "));
         LAB.check("physics: wallFaceBase after a window shift matches a rebuild of that window with the floor-height cache invalidated",
             shifted > 0 && c3Bad === 0,
-            pre + (ctlBad ? "CONTROL: two cache-invalidated rebuilds disagree; " : "") + c3.join("; ") +
-            " (wallFaceBase reads getFloorHeightAt; the cache tick is bumped in draw() and by noteWorldGeometryEdit at the end of assembleWindow)");
+            pre + (primedLow.length ? "PRECONDITION FAILED: fewer than " + D15_MIN_STALE + " reads inside assembleWindow found an old-window height still cached in " + primedLow.join(", ") + "; " : "") +
+            (ctlBad ? "CONTROL: two cache-invalidated rebuilds disagree; " : "") + c3.join("; ") +
+            " (fixture: every mesh cell of the old window read through getFloorHeightAt just before the shift; wallFaceBase reads getFloorHeightAt; " +
+            "the cache is retired by getFloorHeightAt's mesh-identity check and by noteWorldGeometryEdit at the end of assembleWindow)");
     });
 
     // A new world is assembled by resetEndlessMode -> assembleWindow(0,0)
@@ -674,8 +738,13 @@ if (LAB.loaded) (function () {
             var reads = LAB.countCalls("getFloorHeightAt"), rErr = 0;
             try { for (var f = 0; f < 10; f++) rErr += LAB.frame(); } finally { reads.restore(); }
             if (reads.calls === 0 || rErr) { preFail.push(W.tag + " after " + P.tag + ": " + reads.calls + " floor reads, " + rErr + " render errors in 10 frames"); return; }
-            start(W, true);                         // keepCache: the page never invalidates it here
+            var primed = primeFloorCacheFromWindow(getFloorHeightAt);   // the D15 fixture, on the previous world
+            var realGFH = G.getFloorHeightAt, cold = coldReader(realGFH);
+            G.getFloorHeightAt = function (x, y) { primedRead(primed, x, y, cold); return realGFH(x, y); };
+            try { start(W, true); }                 // keepCache: the page never invalidates it here
+            finally { G.getFloorHeightAt = realGFH; }
             var got = Float32Array.from(wallFaceBase), half = Math.floor(WINDOW_CHUNKS / 2);
+            if (primed.stale < D15_MIN_STALE) preFail.push(W.tag + " after " + P.tag + ": only " + primed.stale + " reads found an old-world height still cached (need >= " + D15_MIN_STALE + ")");
             bumpFloorCache(); assembleWindow(windowCX + half, windowCY + half); var A = Float32Array.from(wallFaceBase);
             bumpFloorCache(); assembleWindow(windowCX + half, windowCY + half); var B = Float32Array.from(wallFaceBase);
             var diff = 0, ctl = 0, maxd = 0, fex = null;
@@ -689,14 +758,16 @@ if (LAB.loaded) (function () {
             worlds++;
             if (ctl) ctlBad++;
             if (diff || ctl) bad++;
-            detail.push(W.tag + " after 10 frames of " + P.tag + ": " + diff + " stale faces (max " + f2(maxd) + "h)" + (ctl ? " CONTROL MISMATCH " + ctl : "") + (fex ? " e.g. " + fex : ""));
+            detail.push(W.tag + " after 10 frames of " + P.tag + ": " + diff + " stale faces (max " + f2(maxd) + "h)" + (ctl ? " CONTROL MISMATCH " + ctl : "") + (fex ? " e.g. " + fex : "") +
+                ", fixture: " + primed.stale + " reads found an old-world height still cached for their key (" + primed.hits + " found the key, " + primed.live + " primed)");
         });
         var pre = worlds > 0 && !preFail.length;
         LAB.check("physics: a new world's wallFaceBase matches a rebuild of that window with the floor-height cache invalidated, after another world was played",
             pre && bad === 0,
             (pre ? "" : "PRECONDITION FAILED: " + (preFail.join("; ") || "no world") + "; ") +
             (ctlBad ? "CONTROL: two cache-invalidated rebuilds disagree; " : "") + detail.join("; ") +
-            " (resetEndlessMode -> assembleWindow -> wallFaceBase reads getFloorHeightAt; the cache tick is bumped in draw() and by noteWorldGeometryEdit at the end of assembleWindow)");
+            " (fixture: every mesh cell of the previous world's window read through getFloorHeightAt after its last frame; resetEndlessMode -> assembleWindow -> " +
+            "wallFaceBase reads getFloorHeightAt; the cache is retired by getFloorHeightAt's mesh-identity check and by noteWorldGeometryEdit at the end of assembleWindow)");
     });
 
     // ── D. surface walls are solid (regression guard) ─────────────────────────
