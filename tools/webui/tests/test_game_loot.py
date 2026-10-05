@@ -15,8 +15,10 @@ loot path in handleInput, the chest draw pass in a real loop() frame):
     player standing there gets (so a neighbour's chest cannot stand in for it);
   - a cave chest is offered from the cave floor beside it, pays exactly what
     its floating text (read from the real canvas calls) names, once; it is
-    reached on foot from the entrance at 30 fps; and it is NOT offered to a
-    player on the surface cap directly above it;
+    reached on foot from the entrance at 30 fps (a known defect today: the
+    walker that comes to rest beside the chest is offered it with no prompt
+    on screen, see KNOWN_BUGS); and it is NOT offered to a player on the
+    surface cap directly above it;
   - the "[E] Take" / "[E] Swap" prompt says what pressing A actually does;
   - a looted chest stays looted across a measured window re-centre;
   - chests inside a cave entrance reserve are filtered out of the window.
@@ -72,47 +74,76 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "from common to epic leaves the actual collectChest gold reward unchanged.",
         r"^0/[1-9]\d* same-seed common/epic pairs scale gold by at least 1\.2x$"),
     _PROMPT: (
-        "NEW (loot review, not in the audit index): the prompt branch (L9406-9413) says '[E] Swap' only "
+        "NEW (loot review, not in the audit index): drawTreasureChestLabel's prompt branch says '[E] Swap' only "
         "when currentItem.id !== eInst.id, but collectChest (L20198-20207) swaps whenever the slot is "
         "occupied; wearing the chest's own item at another quality shows '[E] Take' and A silently "
         "swaps (a q1.27 hood is traded for the chest's q0.73 one)",
         r"MISMATCH wearing the same \w+ at q1\.27: prompt '[^']*\[E\] Take' -> A SWAP"),
+    _WALK: (
+        "NEW (loot lab walk, not in the audit index; present since the 0.0 snapshot): an offered chest can have no "
+        "visible prompt. The only prompt is the floating label drawTreasureChestLabel (07-decorations-lighting.js) "
+        "draws above the chest (legacy pass floorZ+bodyH+lidH+8, chest-model pass its 'label' anchor); within "
+        "~18-22 u of the chest it projects wholly below the canvas even at full downward pitch, so "
+        "withSceneDepthBillboard culls it, while updateTreasureChests still offers the chest (dist < 90 && "
+        "canReachChest) and A/E loots it. The walker releases W ~70 u out at ~120 u/s and cave damping (0.975 per "
+        "60 Hz step) slides it to 6-17 u from the chest: offered=true, no prompt.",
+        r"^0/\d+ walks at 30 fps (?!.*STUCK)(?!.*underground=false)(?!.*offered=false)(?!.*prompt ')"
+        r"(?!.*render errors [1-9])(?!.*rest (?:2[2-9]|[3-9]\d|\d{3,})\.\d u from the chest)"
+        r".*offered=true prompt no prompt drawn; render errors 0$"),
 }
 
-# The cave-chest classifier, window assembly copy and reserve filter used by
-# more than one probe (anchors each occur exactly once in the extracted JS).
-_EDGE = "        if (_tcx2 < 1 || _tcx2 >= CHUNK_CELLS - 1 || _tcy2 < 1 || _tcy2 >= CHUNK_CELLS - 1) continue;"
-_EDGE_FIXED = "        if (_tcx2 < 0 || _tcx2 >= CHUNK_CELLS || _tcy2 < 0 || _tcy2 >= CHUNK_CELLS) continue;"
-_CAVE_TIER = "          tier: cTier, quality: 0.7 + caveChestRng() * 0.3,"
+# Window assembly copy, reserve filter and pickup texts used by more than one
+# probe (anchors each occur exactly once in the extracted JS).
 _WIN_COPY = "          tier: tc.tier || 'common', quality: tc.quality || 1.0, relicId: tc.relicId || null,"
 _RES_FILTER = "    treasureChests = treasureChests.filter(function(it){ return !inEntranceReserve(it.x, it.y); });"
 _IN_RANGE = "    var inRange = dist < 90 && canReachChest(ch);\n"
 _SAVE_COLLECTED = "        tcChunk.treasureChests[tc._chunkIdx].collected = tc.collected;"
 _RECENTRE = "  if (pcx !== centerCX || pcy !== centerCY) {"
 _HYSTERESIS = "  if (Math.abs(pcx - centerCX) > 2 || Math.abs(pcy - centerCY) > 2) {"
-_N8_FIX = [
-    (_EDGE, _EDGE_FIXED),
-    (_CAVE_TIER, _CAVE_TIER + " cave: true,"),
-    (_WIN_COPY, _WIN_COPY + " cave: !!tc.cave,"),
-    (_RES_FILTER, "    treasureChests = treasureChests.filter(function(it){ return it.cave || !inEntranceReserve(it.x, it.y); });"),
-]
+# generateChunk's terminal-chamber chest: caveChamberContentPoint places it in
+# its owner chunk (18 u inset), so N8's outer-ring guard no longer exists.
+_TC_OWNER = "        if (_tcPoint.ownerCX !== cx || _tcPoint.ownerCY !== cy) continue;\n"
+# queryCaveGeometry's corridor stamp.
+_CORRIDOR_BAND = "      if (perpDist < hw + 36) {"
+# The near-chest prompt (KNOWN_BUGS[_WALK]): the first line of
+# drawTreasureChestLabel, and a candidate fix that keeps the label's anchor on
+# the canvas. Probes whose walk control must reach the chest carry the fix, so
+# the walk passes or fails on what they break, not on the known prompt defect.
+_LABEL = "  var fontSize = Math.max(8, Math.min(14, Math.floor(1800 / textP.fwd)));\n"
+_LABEL_FIX = ("  if (textP.sy > canvas.height - 4) textP = {sx: textP.sx, sy: canvas.height - 4, fwd: textP.fwd};\n"
+              + _LABEL)
+
+# N8 (terminal chambers in a chunk's outer cell ring had no chest; the review
+# also named an entrance-reserve cause) was repaired before the 0.0 snapshot:
+# generateChunk places every terminal chest with caveChamberContentPoint inside
+# its owner chunk. Slot 00 is now the BREAK that reintroduces the ring guard.
+# The old "edge fix ALONE" control (slot 01) cannot be expressed any more: the
+# reserve cause is unreachable by construction (generateCaveNetwork's
+# winding-chamber-v1 layout puts a network's only terminal chamber at least
+# ~228 u along the inward axis from its mouth, against a 44 x 34 u reserve; 0 of
+# 44 terminal chambers across the 7 default worlds lie in one), and the reserve
+# filter itself stays guarded by probe 09 and the 'loot: entrance reserve'
+# scenario. Slot 01 now holds the near-chest prompt FIX.
 
 # (description, anchor | [(anchor, replacement), ...], replacement | None, {check id: verdict under the mutation})
 PROBES: list = [
+    ("BREAK N8 (repaired: caveChamberContentPoint places every terminal chest inside its owner chunk): a "
+     "terminal chamber whose centre lies in its chunk's outer cell ring gets no chest again",
+     _TC_OWNER,
+     "        if (_tcPoint.ownerCX !== cx || _tcPoint.ownerCY !== cy) continue;"
+     " var _tcx2 = Math.floor((_cch2.cx - cx * CHUNK_SIZE) / cell), _tcy2 = Math.floor((_cch2.cy - cy * CHUNK_SIZE) / cell);"
+     " if (_tcx2 < 1 || _tcx2 >= CHUNK_CELLS - 1 || _tcy2 < 1 || _tcy2 >= CHUNK_CELLS - 1) continue;\n",
+     {_TERM: "FAIL", _TERMPRE: "PASS", _RESERVE: "PASS"}),
     # ── FIX probes: remove a known bug's cause, its check must go PASS ────────
-    ("FIX N8, both causes: terminal chambers in a chunk's edge cells keep their chest (L5966), and "
-     "cave chests -- tagged at generation, tag copied into the window -- are exempt from the entrance "
-     "reserve filter (L7180). The injected reserve chest has no tag, so the reserve guard stays PASS.",
-     _N8_FIX, None, {_TERM: "PASS", _RESERVE: "PASS", _TERMPRE: "PASS"}),
-    ("N8 edge-ring fix ALONE: the reserve cause (Cave Test 777, Endless 424242) keeps the check failing, "
-     "so the check detects the second cause on its own (compare the probe above)",
-     _EDGE, _EDGE_FIXED, {_TERM: "FAIL"}),
-    ("BREAK on top of the N8 fix: drop the chest of every terminal chamber that lies within its radius "
-     "of a lower-index terminal chamber. The old radius match let the neighbour's chest (within the "
-     "radius by construction) satisfy it (review probe p2: 20/20 PASS); the centre match must FAIL.",
-     [(_EDGE, _EDGE_FIXED + "\n        if (_cn2.chambers.some(function (o, oi) { return oi < _cci2 && o.terminal && "
-                           "Math.hypot(o.cx - _cch2.cx, o.cy - _cch2.cy) < _cch2.radius; })) continue;")] + _N8_FIX[1:],
-     None, {_TERM: "FAIL"}),
+    ("FIX the near-chest prompt: keep the loot label on the canvas when the chest is close "
+     "(drawTreasureChestLabel); the walker resting 6-17 u from the chest then sees '[E] Take'",
+     _LABEL, _LABEL_FIX,
+     {_WALK: "PASS", _FLOOR: "PASS", _PAY: "PASS", _CAP: "PASS"}),
+    ("BREAK chamber identity (successor of review probe p2): every cave chest names the next chamber index, so "
+     "a chest standing in a chamber that is not its own must not satisfy that chamber",
+     "          caveSpawnId: _cn2.regionX + ',' + _cn2.regionY + ':chamber:' + _cci2 + ':chest',",
+     "          caveSpawnId: _cn2.regionX + ',' + _cn2.regionY + ':chamber:' + (_cci2 + 1) + ':chest',",
+     {_TERM: "FAIL"}),
     ("FIX D22 at generation: epic cave chests roll a relic like surface epics (L5974)",
      "          equipId: null, relicId: null,\n          tier: cTier,",
      "          equipId: null, relicId: (cTier === 'epic' ? pickRandomRelic(caveChestRng) : null),\n          tier: cTier,",
@@ -135,13 +166,14 @@ PROBES: list = [
      "          gold: Math.floor(10 + caveChestRng() * 30 * difficulty),",
      "          gold: Math.floor((10 + caveChestRng() * 30 * difficulty) * CHEST_TIER_DEFS[cTier].goldMult),",
      {_CGOLD: "PASS"}),
-    ("BREAK roof pickup targeting: restore horizontal-only chest prompt",
-     _IN_RANGE,
-     "    var inRange = dist < 90;\n",
+    ("BREAK roof pickup targeting: restore horizontal-only chest prompt (with the near-chest label FIX, so the "
+     "walk control can pass)",
+     [(_IN_RANGE, "    var inRange = dist < 90;\n"), (_LABEL, _LABEL_FIX)], None,
      {_CAP: "FAIL", _FLOOR: "PASS", _WALK: "PASS"}),
-    ("FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does (L9407)",
-     "          if (currentItem && currentItem.id !== eInst.id) {",
-     "          if (currentItem) {",
+    ("FIX the Take/Swap prompt: say Swap whenever the slot is occupied, as collectChest does "
+     "(drawTreasureChestLabel)",
+     "    if (currentItem && currentItem.id !== eInst.id) {",
+     "    if (currentItem) {",
      {_PROMPT: "PASS", _PROMPTPRE: "PASS"}),
     # ── BREAK probes: inject a bug, a passing check must go FAIL ──────────────
     ("BREAK: drop the entrance-reserve chest filter (L7180)",
@@ -157,15 +189,19 @@ PROBES: list = [
      "must FAIL because of ITS OWN trip (the 2-chunk trip it replaced did not re-centre under hysteresis)",
      [(_RECENTRE, _HYSTERESIS), (_SAVE_COLLECTED, "        tcChunk.treasureChests[tc._chunkIdx].collected = false;")],
      None, {_KEEP_RE: "FAIL"}),
-    ("BREAK: shrink the pickup radius to 20 u (L19434)",
+    # The walk does not claim this one: its walker comes to rest 6-17 u from
+    # the chest, inside 20 u, so it cannot tell a 20 u radius from 90 u (and
+    # it fails on the known prompt defect anyway). The 5 u probe at the end
+    # covers the walk.
+    ("BREAK: shrink the pickup radius to 20 u (updateTreasureChests)",
      _IN_RANGE, "    var inRange = dist < 20;\n",
-     {_FLOOR: "FAIL", _WALK: "FAIL"}),
+     {_FLOOR: "FAIL"}),
     ("BREAK: a gold chest is never marked collected (L20215-20216)",
      "    coins += ch.gold;\n    ch.collected = true;", "    coins += ch.gold;",
      {_PAY: "FAIL"}),
-    ("BREAK (review p3): the floating text advertises double the gold the chest pays (L9416)",
-     "          textLines.push('+' + ch.gold + ' Gold');",
-     "          textLines.push('+' + (ch.gold * 2) + ' Gold');",
+    ("BREAK (review p3): the floating text advertises double the gold the chest pays (drawTreasureChestLabel)",
+     "    textLines.push('+' + ch.gold + ' Gold');",
+     "    textLines.push('+' + (ch.gold * 2) + ' Gold');",
      {_PAY: "FAIL"}),
     ("BREAK: epic surface chests lose their relic (L5849)",
      "        chRelicId = pickRandomRelic(chestRng);", "        chRelicId = null;",
@@ -182,21 +218,32 @@ PROBES: list = [
      "  return td.qualityMin + rngFn() * (td.qualityMax - td.qualityMin);",
      "  return td.qualityMin - 0.25 + rngFn() * (td.qualityMax - td.qualityMin);",
      {_EQQ: "FAIL"}),
-    ("BREAK: corridors are not carved into the mesh (queryCaveGeometry corridor band, L4683). Chambers "
-     "still are, so the teleport floor check stays PASS; walking in from the entrance must FAIL",
-     "      var outerHW = hw + 108;  // 9-cell feather band (was 20u) — wider gradient",
-     "      var outerHW = -1;",
+    ("BREAK: corridors are not stamped by queryCaveGeometry (its corridor band; with the near-chest label FIX "
+     "so the walk fails by getting stuck, not on the known prompt defect). Chambers still are, so the teleport "
+     "floor check stays PASS; walking in from the entrance must FAIL",
+     [(_CORRIDOR_BAND, "      if (false) {"), (_LABEL, _LABEL_FIX)], None,
      {_WALK: "FAIL", _FLOOR: "PASS"}),
-    ("BREAK: no cave network gets a terminal chamber (L4537) -- every cave-chest precondition must FAIL",
-     "      var isTerminal = (step === cur.stepsLeft - 1);", "      var isTerminal = false;",
-     {_TERMPRE: "FAIL", _SAMPLEPRE: "FAIL", _CAPPRE: "FAIL"}),
-    ("BREAK: surface chests never hold equipment (L5851) -- the prompt scenario's precondition must FAIL",
+    # These two target precondition gates: each gate must FAIL with its
+    # PRECONDITION marker (game_lab's "PRECONDITION" expectation).
+    ("BREAK: no cave network gets a terminal chamber (generateCaveNetwork's layout) -- every cave-chest "
+     "precondition must FAIL",
+     "      radius: chamberRadius, ceilH: headroom + 0.6, terminal: true}]};",
+     "      radius: chamberRadius, ceilH: headroom + 0.6, terminal: false}]};",
+     {_TERMPRE: "PRECONDITION", _SAMPLEPRE: "PRECONDITION", _CAPPRE: "PRECONDITION"}),
+    ("BREAK: surface chests never hold equipment (generateChunk) -- the prompt scenario's precondition must FAIL",
      "      } else if (chestRng() < chTierDef.equipChance) {", "      } else if (chestRng() < 0) {",
-     {_PROMPTPRE: "FAIL"}),
+     {_PROMPTPRE: "PRECONDITION"}),
     ("BREAK: the game script throws at load (and the one-line diagnostic keeps the real check id parseable)",
      "var spellOrder = ['missile','fire','ice','lightning','poison','arcane'];",
      "var spellOrder = ['missile','fire','ice','lightning','poison','arcane']; throw new Error('probe: loot load');",
      {_LOAD: "FAIL"}),
+    # Appended so the slots above keep their test_probe_NN: the walk's own
+    # pickup-radius sensitivity, with the near-chest label FIX so the walk can
+    # pass at baseline radius.
+    ("BREAK: a 5 u pickup radius, with the near-chest label FIX: the walker resting 6-17 u from the chest is no "
+     "longer offered it",
+     [(_IN_RANGE, "    var inRange = dist < 5;\n"), (_LABEL, _LABEL_FIX)], None,
+     {_WALK: "FAIL", _FLOOR: "FAIL"}),
 ]
 
 LootSuite = suite_testcase("loot", KNOWN_BUGS, min_checks=18)

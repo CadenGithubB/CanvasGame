@@ -277,11 +277,12 @@ if (LAB.loaded) {
             }
             var cgx = Math.floor((wx - k.cx * CHUNK_SIZE) / cell), cgy = Math.floor((wy - k.cy * CHUNK_SIZE) / cell);
             // Interaction scenarios keep a stable population under the N8
-            // FIX probe. That mutation restores chests which never existed in
-            // the baseline window: outer-ring chests, plus a terminal chamber
-            // overlapping the entrance reserve. Rewards still judge all of
-            // them, but floor/cap/walk checks use interior, non-reserve cave
-            // chests so a FIX does not silently change their precondition.
+            // BREAK probe (N8 is repaired; the probe reintroduces its outer
+            // cell-ring guard, which drops chests the baseline window has).
+            // Rewards still judge every chest, but floor/cap/walk checks use
+            // interior, non-reserve cave chests, so a mutation that adds or
+            // removes edge-ring or reserve chests does not silently change
+            // their precondition.
             var interaction = !!t && cgx >= 1 && cgx < CHUNK_CELLS - 1 && cgy >= 1 && cgy < CHUNK_CELLS - 1 &&
                 !inEntranceReserve(tc.x, tc.y);
             var rec = { world: world, net: t ? t.net : null, chamberX: t ? t.wx : null, chamberY: t ? t.wy : null,
@@ -487,7 +488,7 @@ if (LAB.loaded) {
         var pr = ch ? chestPrompt(ch, 4) : null;
         var errs = LAB.renderErrorsSince(mark);
         var cl = LAB.layersAt(p.wx - windowOriginX, p.wy - windowOriginY), fl = LAB.lowestWalkable(cl);
-        var w2 = LAB.worldPos();
+        var w2 = LAB.worldPos(), restD = Math.hypot(w2.x - p.wx, w2.y - p.wy);
         rec.reached = !stuckAt;
         rec.onFloor = !!fl && Math.abs(LAB.h() - fl.z) < 0.5 && !!playerUnderground;
         rec.offered = !!ch && nearestOpenChest === ch;
@@ -499,7 +500,7 @@ if (LAB.loaded) {
             (stuckAt ? "; STUCK " + r1(stuckAt.d) + " u short of node " + stuckAt.k + " at (" + r1(stuckAt.w.x) + "," + r1(stuckAt.w.y) + ")" : "") +
             "; end at (" + r1(w2.x) + "," + r1(w2.y) + ") h=" + r2(LAB.h()) + " chest-cell floor " + (fl ? r2(fl.z) : "none") +
             " underground=" + !!playerUnderground + " airborne frames " + air + " min h " + r2(minH) +
-            "; offered=" + rec.offered + " prompt " + fmtPrompt(pr) + "; render errors " + errs;
+            "; rest " + r1(restD) + " u from the chest; offered=" + rec.offered + " prompt " + fmtPrompt(pr) + "; render errors " + errs;
         A.walk.push(rec);
     }
 
