@@ -11,6 +11,7 @@ HARNESS = Path(__file__).with_name("water_system.js")
 DRAINED_END = ("a river that drains ends in a rounded end that holds its water: no dry hole past its end, "
                "and the land at its rim stands at or above the water")
 DRY_CUT = "ground cut as deep as WATER_MAX_CUT allows always holds water: no dry pit or notch"
+NEVER_ABOVE = "water that reaches reserved ground drains into it and never stands above it"
 TRIBUTARY = ("a tributary of a river that drains ends in its water at its surface, at the last point of its course "
              "that can hold that surface, or drains where it has no such point")
 
@@ -93,12 +94,13 @@ class WaterSystemTests(unittest.TestCase):
                              "reserved ground beside it, and drains there")
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
-    def test_regression_rejects_drained_ends_left_above_their_land(self) -> None:
-        self.assert_rejected("--no-drain-fall", DRAINED_END)
+    def test_regression_rejects_drained_ends_standing_above_reserved_ground(self) -> None:
+        # The solver's surface kept to a drained river's end: its water stands above the reserved ground it reaches.
+        self.assert_rejected("--no-drain-fall", NEVER_ABOVE)
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_drained_ends_the_land_cannot_hold(self) -> None:
-        self.assert_rejected("--no-hold", DRAINED_END)
+        self.assert_rejected("--no-hold", NEVER_ABOVE)
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_drained_rivers_sinking_below_what_their_channel_holds(self) -> None:

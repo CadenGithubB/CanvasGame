@@ -495,14 +495,6 @@
       r.confluences.forEach(function(c){confluences++;if(!c.within)tribOk=false;});});
     check('a tributary of a river that drains ends in its water at its level, and no tributary is left where the river it joined no longer runs',
       tribOk&&tribs>=2&&confluences>=1,seen.map(function(r){return brief(r,['tribs','confluences']);}));
-    // Past its end a drained river ends like any open end: its rounded end is
-    // carved and holds water, ground there cut below the surface is never dry,
-    // and the dry ground at the rim of the rounded end stands at or above the
-    // water (the land holds it).
-    var pastOk=true,past=0,wetPast=0,rim=0;
-    seen.forEach(function(r){past+=r.past;wetPast+=r.wetPast;rim+=r.rim;if(r.holes.length||r.rimLow.length)pastOk=false;});
-    check('a river that drains ends in a rounded end that holds its water: no dry hole past its end, and the land at its rim stands at or above the water',
-      pastOk&&past>50&&wetPast>10&&rim>20,seen.map(function(r){return brief(r,['past','wetPast','rim','holes','rimLow']);}));
     // Subjects: water within two points of reserved ground and rivers that
     // drain into it. Each drained river ends within its width, a section and a
     // point and a half of reserved ground, where it reached that ground, or
@@ -513,6 +505,14 @@
       r.drained.forEach(function(d){drained++;if(d.held>0)heldBack++;if(!(d.gap<=d.bound+d.held+1e-3))endsOk=false;});});
     check('water that reaches reserved ground drains into it and never stands above it',
       aboveOk&&endsOk&&drained>=4&&heldBack>=1&&nearReserve>0,seen.map(function(r){return brief(r,['nearReserve','above','drained']);}));
+    // Past its end a drained river ends like any open end: its rounded end is
+    // carved and holds water, ground there cut below the surface is never dry,
+    // and the dry ground at the rim of the rounded end stands at or above the
+    // water (the land holds it).
+    var pastOk=true,past=0,wetPast=0,rim=0;
+    seen.forEach(function(r){past+=r.past;wetPast+=r.wetPast;rim+=r.rim;if(r.holes.length||r.rimLow.length)pastOk=false;});
+    check('a river that drains ends in a rounded end that holds its water: no dry hole past its end, and the land at its rim stands at or above the water',
+      pastOk&&past>50&&wetPast>10&&rim>20,seen.map(function(r){return brief(r,['past','wetPast','rim','holes','rimLow']);}));
     // A drained river's surface ends no higher than the reserved ground within
     // its end's shore (its water meets the land, which no water stands above),
     // and no lower than its channel can hold: at most WATER_MAX_CUT less the

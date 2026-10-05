@@ -970,7 +970,8 @@ drained end, no floor beside ground the carve leaves as it is, a drained
 end carved but left dry, unbounded carving, dry pits or bank notches at the
 cut bound, and a tributary of a river that drains left as it was, meeting
 it without falling to its surface, searching only its own end, or not
-draining without an outlet). `water_movement.js`
+draining without an outlet), each the first failure of the check it
+names. `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
