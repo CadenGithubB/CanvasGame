@@ -104,6 +104,12 @@ class WaterSystemTests(unittest.TestCase):
                              "end and no lower than its channel can hold, its tail holding water")
 
     @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_tails_left_dry_beside_unshaped_ground(self) -> None:
+        # Seed 9's river down a wall: its tail ran dry at the natural ground where the carve cannot cut.
+        self.assert_rejected("--no-unshaped-floor", "a river that drains ends no higher than the reserved ground around "
+                             "its end and no lower than its channel can hold, its tail holding water")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
     def test_regression_rejects_dry_holes_past_a_drained_end(self) -> None:
         # The rounded end carved but left without its water, as once happened.
         self.assert_rejected("--dry-drained-ends", DRAINED_END)

@@ -10541,9 +10541,9 @@ function _waterRiverKeepOff(mesh, field, course) {
 // and the reserved ground within that distance. The river's surface
 // falls over its last WATER_DRAIN_FALL world units to the lowest ground of
 // that shore, so its water meets the land there instead of stopping above it,
-// but never below what its channel can hold (_waterRiverFloor). Where the
-// shore cannot hold even that (_waterDrainEnd), the river ends a section
-// earlier, until it can.
+// but never below what its channel can hold (_waterRiverFloor), so its tail
+// never runs dry. Where the shore cannot hold even that (_waterDrainEnd), the
+// river ends a section earlier, until it can.
 var WATER_DRAIN_FALL = 36;
 // How far a drained river's surface may sink below the ground under its
 // course where the carve shapes that ground: its channel, cut no deeper than
@@ -10562,13 +10562,14 @@ function _waterCarvable(mesh, H, v) {
 }
 // The lowest surface a river can hold at course point p, from the ground at
 // its nearest height point: WATER_DRAIN_SINK below it where the carve shapes
-// that point, the ground itself where the carve leaves it as it is, and
-// -Infinity off open ground or on a lake (no river water is written there).
+// that point, and WATER_MIN_DEPTH above it where the carve leaves it as it is
+// (a surface no higher than that ground would leave it dry); -Infinity off
+// open ground or on a lake (no river water is written there).
 function _waterRiverFloor(mesh, field, p) {
   var gs = mesh.gridSize, w = mesh.w, H = field.height;
   var gx = Math.max(0, Math.min(w - 1, Math.round(p[0] / gs))), gy = Math.max(0, Math.min(mesh.h - 1, Math.round(p[1] / gs))), v = gy * w + gx;
   if (!(H[v] === H[v]) || mesh.water[v] === WATER_KIND.still) return -Infinity;
-  return _waterCarvable(mesh, H, v) ? H[v] - WATER_DRAIN_SINK : H[v];
+  return _waterCarvable(mesh, H, v) ? H[v] - WATER_DRAIN_SINK : H[v] + WATER_MIN_DEPTH;
 }
 // The shore of the course's current end: its lowest ground (a lake there
 // counts at its surface), and the highest surface it holds. Reserved ground

@@ -41,6 +41,9 @@
   // it to its end, or sinks below what its channel can hold.
   src=patch(src,'  if (course.drains) _waterRiverDrainFall(mesh, field, course);\n','','--no-drain-fall');
   src=patch(src,'var WATER_DRAIN_SINK = WATER_MAX_CUT - WATER_RIVER_BED_DEPTH;','var WATER_DRAIN_SINK = WATER_MAX_CUT;','--deep-drain-sink');
+  // ... or falls below ground the carve leaves as it is (beside a wall), where
+  // its water then has no depth.
+  src=patch(src,': H[v] + WATER_MIN_DEPTH;',': -Infinity;','--no-unshaped-floor');
   // A drained river ending where the land ahead cannot hold its water.
   src=patch(src,'    if (!(end.floor > end.hold)) break;\n','    break;\n','--no-hold');
   // A drained river's rounded end carved but left without its water (dry holes).
@@ -329,9 +332,12 @@
     // watchtower's levelled ground; seed 22: an arena and a fortress sharing
     // chunks, with a channel cut as deep as WATER_MAX_CUT allows at a
     // terrain step; seed 14: a river whose carved water, wider than the
-    // solver's estimate there, would stand above the arena's reserved ground)
+    // solver's estimate there, would stand above the arena's reserved ground;
+    // seed 9: a drained river down a wall, where the carve leaves the ground
+    // under its tail as it is, and its tail ran dry when the fall took no
+    // account of that)
     var fixtures=[[11,-49,41,'fortress','-17,14'],[6,44,39,'arena','14,13'],[3,56,-3,'fortress','19,-2'],[10,14,16,'watchtower','5,5'],
-      [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1']],seen=[];
+      [8,-15,102,'watchtower','-5,34'],[22,13,58,'arena','4,19'],[14,13,4,'arena','4,1'],[9,-3,-35,'watchtower','-1,-13']],seen=[];
     function segDist(a,b,x,y){var sx=b[0]-a[0],sy=b[1]-a[1],l2=sx*sx+sy*sy,t=l2>0?Math.max(0,Math.min(1,((x-a[0])*sx+(y-a[1])*sy)/l2)):0;
       return Math.hypot(x-a[0]-sx*t,y-a[1]-sy*t);}
     var pair=null;

@@ -804,8 +804,9 @@ drawing and a lookup.
   at a straight edge (as it once did, its channel cut off at full depth above
   lower ground), but never below what its channel can hold: `WATER_DRAIN_SINK`
   (0.55, the cut bound less the bed depth) below the ground under its course
-  where the carve shapes that ground, and not below the ground where the
-  carve leaves it as it is. Where the shore cannot hold even that (reserved
+  where the carve shapes that ground, and `WATER_MIN_DEPTH` above the ground
+  where the carve leaves it as it is (beside a wall, say), so its tail never
+  runs dry. Where the shore cannot hold even that (reserved
   ground or ground the carve leaves as it is lower than that surface, or
   ground it shapes lower by more than `WATER_MAX_FILL - WATER_BANK_LIP`), the
   river ends a section earlier, until it can, or has no river left
@@ -910,14 +911,16 @@ downstream along cells or river objects, carved channels measured on the
 rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system). Seven structure windows are entered from the home
+without the system). Eight structure windows are entered from the home
 window, as a walk-in is, and compared with themselves rebuilt with the
 system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
 used to cross, the seed 3 fortress with a footprint chunk recorded by a
 neighbouring watchtower, two watchtowers (seeds 10 and 8) beside the
 generator's terrain steps, the seed 22 arena and fortress sharing chunks
-(a channel cut to the bound at a terrain step) and the seed 14 arena
-(carved water wider than the solver's estimate of it). Their levelled
+(a channel cut to the bound at a terrain step), the seed 14 arena
+(carved water wider than the solver's estimate of it) and the seed 9
+watchtower (a drained river down a wall, whose tail once ran dry where the
+carve cannot cut). Their levelled
 floors, footprints and margins get no new water, reshaped ground, spring
 or river surface; keep props, structure floors and structure models stand
 the same; no water stands more than 0.001 above a reserved neighbour's
@@ -931,11 +934,12 @@ within its end's shore and no more than the cut bound less the bed depth
 below the natural ground at its end (at least one sinks), with water along
 its last 16 sections; both carving bounds bind and hold, and no ground cut
 to the bound is dry; and a point is reserved the same way in a window one
-region over. The suite has 23 mutation controls (including no carving,
+region over. The suite has 24 mutation controls (including no carving,
 banks without the levee, no reserve, a reserve read from the stale
 `largeStructures` list, no margin, no basin or river drain, a drain level or
 reach left out, no keep-off, no fall, no hold-back or too deep a sink at a
-drained end, a drained end carved but left dry, unbounded carving and dry
+drained end, no floor beside ground the carve leaves as it is, a drained
+end carved but left dry, unbounded carving and dry
 pits or bank notches at the cut bound). `water_movement.js`
 runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
