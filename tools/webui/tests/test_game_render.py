@@ -8,7 +8,8 @@ surface tops above the horizon are not automatically exposed undersides.
 Fixtures cover cave floors/ceilings and portals, ceiling-dependent wall
 closure, real wall-mounted ore, surface actors/chests/goals, whole-loop walks,
 and fixed-level rendering. Current known defects remain explicit below:
-enemy walk-cycle selection. The shop tower's literal-zero height defect and
+enemy walk-cycle selection (with a FIX probe that drives it from the enemy's
+own motion). The shop tower's literal-zero height defect and
 the fixed-level floor crash (audit D24: classic floor meshes had no per-layer
 colours) are repaired; BREAK probes reintroduce them.
 
@@ -55,9 +56,10 @@ _LOAD = "render: game script evaluates without throwing"
 # check id -> (why it fails today, regex its FAIL detail must match).
 KNOWN_BUGS: dict[str, tuple[str, str]] = {
     _CYCLE: (
-        "audit F5 (U4 'enemies look stuck'): drawEnemies3D sets isMoving from the CAMERA distance, "
-        "dist in (10, chaseRange) (14070), not from the enemy's own motion, so an idle enemy 60 u away walks in "
-        "place (5-7 frames in 8 draws) and a walking enemy beyond chaseRange is frozen on frame 0.",
+        "audit F5 (U4 'enemies look stuck'): drawEnemies3D (14-render-entities.js) sets isMoving from the CAMERA "
+        "distance, dist in (10, chaseRange), not from the enemy's own motion, so an idle enemy 60 u away walks in "
+        "place (5-7 frames in 8 draws 100 ms of game time apart) and a walking enemy beyond chaseRange is frozen "
+        "on frame 0.",
         r"idle@60u frames=[2-9].*walking@\d+u frames=1 "),
     # _LV_ERR, _LV_FILL and _LV_BAL (audit D24's fixed-level floor) were
     # repaired by codex/floor-render-crash: buildClassicFloorLayerColors gives
@@ -97,6 +99,13 @@ PROBES = [
      "  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, bgz, C, {maxDist: 900, sceneDepth: true, fadeFraction: 0.8});",
      "  var towerVis = entityVisible3D(shopMarker.x, shopMarker.y, 0, C, {maxDist: 900, depthOffset: 5, checkMidpoint: true, fadeFraction: 0.8});",
      {_SHOP_ZERO: "FAIL", _GOAL_ZERO: "PASS"}),
+    # Audit F5, still present: the walk cycle follows the enemy's own motion
+    # between draws instead of the camera distance. Appended so the slots
+    # above keep their test_probe_NN.
+    ("FIX F5: the walk cycle follows the enemy's own motion between draws (drawEnemies3D isMoving)",
+     "    var isMoving = (dist > 10 && dist < eType.chaseRange);",
+     "    var isMoving = e._f5x !== undefined && Math.hypot(e.x - e._f5x, e.y - e._f5y) > 0.01; e._f5x = e.x; e._f5y = e.y;",
+     {_CYCLE: "PASS"}),
 ]
 
 RenderSuite = suite_testcase("render", KNOWN_BUGS, min_checks=24)

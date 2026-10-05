@@ -908,8 +908,12 @@ LAB.check("render: game script evaluates without throwing", LAB.load(__argv[0]),
     // (14073-14078). Each drawImage is recorded through a wrapper around the
     // game's ctx and mapped back to (type, direction, frame) by identity.
     // Idle: a surface enemy that never moves, camera 60 u away, 8 draws 100 ms
-    // apart -- it must hold one frame. Walking: the same enemy moved 1.5 u per
-    // draw, camera 1.1 x its chaseRange away -- it must cycle (>= 3 frames).
+    // of game time apart (advanceGameClock; LAB.advance moves only Date.now,
+    // and drawEnemies3D animates by gameTimeNow(), which only simulation ticks
+    // advance once the clock has started) -- it must hold one frame. Walking:
+    // the same enemy moved 1.5 u per draw, camera 1.1 x its chaseRange away --
+    // it must cycle (>= 3 frames). A series whose game clock did not advance
+    // 800 ms is a PRECONDITION failure: a frozen clock shows one frame anyway.
     LAB.scenario("render: enemy walk cycle", function () {
         var res = [];
         function frameOf(img) {
@@ -919,7 +923,8 @@ LAB.check("render: game script evaluates without throwing", LAB.load(__argv[0]),
             return null;
         }
         function drawSeries(e, n, step, camDist) {
-            var out = [], real = ctx, allE = enemies, x0 = e.x, y0 = e.y;
+            startGameClock();       // as in play: game time is the session clock, not Date.now()
+            var out = [], real = ctx, allE = enemies, x0 = e.x, y0 = e.y, g0 = gameTimeNow();
             ctx = new Proxy({}, {
                 get: function (t, k) {
                     if (k === "drawImage") return function (img) { var fo = frameOf(img); if (fo) out[out.length - 1].push(fo); return real.drawImage.apply(real, arguments); };
@@ -930,6 +935,7 @@ LAB.check("render: game script evaluates without throwing", LAB.load(__argv[0]),
             try {
                 for (var i = 0; i < n; i++) {
                     LAB.advance(100);
+                    advanceGameClock(0.1);   // drawEnemies3D reads gameTimeNow(), which only simulation ticks advance
                     e.x += step;
                     var ls = LAB.layersAt(e.x, e.y), g = LAB.topWalkable(ls), a = 0.7;
                     cam.x = e.x - camDist * Math.cos(a); cam.y = e.y - camDist * Math.sin(a); cam.ang = a; cam.pitch = 0;
@@ -940,6 +946,7 @@ LAB.check("render: game script evaluates without throwing", LAB.load(__argv[0]),
                     drawEnemies3D();
                 }
             } finally { ctx = real; enemies = allE; e.x = x0; e.y = y0; }
+            out.clockMs = gameTimeNow() - g0;
             return out;
         }
         ENDLESS_SEEDS.forEach(function (seed) {
@@ -967,10 +974,12 @@ LAB.check("render: game script evaluates without throwing", LAB.load(__argv[0]),
             function distinct(s) { var seen = {}; s.forEach(function (fr) { fr.forEach(function (f) { seen[f] = 1; }); }); return Object.keys(seen); }
             var drawnAll = idle.every(function (fr) { return fr.length > 0; }) && walk.every(function (fr) { return fr.length > 0; });
             var di = distinct(idle), dw = distinct(walk);
-            res.push({ ok: drawnAll && di.length === 1 && dw.length >= 3,
+            var clockOk = Math.abs(idle.clockMs - 800) < 1 && Math.abs(walk.clockMs - 800) < 1;
+            res.push({ ok: drawnAll && clockOk && di.length === 1 && dw.length >= 3,
                 d: "s" + seed + " " + e.enemyType.id + " (chaseRange " + e.enemyType.chaseRange + ") idle@60u frames=" + di.length + " [" + di.join(",") + "]" +
                    " walking@" + f0(e.enemyType.chaseRange * 1.1) + "u frames=" + dw.length + " [" + dw.join(",") + "]" +
-                   (drawnAll ? "" : " PRECONDITION FAILED (the enemy was not drawn on every frame)") });
+                   (drawnAll ? "" : " PRECONDITION FAILED (the enemy was not drawn on every frame)") +
+                   (clockOk ? "" : " PRECONDITION FAILED (game clock advanced " + f0(idle.clockMs) + " / " + f0(walk.clockMs) + " ms over 8 draws, not 800)") });
         });
         emit("render: an enemy's walk-cycle frame advances only while the enemy itself moves", res);
     });
