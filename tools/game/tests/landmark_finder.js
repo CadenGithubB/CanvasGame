@@ -13,7 +13,7 @@
 //   --finder-no-settle          skip settlePlayerAtSpawn
 //   --finder-keep-velocity      keep the pre-teleport velocity
 //   --finder-stale-origin       place with pre-re-centre window coordinates
-//   --finder-threshold          presence threshold 0.012 -> 0.02
+//   --finder-threshold          presence threshold 0.012 -> 0.02 (the region rule, 05)
 //   --finder-no-interp-reset    skip resetRenderInterpolation
 //   --finder-no-spawner-gap     land within waking range of a live spawner
 //   --finder-no-enemy-safety    ignore how soon an enemy can walk to the cell
@@ -43,8 +43,10 @@
   }
   H.loadManifest(function (path, source) {
     if (path === 'src/05-endless-world.js') {
-      return swap(source, '--finder-no-run-reset',
+      source = swap(source, '--finder-no-run-reset',
         "  if (typeof resetLandmarkFinder === 'function') resetLandmarkFinder();   // a new run cycles landmarks afresh\n", '');
+      // The finder's region rule lives with the generator (largeStructureForRegion).
+      return swap(source, '--finder-threshold', '  if (rng() > 0.012) return null;', '  if (rng() > 0.02) return null;');
     }
     if (path !== 'src/22-landmark-finder.js') return source;
     source = swap(source, '--finder-no-settle', '  settlePlayerAtSpawn(true);                 // support height', '  // settle skipped; support height');
@@ -52,7 +54,6 @@
       "  if (typeof clearGameplayInput === 'function') clearGameplayInput();\n  vel.x = 0; vel.y = 0; jumpVelZ = 0; jumpAirborne = false; jumpPressed = false; dashPressed = false;\n", '');
     source = swap(source, '--finder-stale-origin', '        landing = {gx: gx, gy: gy, x: lwx - windowOriginX, y: lwy - windowOriginY, gap: landing.gap};',
       '        landing = {gx: gx, gy: gy, x: landing.x, y: landing.y, gap: landing.gap};');
-    source = swap(source, '--finder-threshold', '  if (rng() > 0.012) return null;', '  if (rng() > 0.02) return null;');
     source = swap(source, '--finder-no-interp-reset', '  resetRenderInterpolation();                // a teleport', '  // no interpolation reset; a teleport');
     source = swap(source, '--finder-no-spawner-gap',
       '    if (sp.active && sp.hp > 0 && Math.hypot(sp.x - x, sp.y - y) < LANDMARK_SPAWNER_GAP) return null;\n', '');

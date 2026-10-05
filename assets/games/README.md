@@ -768,7 +768,77 @@ drawing and a lookup.
   spring at its highest open cell above `WATER_SPRING_MIN_H`; chunk
   coordinates seed it, so the same spring appears in every window.
 - **Open ground.** Plain surface terrain only: walls, cave interiors, carved
-  entrance ramps and cave caps stay dry in this version.
+  entrance ramps and cave caps stay dry in this version. A height point
+  stands for the floor square to its south-east (as `waterAt` and the ground
+  colours read it), so it is closed when that square's wall cell, found in
+  world units, is solid.
+- **Reserved ground.** The levelled floor of every fortress, arena and
+  watchtower stays dry and keeps its shape: the generator's flat zone
+  (`largeStructureFlatRadii` in `05-endless-world.js`: 1.75, 1.25 and 1.55
+  chunk sizes times the structure's scale from its centre, by the larger
+  axis distance, straight-line for arenas) plus a `WATER_RESERVE_MARGIN`
+  (48-unit) ring, the widest river half-width and a ribbon's reach into its
+  bank in whole grid steps. No spring rises there, no river, lake or river
+  surface covers it and carving never reshapes it, so courtyards, keep props
+  and structure models stand at the same height with water on and off. The
+  mask (`_waterReserveMask`, `mesh.waterReserve`) is built once per window
+  build from the generator's own region rule (`largeStructureForRegion`),
+  not from the window's `largeStructures` list, which is assembled after the
+  water; a point is reserved the same way in every window that holds it,
+  including a footprint chunk that recorded a neighbouring structure and was
+  never levelled. Legacy valley pools there keep their water. Reserved
+  ground drains water (`field.sink`), so no river or lake stands above it:
+  water that reaches reserved ground lower than its surface ends there as
+  an outflow, as at the window edge. The solver tests every open point
+  within a river's half-width of its course that would lie under its water
+  (`_waterReachesSink`, the spring's `reach`); a basin drains where its
+  rising water meets reserved ground, its level at that ground's height;
+  and once smoothed, a river ends at the start of the first stretch whose
+  carved water would stand above reserved ground beside it
+  (`_waterRiverKeepOff`; points next to reserved ground are never reshaped,
+  so they keep their own height), or has no river at all when that is at
+  its spring. Such a river (`drains` on its object) ends like any other
+  open end, in a rounded end that the carve shapes and fills and the ribbon
+  caps, at an end the land holds. The end's shore is the ground ahead of it
+  within its half-width, a levee's width (`WATER_LEVEE_WIDTH`) and a grid
+  step, and the reserved ground within that distance. Over its last
+  `WATER_DRAIN_FALL` (36) units its surface falls to the lowest ground of
+  that shore, so its water meets the land there rather than stopping above it
+  at a straight edge (as it once did, its channel cut off at full depth above
+  lower ground), but never below what its channel can hold: `WATER_DRAIN_SINK`
+  (0.55, the cut bound less the bed depth) below the ground under its course
+  where the carve shapes that ground, and `WATER_MIN_DEPTH` above the ground
+  where the carve leaves it as it is (beside a wall, say), so its tail never
+  runs dry. Where the shore cannot hold even that (reserved
+  ground or ground the carve leaves as it is lower than that surface, or
+  ground it shapes lower by more than `WATER_MAX_FILL - WATER_BANK_LIP`), the
+  river ends a section earlier, until it can, or has no river left
+  (`heldBack` on its object records how far). In a 1,045-window survey (350
+  drained rivers, a river counted once per window) none of the 340 drained
+  ends with plain ground past them has rendered ground more than 0.01 below
+  its drawn surface within 12 units past its drawn end (366 of 370 did
+  before, by a median 0.42); 185 were held back, by up to 164 units, so a
+  drained end lies a median 43 units from reserved ground (36 before) and at
+  most 198 (43 before); 20 have no river left, and spring-fed water outside
+  reserved ground fell by 0.2%. A drained river's water may sit up to
+  `WATER_DRAIN_SINK` below the land along its tail, in a channel that holds
+  it. A tributary of a river that drains (`_waterRiverOutlet`) meets that
+  river's water even where its surface fell at the confluence or where it
+  was held back or kept off short of it: the tributary ends at the last
+  point of its course that lies within that river's width and whose channel
+  can hold that river's surface there, searching back from its end while it
+  stays within that width, and its own surface falls to that river's over
+  its last `WATER_DRAIN_FALL` (`joins` on its object). That river's surface
+  covers its end, so it draws no end cap of its own. A tributary with no
+  such point has lost its outlet and drains, ending as a drained river does.
+  Before this, seed 1's tributary ended 0.45 above the falling tail of the
+  river it joined, and seed 35's was left 14 units from a river held back
+  30 units short of its confluence, on ground 0.09 above that river's
+  water; in a 1,966-window survey (40 seeds) four tributaries change, each
+  now ending in the water of the river it joins.
+  Markets, shrines, ruin pads and the spawn clearing are not reserved; the
+  transition ring beyond the margin, where the levelled floor blends back
+  into natural terrain, stays open ground.
 - **One query.** `waterAt(x, y)` returns kind, surface, depth, surface Z in
   player units and flow. Rendering, movement and enemies all read it.
 - **Rivers are carved into the land** (`buildWaterRivers`,
@@ -783,12 +853,20 @@ drawing and a lookup.
   triangles), then the higher of a cut bank rising to higher ground and a
   levee shelf just above the water that falls back to lower ground only after
   `WATER_LEVEE_WIDTH` (so the river never sits perched above its banks).
-  Points next to walls, caves and lakes keep their height. Carved ground takes
+  Points next to walls, caves and reserved ground keep their height, as do
+  lakes. Carved ground takes
   the colour the generator would give its new height, with the generator's
   slope shading. Water past a river end that opens into a lake joins that
   lake. The walkable floor changes with the carve, so players and enemies wade
-  down into rivers. Rebuilding restores the saved heights and colours first,
-  so carving never compounds.
+  down into rivers. Carving never moves ground more than `WATER_MAX_FILL`
+  above or `WATER_MAX_CUT` below its natural height (1 mesh unit each:
+  ordinary terrain needs up to about 1, only the steps the generator leaves
+  at the edges of a structure's levelled ground ask for more, and there a
+  bank may stand below the water or a channel run dry; a point that the cut
+  bound would leave dry, in a channel or a bank, is not cut at all, so no dry
+  pit or notch is left
+  behind). Rebuilding restores
+  the saved heights and colours first, so carving never compounds.
 - **Rendering** (`13-render-water.js`, pass `water3D` after walls, the
   landmark pass and `sceneEntities`' opaque phase, before its overlay phase
   and every later billboard or sprite stage: water writes no depth, so a
@@ -803,7 +881,16 @@ drawing and a lookup.
   edge into the bank (the depth test draws the waterline) but not out over
   ground clearly lower than the water. On the inside of a bend tighter than
   the ribbon it stops at the bend's centre (a fan, not a fold that paints
-  twice), and open ends get one extra section. Each frame culls, sorts far to
+  twice). Every open end gets one extra section straight on that covers its
+  rounded end to the channel's edge, where the carve brings the ground up to
+  the water. A drained end's reaches on into the land past it the way a side
+  reaches into its bank, so the waterline is drawn where its falling surface
+  meets that land; other ends stop at the edge, since the square cap's
+  corners lie on the bank beside the rounded end, which is probed only along
+  the centre line (letting every end reach on drew spring heads over lower
+  ground beside them, in structure-free windows too). The end of a tributary
+  that ends in the water of a river that drains has no cap: that river's
+  surface covers it. Each frame culls, sorts far to
   near and fills translucent through the scene-depth clip (no depth writes),
   with depth-tinted colour, a little distance sky, lake shimmer, river streaks
   and lake glints.
@@ -830,30 +917,94 @@ drawing and a lookup.
 - **Toggles and stats.** `setWaterSystemEnabled(false)` reassembles the
   window as if the system had never run (legacy water flags, ground heights
   and colours); `WATER_RENDER_ENABLED` hides only the
-  surfaces. `getWaterStats()` and `getWaterRenderStats()` report counts and
-  timings.
+  surfaces. `getWaterStats()` (including `drains` and `reserved` points) and
+  `getWaterRenderStats()` report counts and timings.
 
 Tests: `water_system.js` checks the solver on authored terrain (a slope, a
 notched bowl whose lake must be flat at its spill height and cover exactly
-the expected cells, a weak spring, a walled gap, a flat plateau) and on real
-seeded windows (legacy lakes, no water on closed ground, surfaces never
-rising downstream along cells or river objects, carved channels measured on
-the rendered ground: the bed dips at least 0.3 below the water across every
+the expected cells, a weak spring, a walled gap, a flat plateau, the bowl
+with a reserved patch on its slope, strictly below every open cell not yet
+flooded, that it fills exactly up to, a river that drains into lower
+reserved ground beside it, a river as wide as carving makes it that drains
+where its width first reaches a band two rows from its course, a river
+course that ends within a section of where its carved water would first
+reach a reserved band, and a tributary of a river that drains, which ends
+in that river's water at its surface, at the last point of its course whose
+channel can hold that surface, or drains where that river's water no
+longer comes within its width or there is no river) and on real seeded
+windows (legacy lakes, no water on closed ground, surfaces never rising
+downstream along cells or river objects, carved channels measured on the
+rendered ground: the bed dips at least 0.3 below the water across every
 full-width section and dry banks never lie below it, rebuilds reproducing
 water, heights and colours, and switching off giving back a world generated
-without the system), with five mutation controls (including no carving and
-banks without the levee). `water_movement.js` runs the real player step and
+without the system). Ten structure windows are entered from the home
+window, as a walk-in is, and compared with themselves rebuilt with the
+system off: the seed 11 fortress and seed 6 arena whose courtyards rivers
+used to cross, the seed 3 fortress with a footprint chunk recorded by a
+neighbouring watchtower, two watchtowers (seeds 10 and 8) beside the
+generator's terrain steps, the seed 22 arena and fortress sharing chunks
+(a channel cut to the bound at a terrain step), the seed 14 arena (a
+short river the solver drains into it, whose end no point of its course can
+hold, so no river is left), the seed 9 watchtower (a drained river down a
+wall, whose tail once ran dry where the carve cannot cut), the seed 35
+fortress (a river held back short of its confluence) and the seed 1
+watchtower (a tributary joining a drained river's falling tail). Their
+levelled floors, footprints and margins get no new water, reshaped ground,
+spring or river surface; keep props, structure floors and structure models
+stand the same; each tributary of a river that drains ends within that
+river's width, at no higher a surface, over ground below it, and no river
+that ends at a confluence is left where the river it joined no longer runs;
+no water stands more than 0.001 above a reserved neighbour's
+ground, while water comes within two points of reserved ground and every
+drained river ends within its width, a section and a point and a half of
+it, or is held back from there by no more than its `heldBack` (at least one
+is); the ground whose nearest river point is a drained end holds water where
+the carve cut it below the surface, and its dry rim stands at or above the
+water; each drained river's surface ends no higher than the reserved ground
+within its end's shore and no more than the cut bound less the bed depth
+below the natural ground at its end (at least one sinks), with water along
+its last 16 sections; both carving bounds bind and hold, and no ground cut
+to the bound is dry; and a point is reserved the same way in a window one
+region over. The suite has 28 mutation controls (including no carving,
+banks without the levee, no reserve, a reserve read from the stale
+`largeStructures` list, no margin, no basin or river drain, a drain level or
+reach left out, no keep-off, no fall, no hold-back or too deep a sink at a
+drained end, no floor beside ground the carve leaves as it is, a drained
+end carved but left dry, unbounded carving, dry pits or bank notches at the
+cut bound, and a tributary of a river that drains left as it was, meeting
+it without falling to its surface, searching only its own end, or not
+draining without an outlet), each the first failure of the check it
+names. Keep-off (`_waterRiverKeepOff`) is covered only by the authored
+course: in the real windows the solver's width-aware drain already ends
+rivers where their water would reach reserved ground, and with keep-off
+removed from river building no measured contract changes in a 1,966-window
+survey (two rivers differ: one records a longer hold-back to the same end,
+and one short drained river that keep-off removes survives, with no water
+above reserved ground, dry hole or low rim either way). `water_movement.js`
+runs the real player step and
 NPC locomotion: an idle player drifts downstream in a river but not on dry
 ground, the same input covers 55% of the dry distance in deep water, enemies
 wade, and switching the system off removes every effect, with two mutation
-controls. `water_render.js` checks the built tiles in two seeded windows:
+controls. `water_render.js` checks the built tiles in two seeded windows
+and six windows beside structures where rivers drain into reserved ground
+(seed 6 at 36,26, seed 14 at 22,23, seed 8 at -15,102, seed 3 at 6,46,
+seed 10 at 17,12, where a spring's head sits by a step at the edge of a
+watchtower's levelled ground, and seed 1 at 31,-1, where a tributary joins
+a drained river's falling tail):
 every floor square touching lake water carries a lake surface, lakes never
 hang above lower dry ground, ribbons never fold, every point of river water
-lies under a water surface, ribbon edges never hang above dry open ground, no
-bed under water is near-black, and the toggle restores every ground colour,
-with seven mutation controls (one-square-per-point coverage, unclamped lake
-edges, dark natural beds, half-width ribbons, unrelaxed courses, no bend fan,
-banks without the levee). `cave_surface_material.js` skips the river-bank
+lies under a water surface, no corner of a ribbon piece (the last section
+included) hangs above dry open ground, no bed under water is near-black, a
+river that drains into reserved ground ends where the land holds its water
+(across the middle half of its last drawn section, no rendered ground 1 to
+12 units past it lies more than 0.01 below its surface), and the toggle
+restores every ground colour, with thirteen mutation controls
+(one-square-per-point coverage, unclamped lake edges, dark natural beds,
+half-width ribbons, unrelaxed courses, no bend fan, banks without the
+levee, a drained end cut off at a straight edge as it once was, no fall or
+no hold-back at a drained end, drained ends' caps that stop at the channel
+edge, every cap reaching on into the bank, and a tributary of a river that
+drains drawing its own end cap). `cave_surface_material.js` skips the river-bank
 points the water system lists in `mesh.waterCarveColors`, as it already
 accepts shoreline tint. Browser, one local run in the app's browser: a window
 solve including carving took 6-23 ms and building the tiles 1-4 ms, once per
@@ -862,10 +1013,17 @@ frames) with 148 visible tiles. Known limits: the terrain is coloured per
 12-unit square, so up close a diagonal river still shows a faint staircase in
 its bed and bank colours; rivers from springs outside the window appear when
 the window moves; level (non-Endless) maps keep their legacy water for now.
-Carving and lakes leave generated objects (floor props, chests, shrines)
-where chunk generation put them, so some stand in water, a few deep under it
-(seeds 1, 15, 29 and 31: 6 of 69 chests and 1 of 6 shrine pedestals fully
-submerged, up to 42 units deep). Their models draw before the water, whose
+The generator levels a structure's surroundings only in chunks that record
+the structure, and a chunk records one structure, so steps of up to about 3
+height units stand at the edges of some levelled floors (older than the
+water system); the carving bounds keep rivers beside them from building dams
+or trenches, so there a bank can stand below the water and a ribbon's edge
+or cap corner hang over it (seed 15's spring on top of such a step, at
+-8,-5: a cap corner 0.42 above the lower ground). Outside structure floors, carving and lakes leave generated
+objects (floor props, chests, shrines) where chunk generation put them, so
+some stand in water, a few deep under it (seeds 1, 15, 29 and 31: 6 of 69
+chests and 1 of 6 shrine pedestals fully submerged, up to 42 units deep).
+Their models draw before the water, whose
 alpha rises from 0.64 at the shore to 0.94 at 1.2 H deep, so a deep chest or
 pedestal shows only faintly through it, while its billboards (chest glow,
 sparkle and label; shrine crystal, glow and prompt) and Legacy sprites draw

@@ -24,12 +24,13 @@ function _waterTerrainZ(mesh, v) {
   return t === 1 || t === 3 || t === 4 ? mesh.l0TopZ[v] : NaN;
 }
 // Rendered height of plain surface ground at a world point (the floor's own
-// triangle split), or NaN where any corner is not plain surface.
+// triangle split), or NaN where any corner is not plain surface. Reserved
+// ground counts: water never stands on it, but a ribbon must not hang over it.
 function _waterGroundAt(mesh, x, y) {
   var gs = mesh.gridSize, gx = Math.floor(x / gs), gy = Math.floor(y / gs), w = mesh.w;
   if (gx < 0 || gy < 0 || gx >= w - 1 || gy >= mesh.h - 1) return NaN;
-  var i = gy * w + gx, z0 = _waterWindowBed(mesh, i), z1 = _waterWindowBed(mesh, i + 1),
-    z2 = _waterWindowBed(mesh, i + w), z3 = _waterWindowBed(mesh, i + w + 1), u = x / gs - gx, v = y / gs - gy;
+  var i = gy * w + gx, z0 = _waterPlainGround(mesh, i), z1 = _waterPlainGround(mesh, i + 1),
+    z2 = _waterPlainGround(mesh, i + w), z3 = _waterPlainGround(mesh, i + w + 1), u = x / gs - gx, v = y / gs - gy;
   return u >= v ? z0 + (z1 - z0) * u + (z3 - z1) * v : z0 + (z3 - z2) * u + (z2 - z0) * v;
 }
 // How far one side of a river ribbon reaches: past the channel edge into the
@@ -43,15 +44,24 @@ function _waterRibbonReach(mesh, x, y, nx, ny, hw, surface) {
   }
   return hw + WATER_RIBBON_OVERLAP;
 }
-// A river's open end (its spring, a confluence, the window edge) gets one
-// more section straight on, covering the rounded end of its carved channel.
-// An end inside a lake needs none: the lake's own surface covers it.
-function _waterRibbonCap(mesh, pts, q) {
+// A river's open end (its spring, a confluence, the window edge, or an end
+// that drains into reserved ground) gets one more section straight on,
+// covering the rounded end of its carved channel to its edge, where the
+// carve brings the ground up to the water. A drained end (`drained`) reaches
+// on into the land past it as a side reaches into its bank
+// (_waterRibbonReach): its surface falls to meet that land, which the depth
+// test then cuts as the waterline. The cap is square, so its corners lie on
+// the bank beside the rounded end, where only the centre line was probed;
+// other ends keep to the rounded end's edge. An end inside a lake needs
+// none (the lake's own surface covers it), nor does the end of a river that
+// ends in another river's water (river.joins; see buildWaterTiles).
+function _waterRibbonCap(mesh, pts, q, drained) {
   var p = pts[q], o = pts[q === 0 ? 1 : q - 1];
   if (!o || _waterLakeAt(mesh, p) >= 0) return null;
-  var dx = p[0] - o[0], dy = p[1] - o[1], len = Math.hypot(dx, dy), reach = p[4];
-  if (!(len > 0) || !(reach > 0)) return null;
-  return [p[0] + dx / len * reach, p[1] + dy / len * reach, p[2], q === 0 ? p[3] - reach : p[3] + reach, reach];
+  var dx = p[0] - o[0], dy = p[1] - o[1], len = Math.hypot(dx, dy), hw = p[4];
+  if (!(len > 0) || !(hw > 0)) return null;
+  var reach = drained ? _waterRibbonReach(mesh, p[0], p[1], dx / len, dy / len, hw, p[2]) : hw;
+  return [p[0] + dx / len * reach, p[1] + dy / len * reach, p[2], q === 0 ? p[3] - reach : p[3] + reach, hw];
 }
 // Signed curvature of a river centreline at point q (1 / radius; positive
 // when the river turns toward its left, the ribbon's first side).
@@ -112,7 +122,7 @@ function buildWaterTiles(mesh) {
   var rivers_ = typeof waterRivers !== 'undefined' ? waterRivers : [];
   for (var r = 0; r < rivers_.length; r++) {
     var rv = rivers_[r], pts = rv.points, half = 0, sections = [];
-    var capA = _waterRibbonCap(mesh, pts, 0), capB = _waterRibbonCap(mesh, pts, pts.length - 1), bend = [];
+    var capA = _waterRibbonCap(mesh, pts, 0), capB = rv.joins ? null : _waterRibbonCap(mesh, pts, pts.length - 1, rv.drains), bend = [];
     if (capA || capB) { pts = pts.slice(); if (capA) pts.unshift(capA); if (capB) pts.push(capB); }
     for (var b0 = 0; b0 < pts.length; b0++) bend.push(_waterBend(pts, b0));
     for (var q = 0; q < pts.length; q++) {

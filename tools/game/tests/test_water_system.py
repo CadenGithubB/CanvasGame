@@ -1,13 +1,19 @@
-"""Water system: solver contracts on authored terrain and the real Endless window."""
+"""Water system: solver contracts on authored terrain, the real Endless window and structure floors."""
 
 from pathlib import Path
 import unittest
 
 from tools.webui.js_engine import JS_ENGINE, run_js
 
-CHECK_COUNT = 20
+CHECK_COUNT = 34
 PASS_RESULT = f"WATER_SYSTEM_RESULT PASS {CHECK_COUNT}"
 HARNESS = Path(__file__).with_name("water_system.js")
+DRAINED_END = ("a river that drains ends in a rounded end that holds its water: no dry hole past its end, "
+               "and the land at its rim stands at or above the water")
+DRY_CUT = "ground cut as deep as WATER_MAX_CUT allows always holds water: no dry pit or notch"
+NEVER_ABOVE = "water that reaches reserved ground drains into it and never stands above it"
+TRIBUTARY = ("a tributary of a river that drains ends in its water at its surface, at the last point of its course "
+             "that can hold that surface, or drains where it has no such point")
 
 
 class WaterSystemTests(unittest.TestCase):
@@ -45,6 +51,112 @@ class WaterSystemTests(unittest.TestCase):
     def test_regression_rejects_banks_below_the_water(self) -> None:
         self.assert_rejected("--perched-bank",
                              "rivers run in carved channels: the bed dips below the water and dry banks stand above it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_basins_standing_above_reserved_ground(self) -> None:
+        self.assert_rejected("--no-basin-drain", "a basin beside reserved ground fills only to that ground and drains into it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_basin_drain_below_the_reserved_ground(self) -> None:
+        self.assert_rejected("--no-drain-level", "a basin beside reserved ground fills only to that ground and drains into it")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_rivers_running_past_lower_reserved_ground(self) -> None:
+        self.assert_rejected("--no-river-drain", "a river passing lower reserved ground drains into it there")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_drain_that_ignores_the_river_width(self) -> None:
+        self.assert_rejected("--no-drain-reach", "a river drains where its width reaches lower reserved ground beside its course")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_wall_cells_looked_up_off_their_floor_square(self) -> None:
+        self.assert_rejected("--wall-cell-nw", "no water on walls, cave interiors or carved ground in the real window")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_rivers_through_structure_floors(self) -> None:
+        self.assert_rejected("--no-reserve", "keep props, structure floors and structure models stand the same with water on and off")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_read_from_the_stale_structure_list(self) -> None:
+        # Seed 11's fortress is not yet in largeStructures when a walk-in solves its water.
+        self.assert_rejected("--stale-structures",
+                             "keep props, structure floors and structure models stand the same with water on and off")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_without_its_margin(self) -> None:
+        self.assert_rejected("--no-margin", "water keeps off the levelled floor, footprint and margin of a fortress, arena "
+                             "or watchtower: no new water, reshaped ground, spring or river surface there")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_carved_water_standing_above_reserved_ground(self) -> None:
+        # The authored course: only keep-off ends it where its carved water would reach the band.
+        self.assert_rejected("--no-keep-off", "a river ends where its carved water would first stand above lower "
+                             "reserved ground beside it, and drains there")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_ends_standing_above_reserved_ground(self) -> None:
+        # The solver's surface kept to a drained river's end: its water stands above the reserved ground it reaches.
+        self.assert_rejected("--no-drain-fall", NEVER_ABOVE)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_ends_the_land_cannot_hold(self) -> None:
+        self.assert_rejected("--no-hold", NEVER_ABOVE)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_rivers_sinking_below_what_their_channel_holds(self) -> None:
+        self.assert_rejected("--deep-drain-sink", "a river that drains ends no higher than the reserved ground around its "
+                             "end and no lower than its channel can hold, its tail holding water")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_drained_tails_left_dry_beside_unshaped_ground(self) -> None:
+        # Seed 9's river down a wall: its tail ran dry at the natural ground where the carve cannot cut.
+        self.assert_rejected("--no-unshaped-floor", "a river that drains ends no higher than the reserved ground around "
+                             "its end and no lower than its channel can hold, its tail holding water")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_dry_holes_past_a_drained_end(self) -> None:
+        # The rounded end carved but left without its water, as once happened.
+        self.assert_rejected("--dry-drained-ends", DRAINED_END)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_left_above_or_beside_a_drained_river(self) -> None:
+        # Seed 35's tributary left on dry ground where the river it joined was held back; seed 1's 0.45 above its tail.
+        self.assert_rejected("--no-outlet", "a tributary of a river that drains ends in its water at its level, "
+                             "and no tributary is left where the river it joined no longer runs")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_meeting_a_drained_river_above_its_surface(self) -> None:
+        self.assert_rejected("--no-outlet-fall", TRIBUTARY)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_that_only_try_their_own_end(self) -> None:
+        self.assert_rejected("--no-walk-back", TRIBUTARY)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_tributaries_without_an_outlet_that_do_not_drain(self) -> None:
+        self.assert_rejected("--lost-outlet-dangles", TRIBUTARY)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_dry_pits_at_the_cut_bound(self) -> None:
+        self.assert_rejected("--dry-cuts", DRY_CUT)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_dry_bank_notches_at_the_cut_bound(self) -> None:
+        self.assert_rejected("--dry-bank-cuts", DRY_CUT)
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_unbounded_levees(self) -> None:
+        self.assert_rejected("--no-fill-cap", "carving never moves ground more than WATER_MAX_FILL above or "
+                             "WATER_MAX_CUT below its natural height")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_unbounded_channel_cuts(self) -> None:
+        self.assert_rejected("--no-cut-cap", "carving never moves ground more than WATER_MAX_FILL above or "
+                             "WATER_MAX_CUT below its natural height")
+
+    @unittest.skipIf(JS_ENGINE is None, "a supported JavaScript engine is required")
+    def test_regression_rejects_a_reserve_that_depends_on_the_window(self) -> None:
+        self.assert_rejected("--reserve-window-regions", "a point is reserved the same way in every window that holds it")
 
 
 if __name__ == "__main__":
