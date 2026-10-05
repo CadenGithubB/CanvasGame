@@ -85,28 +85,38 @@ _PLACED = "browser: every driver view places the player where it says, on the la
 _HEADLESS = "browser: a headless driver run completes, renders every view without exceptions, and reports every frame blank"
 
 PROBES: list[tuple] = [
-    ("BREAK: the floor pass paints tilted quads orange-yellow (#ffb000, g/r 0.69) -- a palette the "
-     "classifier cannot follow must be caught, not silently re-labelled",
+    # #ffbe78 lights to about rgb(229,171,108): LAB.polyClass still calls it
+    # 'tilted' (g/r 0.75 > 0.7), so the classifier check's class-coverage
+    # precondition holds, but its hue (31 deg) lies inside the driver's
+    # cave-floor band. (The earlier #ffb000, g/r 0.69, was 'caveFloor' to LAB
+    # too, so no tilted class was seen and the check failed on its precondition.)
+    ("BREAK: the floor pass paints tilted quads #ffbe78 (LAB.polyClass still 'tilted', g/r 0.75, but hue 31 deg, "
+     "inside the driver's cave-floor band) -- a palette the driver's classifier cannot follow must be caught, not "
+     "silently re-labelled",
      "else if (_ptMaxDz >= 2.0) baseCol = '#ffdc00';",
-     "else if (_ptMaxDz >= 2.0) baseCol = '#ffb000';",
+     "else if (_ptMaxDz >= 2.0) baseCol = '#ffbe78';",
      {_CLASSIFY: "FAIL", _PLACED: "PASS"}),
-    ("BREAK: no surface caps anywhere (CAP_EXCL_SQ huge, 6647) -- the inside and cap views no longer "
+    ("BREAK: no surface caps anywhere (needsCap never set in the cap model) -- the inside and cap views no longer "
      "reach a buried tunnel, so the browser checks there would be vacuous",
-     "var CAP_EXCL_SQ = 30 * 30;",
-     "var CAP_EXCL_SQ = 1e12;",
+     "      if (_hasCeilAbove) needsCap[iN] = 1;",
+     "      if (false && _hasCeilAbove) needsCap[iN] = 1;",
      {_SCENES: "FAIL", _LAB_SCENES: "FAIL", _PLACED: "PASS"}),
     ("BREAK: the walkable-layer picker returns the walk target 0.5 h too high",
-     "if (best_idx >= 0) return {topH: best_topH, idx: best_idx, type: best_type, action: 'walk'};",
-     "if (best_idx >= 0) return {topH: best_topH + 0.5, idx: best_idx, type: best_type, action: 'walk'};",
+     "  if (best) return best;\n  if (fall) { fall.supportIdx = fall.idx;",
+     "  if (best) { best.topH += 0.5; return best; }\n  if (fall) { fall.supportIdx = fall.idx;",
      {_PLACED: "FAIL", _SCENES: "FAIL", _LAB_SCENES: "FAIL"}),
     ("BREAK: drawFloorScatter3D throws while the player is underground",
      "function drawFloorScatter3D() {",
      "function drawFloorScatter3D() { if (playerUnderground) throw new Error('probe');",
      {_HEADLESS: "FAIL"}),
-    ("BREAK: the DEBUG_POLY_TYPES floor palette is disabled",
+    # Without the debug palette LAB cannot see the cap or cave-floor classes,
+    # so the classifier check's class-coverage precondition is the only way
+    # this defect can show: it must FAIL on that PRECONDITION.
+    ("BREAK: the DEBUG_POLY_TYPES floor palette is disabled -- the classifier check must FAIL on its "
+     "class-coverage precondition",
      "        if (DEBUG_POLY_TYPES) {\n          var _ptMaxDz",
      "        if (false) {\n          var _ptMaxDz",
-     {_CLASSIFY: "FAIL"}),
+     {_CLASSIFY: "PRECONDITION"}),
 ]
 
 BrowserSuite = suite_testcase("browser", KNOWN_BUGS, min_checks=10)
