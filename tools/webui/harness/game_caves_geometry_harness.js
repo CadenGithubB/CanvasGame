@@ -39,7 +39,7 @@ var INSIDE_LEN = 150;         // u of corridor followed inside the entrance
 var DS = 6;                   // u between path samples (half a 12 u mesh cell)
 var NET_RADIUS = 12;          // regions searched around spawn in normal Endless
 var SEAM_TOL = 0.25;          // h a chunk-border spike of the cave floor may exceed the mid-chunk control spike by
-var SURF_SEAM_R = 300;        // u around an entrance where generateChunk blurs the surface (10 cells x 12 u x 2.5, L5525/L5541)
+var SURF_SEAM_R = 300;        // u around an entrance where generateChunk once blurred the surface chunk by chunk (10 cells x 12 u x 2.5)
 var SURF_SEAM_TOL = 0.05;     // h: see the surface-seam check
 var WATER_TOL = 0.0025;       // fraction of water cells a wall may stand on: see the D17 check
 var D17_R = 8;                // chunks -8..8 around spawn per Endless seed for the water/wall census
@@ -94,10 +94,11 @@ var A = {
     mouth: { bad: 0, cells: 0, entCells: 0, per: [] },
     interior: { bad: 0, pairs: 0, per: [], borderBad: 0, borderPairs: 0 },
     seam: { bad: 0, n: 0, per: [] },
-    surf: { bad: 0, n: 0, bSamples: 0, per: [] },
+    surf: { bad: 0, n: 0, bSamples: 0, per: [], noRecord: [] },
+    levee: { bad: 0, pairs: 0, high: 0, per: [], ex: [] },
     trunc: { miss: 0, extra: 0, want: 0, chunks: 0, per: [], minMargin: Infinity },
     water: { wall: 0, water: 0, bad: false, per: [] },
-    entCount: { one: 0, nets: 0, per: [] },
+    angle: { n: 0, lower: 0, max: -1, per: [] },
     f6: 0
 };
 
@@ -264,20 +265,48 @@ function spikes(Z, W, H, CC, keep) {
     return r;
 }
 
-// ── the ground surface near entrances: the per-chunk entrance blur ─────────
-// generateChunk blurs the surface within 10 cells x 2.5 of each entrance
-// (L5524-5562) using only the chunk's own cells (neighbours outside the chunk
-// are skipped), so the two sides of a chunk line are blurred differently.
-// surfaceH is that blurred pre-stamp surface: open ground outside caves and
-// the height every cap over a cave is built from (L6682).
+// ── the ground surface near entrances: chunk-by-chunk shaping ──────────────
+// generateChunk once blurred the surface within 300 u of each entrance using
+// only the chunk's own cells (neighbours outside the chunk skipped), so the
+// two sides of a chunk line were blurred differently (E2). That per-chunk
+// blur has been deleted (generateChunk now says entrance shaping is sampled
+// in world space); this check guards against chunk-by-chunk surface shaping
+// coming back. surfaceH is the pre-stamp surface: open ground outside caves
+// and the height every cap over a cave is built from.
+// The water system carves river channels and levees into surfaceH/l0TopZ
+// after the window is assembled (06-water.js carveWaterRivers, a whole-window
+// pass that knows nothing of chunks) and records every value it changed in
+// mesh.waterCarveSaved, which _waterRestoreCarve writes back before any
+// rebuild. The seam check judges the generator's surface, so it reads
+// surfaceH with those originals put back; river levees are excluded on
+// purpose here and judged by the levee check below. A window that carries
+// river water (WATER_KIND.flowing points: the carve wrote its channels) but
+// no record is a setup failure, never a pass. A window with no river keeps
+// no record because nothing was carved (carveWaterRivers returns before it
+// creates one), and its surfaceH is the generator's own.
+function preCarveSurface(m) {
+    var Z = new Float64Array(m.surfaceH), n = 0, saved = m.waterCarveSaved, rivers = 0;
+    if (saved && typeof saved === "object") for (var k in saved) { Z[+k] = saved[k]; n++; }
+    var waterOn = typeof WATER_SYSTEM_ENABLED === "boolean" && WATER_SYSTEM_ENABLED;
+    if (waterOn && m.water && typeof WATER_KIND === "object")
+        for (var i = 0; i < m.water.length; i++) if (m.water[i] === WATER_KIND.flowing) rivers++;
+    return { Z: Z, carved: n, riverPoints: rivers, ok: !(waterOn && rivers > 0 && !(saved && typeof saved === "object")) };
+}
 function scanSurfaceSeam(label) {
     var m = floorMesh, W = m.w, H = m.h, CC = CHUNK_SIZE / m.gridSize, R2 = SURF_SEAM_R * SURF_SEAM_R;
     var ents = LAB.entrances().map(function (E) { return LAB.toLocal(E.x, E.y); });
-    var sp = spikes(m.surfaceH, W, H, CC, function (gx, gy) {
+    var keep = function (gx, gy) {
         var x = (gx + 0.5) * m.gridSize, y = (gy + 0.5) * m.gridSize;
         for (var k = 0; k < ents.length; k++) { var dx = x - ents[k].x, dy = y - ents[k].y; if (dx * dx + dy * dy < R2) return true; }
         return false;
-    });
+    };
+    var pre = preCarveSurface(m);
+    if (!pre.ok) A.surf.noRecord.push(label);
+    var sp = spikes(pre.Z, W, H, CC, keep), carvedSp = spikes(m.surfaceH, W, H, CC, keep);
+    LAB.metric("caves_geometry." + label + ".surface_carved_border_spike_h", isFinite(carvedSp.bMax) ? carvedSp.bMax : -99);
+    LAB.metric("caves_geometry." + label + ".surface_carved_control_spike_h", isFinite(carvedSp.cMax) ? carvedSp.cMax : -99);
+    LAB.metric("caves_geometry." + label + ".surface_points_carved_by_water", pre.carved, "points");
+    LAB.metric("caves_geometry." + label + ".river_water_points", pre.riverPoints, "points");
     A.surf.bSamples += sp.bN;
     if (sp.bN > 0 && sp.cN > 0) {
         A.surf.n++;
@@ -287,6 +316,45 @@ function scanSurfaceSeam(label) {
     } else A.surf.per.push(label + " no chunk line within " + SURF_SEAM_R + " u of an entrance (" + sp.bN + "/" + sp.cN + ")");
     LAB.metric("caves_geometry." + label + ".surface_border_spike_h", isFinite(sp.bMax) ? sp.bMax : -99);
     LAB.metric("caves_geometry." + label + ".surface_control_spike_h", isFinite(sp.cMax) ? sp.cMax : -99);
+}
+
+// ── river levees: steps the carve makes that the player cannot climb ───────
+// carveWaterRivers raises a levee shelf up to WATER_MAX_FILL above natural
+// ground and lets it fall back over WATER_LEVEE_FALL world units (or not at
+// all beside ground _waterCarvable refuses to shape). The player's picker
+// refuses a step up of more than STEP_UP (getWalkableLayerTopAt stepUp 1.0).
+// Natural ground is the pre-carve value in mesh.waterCarveSaved (the record
+// _waterRestoreCarve writes back). Only plain single-layer ground counts, and
+// a pair counts only where the natural ground had no such step: the carve
+// made it. Each counted pair also records what the game's picker answers to a
+// player standing on the low point who steps onto the high one.
+var LEVEE_HIGH = 0.5;         // h: a levee point raised at least this much (the fixture must reach high levees)
+function scanLevee(label) {
+    var m = floorMesh, W = m.w, H = m.h, saved = m.waterCarveSaved;
+    if (!saved || typeof saved !== "object") { A.levee.per.push(label + " no carve record"); return; }
+    var post = m.l0TopZ, pre = new Float64Array(post), pairs = 0, bad = 0, high = 0;
+    for (var k in saved) { pre[+k] = saved[k]; if (post[+k] - saved[k] >= LEVEE_HIGH) high++; }
+    _floorCacheTick = (_floorCacheTick + 1) | 0;
+    for (var gy = 0; gy < H; gy++) for (var gx = 0; gx < W; gx++) {
+        var a = gy * W + gx;
+        for (var d = 0; d < 2; d++) {
+            var b = d === 0 ? (gx + 1 < W ? a + 1 : -1) : (gy + 1 < H ? a + W : -1);
+            if (b < 0 || (pre[a] === post[a] && pre[b] === post[b])) continue;
+            if (m.layerCount[a] !== 1 || m.layerCount[b] !== 1) continue;
+            pairs++;
+            var sp = Math.abs(post[a] - post[b]), s0 = Math.abs(pre[a] - pre[b]);
+            if (!(sp > STEP_UP && s0 <= STEP_UP)) continue;
+            bad++;
+            var lo = post[a] < post[b] ? a : b, hi = lo === a ? b : a, hw = LAB.cellWorld(hi), hl = LAB.toLocal(hw.x, hw.y);
+            var pick = getWalkableLayerTopAt(hl.x, hl.y, post[lo]);
+            if (A.levee.ex.length < 6) A.levee.ex.push(label + " " + at(lo) + "->" + at(hi) + " " + fx(post[lo], 3) + "->" + fx(post[hi], 3) +
+                " (natural " + fx(pre[lo], 3) + "->" + fx(pre[hi], 3) + ", picker " + pick.action + ")");
+        }
+    }
+    A.levee.pairs += pairs; A.levee.bad += bad; A.levee.high += high;
+    A.levee.per.push(label + " " + bad + "/" + pairs + " carved pairs, levee points raised >= " + LEVEE_HIGH + " h: " + high);
+    LAB.metric("caves_geometry." + label + ".levee_steps_over_step_up", bad, "pairs");
+    LAB.metric("caves_geometry." + label + ".levee_points_raised_high", high, "points");
 }
 
 // ── roof: authoritative covered footprint vs the assembled layers ──────────
@@ -473,6 +541,13 @@ function scanTruncation(label, nets) {
         function box(x, y, r) { x0 = Math.min(x0, x - r); y0 = Math.min(y0, y - r); x1 = Math.max(x1, x + r); y1 = Math.max(y1, y + r); }
         net.corridors.forEach(function (c) { var r = c.width * 0.5 + 108; box(c.x1, c.y1, r); box(c.x2, c.y2, r); });
         net.chambers.forEach(function (ch) { box(ch.cx, ch.cy, ch.radius + 108); });
+        // The descending approach reaches approachLength (480 u) out of the
+        // mouth, into the neighbouring region; box it with sampleCavePortal's
+        // own lateral reach (halfWidth + 42 widening + 48 feather).
+        net.entrances.forEach(function (e) {
+            var L = e.approachLength || 480, ox = -Math.cos(e.angle), oy = -Math.sin(e.angle), lat = (e.halfWidth || 54) + 42 + 48;
+            box(e.x, e.y, lat); box(e.x + ox * L, e.y + oy * L, lat);
+        });
         for (var cy = Math.floor(y0 / CHUNK_SIZE); cy <= Math.floor(y1 / CHUNK_SIZE); cy++)
             for (var cx = Math.floor(x0 / CHUNK_SIZE); cx <= Math.floor(x1 / CHUNK_SIZE); cx++) keys[cx + "," + cy] = [cx, cy];
         // informational: how close the feather comes to the 3x3-region reach
@@ -529,6 +604,7 @@ function testWindow(label, seen) {
     var r = scanWindow(label);
     scanInterior(label, r.groundZ);
     scanSurfaceSeam(label);
+    scanLevee(label);
     scanMouth(label);
     var tested = 0, ents = LAB.entrances();
     ents.forEach(function (E) {
@@ -585,6 +661,20 @@ if (LAB.loaded) {
         });
     });
 
+    // Windows where a seed sweep found carve-made steps over STEP_UP (Endless
+    // seed, then the WORLD point the window is centred on: the nearest
+    // entrance of one of its cave networks). Fixed world points, so the
+    // fixture does not depend on which network is nearest to spawn.
+    [[3, 9611, -6196], [777000, 7954, 3843], [8, 3856, 3691]].forEach(function (f) {
+        LAB.scenario(P + "river levee window endless seed " + f[0] + " at (" + f[1] + "," + f[2] + ")", function () {
+            LAB.freshPage();
+            LAB.startEndless(f[0]);
+            LAB.freezeDay(0.5);
+            LAB.placeWorld(f[1], f[2], "top");
+            scanLevee("n" + f[0] + "@" + f[1] + "," + f[2]);
+        });
+    });
+
     ENDLESS_SEEDS.forEach(function (seed) {
         LAB.scenario(P + "water census endless seed " + seed, function () {
             LAB.freshPage();
@@ -593,16 +683,27 @@ if (LAB.loaded) {
         });
     });
 
-    LAB.scenario(P + "normal endless entrance counts", function () {
-        var per = {};
+    // D16, current symptom. The winding-chamber-v1 recipe always builds one
+    // entrance, so the old entrance-count contract cannot fail any more. The
+    // shared stream still shows in the mouth's bearing from its region centre:
+    // entryAngle = rng() * 2 pi is the first draw of chunkRng(rx, ry, 100),
+    // the stream whose first draw already had to pass the 30% gate
+    // rng2() <= 0.30 (rng2 is the same chunkRng(rx, ry, 100)).
+    LAB.scenario(P + "normal endless cave mouth bearings", function () {
+        var per = {}, multi = 0;
         normalNets.forEach(function (o) {
-            A.entCount.nets++;
-            if (o.net.entrances.length === 1) A.entCount.one++;
-            per[o.seed] = per[o.seed] || { n: 0, one: 0, two: 0 };
-            per[o.seed].n++;
-            if (o.net.entrances.length === 1) per[o.seed].one++; else if (o.net.entrances.length === 2) per[o.seed].two++;
+            var n = o.net, e = n.entrances[0];
+            if (n.entrances.length !== 1) multi++;
+            if (!e) return;
+            var cxw = (n.regionX * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2, cyw = (n.regionY * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2;
+            var a = Math.atan2(e.y - cyw, e.x - cxw); if (a < 0) a += 2 * Math.PI;
+            A.angle.n++; if (a >= Math.PI) A.angle.lower++;
+            if (a > A.angle.max) A.angle.max = a;
+            per[o.seed] = per[o.seed] || { n: 0, lower: 0 };
+            per[o.seed].n++; if (a >= Math.PI) per[o.seed].lower++;
         });
-        for (var sd in per) A.entCount.per.push("n" + sd + ": " + per[sd].n + " nets, 1-entrance " + per[sd].one + ", 2-entrance " + per[sd].two);
+        for (var sd in per) A.angle.per.push("n" + sd + ": " + per[sd].lower + "/" + per[sd].n);
+        LAB.metric("caves_geometry.networks_without_exactly_one_entrance", multi, "networks");
     });
 
     // ── verdicts ────────────────────────────────────────────────────────────
@@ -666,10 +767,17 @@ if (LAB.loaded) {
         "tolerance: border spike <= mid-chunk control spike + " + SEAM_TOL + " h; " +
         (A.seam.n === 0 ? "PRECONDITION: no world has cave floor across a chunk border; " : "") + A.seam.bad + "/" + A.seam.n + " worlds; " + A.seam.per.join("; "));
     LAB.check("caves_geometry: chunk borders add no seam to the ground surface within 300 u of a cave entrance",
-        A.surf.bSamples >= 50 && A.surf.bad === 0,
-        "[E2 in the surface: the entrance blur L5524-5562 skips neighbours outside the chunk] tolerance: border spike <= control spike + " + SURF_SEAM_TOL + " h; " +
+        A.surf.bSamples >= 50 && !A.surf.noRecord.length && A.surf.bad === 0,
+        (A.surf.noRecord.length ? "PRECONDITION: river water but no mesh.waterCarveSaved record in " + A.surf.noRecord.join(",") + "; " : "") +
+        "[E2: generateChunk shapes its surface chunk by chunk; judged before the river carve, read back from mesh.waterCarveSaved] tolerance: border spike <= control spike + " + SURF_SEAM_TOL + " h; " +
         (A.surf.bSamples >= 50 ? "" : "PRECONDITION: only " + A.surf.bSamples + " chunk-line samples near an entrance (need >= 50); ") +
         A.surf.bad + "/" + A.surf.n + " worlds; " + A.surf.per.join("; "));
+    var leveePre = A.levee.pairs >= 1000 && A.levee.high >= 50;
+    LAB.check("caves_geometry: river carving never leaves a step the player cannot climb (STEP_UP 1.0 h) between neighbouring open ground points where the natural ground had none",
+        leveePre && A.levee.bad === 0,
+        "[06-water.js carveWaterRivers: levee up to WATER_MAX_FILL above natural ground, falling back over WATER_LEVEE_FALL u, or not at all beside ground _waterCarvable refuses to shape] " +
+        (leveePre ? "" : "PRECONDITION: only " + A.levee.pairs + " carved neighbour pairs (need >= 1000) / " + A.levee.high + " levee points raised >= " + LEVEE_HIGH + " h (need >= 50); ") +
+        "unclimbable carve steps " + A.levee.bad + "/" + A.levee.pairs + (A.levee.ex.length ? " e.g. " + A.levee.ex.join("; ") : "") + "; " + A.levee.per.join("; "));
     LAB.check("caves_geometry: every chunk stamps every cell that queryCaveGeometry over all nearby networks calls cave (no network truncation)",
         A.trunc.want > 0 && A.trunc.miss === 0,
         "[E3; generateChunk consults the 3x3 regions L5341-5350 and an AABB margin of 100 L5353] " +
@@ -682,11 +790,11 @@ if (LAB.loaded) {
         "[D17; the water-zone wall test calls terrainNoise under the wall noise seed L4978-4987] " +
         (A.water.water >= 1000 ? "" : "PRECONDITION: only " + A.water.water + " water cells in chunks -" + D17_R + ".." + D17_R + " (need >= 1000); ") +
         "wall-on-water " + A.water.wall + "/" + A.water.water + " (" + fx(100 * wFrac, 2) + "%); " + A.water.per.join("; "));
-    LAB.check("caves_geometry: normal Endless generates some cave networks with exactly one entrance",
-        A.entCount.nets >= 10 && A.entCount.one > 0,
-        "[D16; L4478 asks for 1 or 2, but rng and rng2 share chunkRng(rx,ry,100) L4465/L4472] " +
-        (A.entCount.nets < 10 ? "PRECONDITION: only " + A.entCount.nets + " networks found (need >= 10); " : "") +
-        A.entCount.one + "/" + A.entCount.nets + " networks have exactly 1 entrance; " + A.entCount.per.join("; "));
+    LAB.check("caves_geometry: normal Endless cave mouths lie on every side of their region centre (some bearing in 180-360 deg)",
+        A.angle.n >= 10 && A.angle.lower > 0,
+        "[D16; entryAngle = rng() * 2 pi is the first draw of chunkRng(rx,ry,100), the stream whose first draw passed the 30% gate rng2() <= 0.30] " +
+        (A.angle.n < 10 ? "PRECONDITION: only " + A.angle.n + " networks (need >= 10); " : "") +
+        A.angle.lower + "/" + A.angle.n + " mouths in 180-360 deg, largest bearing " + fx(A.angle.max * 180 / Math.PI, 1) + " deg; " + A.angle.per.join("; "));
     LAB.metric("caves_geometry.entrances_tested", A.entrancesTested);
     LAB.metric("caves_geometry.entrances_with_open_approach_start", A.open.n);
     LAB.metric("caves_geometry.grid_walls_under_ceiling_total", A.f6, "cells");

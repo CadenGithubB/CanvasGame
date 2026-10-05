@@ -57,18 +57,53 @@ What is checked, and why ANY correct implementation meets the threshold:
                     each chunk, 3x the samples of the same geometry).
   surface seam      the same border-vs-control spike statistic on surfaceH (the
                     open ground, and what every cap is built from) within 300 u
-                    of an entrance, where generateChunk blurs it chunk by chunk.
+                    of an entrance. generateChunk used to blur that ground chunk
+                    by chunk (E2, a per-chunk 3x3 blur that skipped neighbours
+                    outside the chunk); that blur has been deleted and entrance
+                    shaping is now sampled in world space, so this check guards
+                    against chunk-by-chunk surface shaping coming back.
                     Tolerance 0.05 h: a seamless surface puts border lines in
                     the same distribution as control lines; 0.05 h is 2.5x the
-                    largest control spike in any default world (<= 0.020 h with
-                    or without the blur) and under half the smallest border
-                    spike the blur leaves (0.113 h).
+                    largest control spike in any default world (<= 0.020 h) and
+                    under half the smallest border spike the old blur left
+                    (0.113 h). The surface is judged BEFORE the water system's
+                    river carve: carveWaterRivers (06-water.js) reshapes
+                    surfaceH over the whole window after assembly, knows
+                    nothing of chunks, and its levees land on border and control
+                    lines alike (up to 0.49 h). It records every value it
+                    changed in mesh.waterCarveSaved (what _waterRestoreCarve
+                    writes back), and that record put back equals a
+                    water-off rebuild of the same window cell for cell. River
+                    levees are excluded here on purpose and judged by the levee
+                    check. A window that carries river water but no record is
+                    a PRECONDITION, never a pass; a window with no river keeps
+                    no record because nothing was carved. The carved surface's
+                    spikes stay METRICs.
+  river levees      between 4-neighbour single-layer ground points that the
+                    river carve changed, the carved ground never steps more than
+                    STEP_UP 1.0 h where the natural ground (the carve record)
+                    stepped no more than that: the carve must not build a step
+                    the player's picker refuses. Default worlds plus three fixed
+                    windows a seed sweep found to reach the defect (Endless 3 at
+                    (9611,-6196), 777000 at (7954,3843), 8 at (3856,3691));
+                    the fixture must reach >= 1000 carved pairs and >= 50 levee
+                    points raised >= 0.5 h. Each failing pair names the
+                    picker's answer (getWalkableLayerTopAt) for a player
+                    stepping from the low point onto the high one.
   truncation        every mesh cell of every chunk that could hold a network,
                     where queryCaveGeometry asked with every network of the 5x5
                     surrounding regions says "cave" (fade >= 0.05), was stamped
                     by generateChunk (a ceiling, or the floor moved off the
                     pre-stamp surface snapshot). Independent of the ceiling
-                    policy, so a D6 fix does not read as truncation.
+                    policy, so a D6 fix does not read as truncation. The chunks
+                    scanned cover each corridor and chamber (+108 u) and each
+                    entrance's approach footprint (sampleCavePortal's reach:
+                    approachLength out of the mouth, halfWidth + 42 + 48 u
+                    either side). winding-chamber-v1 networks stay inside their
+                    region; only the descending approach reaches 480 u out of
+                    the mouth, into the neighbouring region, so without the
+                    approach box no truncation of a neighbouring region's
+                    network could be seen.
   walls in water    at most 0.25% of water cells carry a grid wall, over chunks
                     -8..8 of every Endless seed. The generator's own rule is
                     "skip walls in water zones" (L4986-4987); its water proxy
@@ -76,16 +111,25 @@ What is checked, and why ANY correct implementation meets the threshold:
                     water rule (cHeights < -3.0 at the mesh corner), so a few
                     boundary cells may disagree -- with the D17 fix applied it is
                     0 of 39,758 today, 0.25% leaves room for that.
-  entrance count    normal Endless asks for 1 or 2 entrances (L4478); over >= 10
-                    networks a correct implementation gives at least one
-                    single-entrance network (P(no 1s) = 0.4^n).
+  mouth bearing     the winding-chamber-v1 recipe fixes the entrance count at 1
+                    (`entrances: [entrance]`), so the old "some networks have
+                    exactly one entrance" contract can no longer fail and is
+                    retired. D16's shared stream (rng2 and rng are both
+                    chunkRng(rx, ry, 100), and a network exists only when the
+                    30% gate draws rng2() <= 0.30) still shows: the first rng()
+                    draw is then <= 0.30 and entryAngle = rng() * 2 pi stays in
+                    [0, 108 deg]. Over >= 10 normal-Endless networks some mouth
+                    must bear 180-360 deg from its region centre (an unbiased
+                    angle misses that half with probability 0.5^n).
 
 METRIC lines (never verdicts): per-world bad counts for the aggregated checks,
 roof start per entrance, caps raised above the natural surface and by how much,
 grid-wall cells under a cave ceiling (F6), cells where queryCaveGeometry gives
 a ceilZ but no ceiling was stamped, interior step maxima, border/control seam
-spikes, how close any network's feather comes to generateChunk's 3x3-region
-reach, and cave rarity in normal Endless.
+spikes (of the surface before and after the river carve), points the carve
+moved, levee steps per window, how close any network's feather comes to
+generateChunk's 3x3-region reach, networks without exactly one entrance, and
+cave rarity in normal Endless.
 
 Checks with no probe of their own: none -- every check below is flipped by at
 least one probe in PROBES.
@@ -141,6 +185,12 @@ C_SURF = _P + "chunk borders add no seam to the ground surface within 300 u of a
 C_TRUNC = (_P + "every chunk stamps every cell that queryCaveGeometry over all nearby networks calls cave "
            "(no network truncation)")
 C_WATER = _P + "no more than 0.25% of water cells carry a grid wall"
+C_LEVEE = (_P + "river carving never leaves a step the player cannot climb (STEP_UP 1.0 h) between neighbouring "
+           "open ground points where the natural ground had none")
+C_ANGLE = _P + "normal Endless cave mouths lie on every side of their region centre (some bearing in 180-360 deg)"
+# Retired: winding-chamber-v1 always builds one entrance, so this contract can
+# no longer fail. Its id is kept only to key the audit history below; D16 is
+# now judged by C_ANGLE.
 C_ENTCOUNT = _P + "normal Endless generates some cave networks with exactly one entrance"
 
 AUDIT_KNOWN_BUGS: dict[str, tuple[str, str]] = {
@@ -237,105 +287,206 @@ AUDIT_KNOWN_BUGS: dict[str, tuple[str, str]] = {
 # Preserve the original investigation explanations/probe history above, but
 # repaired cave contracts must now pass rather than becoming expected failures.
 # The unrelated surface-water seed bug remains outside this cave milestone.
-KNOWN_BUGS = {C_WATER: AUDIT_KNOWN_BUGS[C_WATER]}
+# The FIX probes for contracts the cave milestone repaired (C table, D2, D6,
+# N14, D1, E4 and the E2 surface blur) passed vacuously once the repair
+# shipped; they are now BREAK probes that put each defect back.
+KNOWN_BUGS = {
+    C_WATER: AUDIT_KNOWN_BUGS[C_WATER],
+    C_LEVEE: (
+        "river levees (06-water.js carveWaterRivers, added with the water system): the carve can "
+        "raise a levee point by up to WATER_MAX_FILL (1.0 h) next to a point it leaves almost "
+        "unchanged, which makes a step taller than STEP_UP 1.0 that the game's own picker refuses "
+        "(getWalkableLayerTopAt answers 'blocked'). Two mechanisms: (a) the levee rises beside ground "
+        "_waterCarvable refuses to shape, which keeps its height; (b) the levee falls back over "
+        "WATER_LEVEE_FALL = 18 u, 1.5 height-grid steps. Endless 3 window (9611,-6196): "
+        "(10278,-6138)->(10278,-6150) 0.989->2.096, natural 0.989->1.217 (the low point is not "
+        "carvable), plus two more pairs; Endless 777000 (7954,3843): (8370,2658)->(8358,2658) "
+        "3.220->4.231, natural 3.220->3.313; Endless 8 (3856,3691): (2622,2358)->(2610,2358) "
+        "2.679->3.709, natural 2.599->2.791. The largest carve-made step in the seven default worlds is "
+        "0.933 h (Cave Test 12345), so they never reach it. "
+        "FIX C (cap a carved point at its lowest natural 4-neighbour + 0.75) and FIX B "
+        "(WATER_MAX_FILL 0.6) pass it; a 36 u levee fall alone still fails on mechanism (a)",
+        r"unclimbable carve steps [1-9]\d*/\d+ e\.g\. n\d+@\S+ \([-\d]+,[-\d]+\)->\([-\d]+,[-\d]+\) "
+        r"\S+->\S+ \(natural \S+->\S+, picker blocked\)"),
+    C_ANGLE: (
+        "audit D16, current symptom: rng2 and rng are both chunkRng(regionX, regionY, 100) in "
+        "generateCaveNetwork, so a network exists only when the shared stream's first draw is "
+        "<= 0.30, and entryAngle = rng() * 2 pi then reuses that draw: every mouth bears 0-108 deg "
+        "from its region centre. 0 of 35 networks within 12 regions of spawn on seeds 424242, "
+        "999983 and 123 bear 180-360 deg (largest 106.2 deg); 106 of 106 over ten seeds sit in "
+        "octants 0-2. Drawing rng2 from stream 101 passes it",
+        r"\b0/[1-9]\d* mouths in 180-360 deg"),
+}
 
 # ── probe anchors (each must occur exactly once in the extracted game JS) ──
+# The cave milestone (already in the 0.0 snapshot) repaired the C table, D1,
+# D2, D6, N14, E4 and the E2 surface blur, so the old FIX probes' anchors are
+# gone and the checks pass on their own. Each of those risks is now covered by
+# a BREAK probe that puts the defect back into the current code.
 _CEIL = "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }"
-_LERP = "cHeights[cmIdx] = _surfH * (1 - cg.fade) + cg.caveFloorZ * cg.fade;"
-_RELAX = "if (_wsldx * _wsldx + _wsldy * _wsldy < 260 * 260) { STEP_DOWN = 10.0; break; }"
-# D1/N14: each entrance carries its tree's depth (the approach reads e.depth,
-# L4741) and the second tree reuses the first tree's depth (rng() still drawn).
-_TREE_DEPTH = ("depth: 6.0 + rng() * 2.5,   // 6.0-8.5 height units deep",
-               "depth: (ent.depth = (si === 0 ? (_hw1D0 = 6.0 + rng() * 2.5) : (rng(), _hw1D0))),   // 6.0-8.5 height units deep")
-_NO_APPROACH_CEIL = ("ceilZ: ceilZ,", "ceilZ: (approachFade > 0 ? null : ceilZ),")
+_FLOOR = "        cHeights[cmIdx] = cg.floorH;"
+_APPROACH_CEIL = "    surfaceH: surface, ceilZ: null, covered: false, portal: e,"
+# D6: the feather floor lerps toward the surface (it can end above the
+# ceiling) instead of bevelling toward the roof.
+_D6 = ("var floor = best.floor + Math.max(0, ceiling - best.floor) * (1 - bestFade);",
+       "var floor = best.floor + (surface - best.floor) * (1 - bestFade);")
+# getFloorHeightAt's pre-milestone rule: report layer 0, whatever it is.
+_GFH_L0 = ("      if (type === 1 || type === 3 || type === 4) lowest = Math.min(lowest, meshLayerHeight(mesh, cellIndex, li));",
+           "      if (li === 0) lowest = Math.min(lowest, meshLayerHeight(mesh, cellIndex, li));")
+_SORT = ("while (sj >= 0 && layerTmpZ[sj] > vz) {", "while (false) {")
+_CAPSRC = "capH[iN] = needsCap[iN] ? floorMesh.surfaceH[iN] : fhN;"
+_CLAMP = "if (capH[iC] < cz + 0.25) capH[iC] = cz + 0.25;"
+_AXIAL = "var axial = along > 0 ? 1 - caveSmooth01(along / outer) : 1;"
+_TARGET = "var target = typeof e.floorH === 'number' ? e.floorH : -e.depth;"
+_WALLCARVE = "wallCarve: ceiling - floor >= 3.0 && floor - best.floor <= 0.75, source: best.source};"
+_SPREAD = ("            if (_cellFloorMax - _cellFloorMin > 0.75) _cellWalkable = false;\n", "")
+_NO_BLUR = ("  // Entrance shaping is sampled in world space below. Do not blur chunks\n"
+            "  // independently: truncated kernels at chunk edges created floor seams.\n")
+# E2 as it was: three passes of a 3x3 box blur of the chunk's own heights at
+# mesh points within 300 u of an entrance, skipping neighbours outside the chunk.
+_BLUR = (_NO_BLUR +
+         "  for (var _bIt = 0; _bIt < 3; _bIt++) {\n"
+         "    var _bSrc = new Float32Array(cHeights);\n"
+         "    for (var _by = 0; _by < meshH; _by++) for (var _bx = 0; _bx < meshW; _bx++) {\n"
+         "      var _bwx = cx * CHUNK_SIZE + _bx * meshGridSize, _bwy = cy * CHUNK_SIZE + _by * meshGridSize, _bNear = false;\n"
+         "      for (var _be = 0; _be < cCaveEntrances.length; _be++) if (Math.hypot(_bwx - cCaveEntrances[_be].x, _bwy - cCaveEntrances[_be].y) < 300) _bNear = true;\n"
+         "      if (!_bNear) continue;\n"
+         "      var _bs = 0, _bn = 0;\n"
+         "      for (var _bdy = -1; _bdy <= 1; _bdy++) for (var _bdx = -1; _bdx <= 1; _bdx++) {\n"
+         "        var _bnx = _bx + _bdx, _bny = _by + _bdy;\n"
+         "        if (_bnx < 0 || _bny < 0 || _bnx >= meshW || _bny >= meshH) continue;\n"
+         "        _bs += _bSrc[_bny * meshW + _bnx]; _bn++;\n"
+         "      }\n"
+         "      cHeights[_by * meshW + _bx] = _bs / _bn;\n"
+         "    }\n"
+         "  }\n")
+_LEVEE_CLAMP = "      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;\n"
 
 PROBES: list = [
-    # ── FIX probes: remove the audited cause, the check must go PASS ──
-    ("FIX C-table: shrink queryCaveGeometry's mouth to the 30 u cap hole",
-     "var MOUTH_RADIUS = 60;", "var MOUTH_RADIUS = 30;",
-     {C_MOUTH: "PASS"}),
-    ("FIX C-table, the other direction: grow the cap hole to the 60 u mouth (the check prescribes neither)",
-     "var CAP_EXCL_SQ = 30 * 30;", "var CAP_EXCL_SQ = 60 * 60;",
-     {C_MOUTH: "PASS"}),
+    # ── the roof footprint (C table) ──
+    ("BREAK mouth: no ceiling on the covered side within 24 u of the portal plane (a second mouth exclusion)",
+     _CEIL, _CEIL.replace("cg.ceilZ !== null)", "cg.ceilZ !== null && !cg.isEntrance)"),
+     {C_MOUTH: "FAIL", C_ROOF: "PASS"}),
+    ("BREAK mouth, the other direction: a roof 30 u out over the approach (inside the 40 u roof tolerance, "
+     "so the footprint contract is stricter than the roof-start check)",
+     _APPROACH_CEIL, _APPROACH_CEIL.replace("ceilZ: null,", "ceilZ: (approach.along < 30 ? target + e.ceilH : null),"),
+     {C_MOUTH: "FAIL", C_ROOF: "PASS"}),
+    # ── D16 ──
     ("FIX D16: draw the 30% cave gate from its own RNG stream",
      "var rng2 = chunkRng(regionX, regionY, 100);", "var rng2 = chunkRng(regionX, regionY, 101);",
-     {C_ENTCOUNT: "PASS"}),
-    ("FIX D6: stamp a ceiling only where it is above the lerped floor (truncation must stay PASS: "
-     "that check does not assume the ceiling policy)",
-     _CEIL,
-     "if (cg.ceilZ !== null && cg.ceilZ > cHeights[cmIdx]) { cCaveCeilH[cmIdx] = cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }",
-     {C_LOWEST: "PASS", C_GFH: "PASS", C_TRUNC: "PASS"}),
-    ("FIX D6 isolation: getFloorHeightAt returns the lowest non-ceiling layer (stacks untouched)",
-     "var v = mesh.l0TopZ[gridY * mesh.w + gridX];",
-     "var _gi = gridY * mesh.w + gridX, _gZ = [mesh.l0TopZ, mesh.l1TopZ, mesh.l2TopZ, mesh.l3TopZ, mesh.l4TopZ], "
-     "_gT = [mesh.l0Type, mesh.l1Type, mesh.l2Type, mesh.l3Type, mesh.l4Type]; var v = mesh.l0TopZ[_gi]; "
-     "for (var _gl = 0; _gl < mesh.layerCount[_gi]; _gl++) { if (_gT[_gl][_gi] !== 2) { v = _gZ[_gl][_gi]; break; } }",
-     {C_GFH: "PASS", C_LOWEST: "FAIL"}),
-    ("FIX D2 (causal): the ceiling rides the lerped floor at the record's own headroom",
-     _CEIL,
-     "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cHeights[cmIdx] + (cg.ceilZ - cg.caveFloorZ); cCaveHasCeil[cmIdx] = 1; }",
-     {C_HEAD: "PASS", C_LOWEST: "PASS", C_GFH: "PASS", C_TRUNC: "PASS"}),
-    ("FIX D2 (roof): no ceiling where the approach cone reaches (open trench up to the arch)",
-     *_NO_APPROACH_CEIL,
-     {C_ROOF: "PASS"}),
-    ("FIX interior (N14 + feather): both entrance trees share one depth, and a ceiling only in the flat core",
-     [_TREE_DEPTH,
-      (_CEIL, "if (cg.ceilZ !== null && cg.fade >= 0.999) { cCaveCeilH[cmIdx] = cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }")],
-     None,
-     {C_INTERIOR: "PASS", C_HEAD: "PASS", C_LOWEST: "PASS", C_GFH: "PASS", C_E4: "PASS", C_TRUNC: "PASS"}),
-    ("FIX N14: the STEP_DOWN relaxation radius covers the 480 u approach",
-     _RELAX, _RELAX.replace("260 * 260", "500 * 500"),
-     {C_IN: "PASS"}),
-    ("FIX D1 + steep feather + D2 on the approach (three sites, each a documented cause): entrances "
-     "carry their tree's depth and both trees share it; inside its cone the approach ramp's fade "
-     "governs the floor (a linear ramp, not the feather's smoothstep); no ceiling over the cone",
-     [_TREE_DEPTH,
-      ("    if (approachFade > bestFade) combinedFade = approachFade;",
-       "    if (approachFade > 0) combinedFade = approachFade;"),
-      _NO_APPROACH_CEIL],
-     None,
-     {C_STEP: "PASS", C_IN: "PASS", C_OUT: "PASS", C_ROOF: "PASS"}),
-    ("FIX E4: the depth gate uses the cell's own pre-stamp surface, not the 21x21 max",
-     "var cg = queryCaveGeometry(cmwx, cmwy, cCaveNets, _smoothSurf);",
-     "var cg = queryCaveGeometry(cmwx, cmwy, cCaveNets, cSurfaceH[cmIdx]);",
-     {C_E4: "PASS"}),
-    ("FIX E2-surface: no per-chunk entrance blur (demonstrates the mechanism; a real fix blurs a padded buffer)",
-     "for (var _smrIt = 0; _smrIt < 3; _smrIt++) {", "for (var _smrIt = 0; _smrIt < 0; _smrIt++) {",
+     {C_ANGLE: "PASS"}),
+    # ── D6 / D2 headroom ──
+    ("BREAK D6: the feather floor lerps toward the surface (above the ceiling); getFloorHeightAt's walkable "
+     "filter still holds",
+     *_D6,
+     {C_LOWEST: "FAIL", C_GFH: "PASS"}),
+    ("BREAK D6 + getFloorHeightAt returns l0 again (its pre-milestone rule): both the stacks and the query fail",
+     [_D6, _GFH_L0], None,
+     {C_GFH: "FAIL", C_LOWEST: "FAIL"}),
+    ("CONTROL: getFloorHeightAt returns l0 again with correct stacks (l0 is then the floor)",
+     *_GFH_L0,
+     {C_GFH: "PASS"}),
+    ("BREAK D2 headroom: the ceiling sits 2.0 h above the stamped floor",
+     _CEIL, "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.floorH + 2.0; cCaveHasCeil[cmIdx] = 1; }",
+     {C_HEAD: "FAIL", C_LOWEST: "PASS", C_CAP: "PASS"}),
+    # ── D2 roof ──
+    ("BREAK D2 roof: the roof reaches 120 u out over the approach",
+     _APPROACH_CEIL, _APPROACH_CEIL.replace("ceilZ: null,", "ceilZ: (approach.along < 120 ? target + e.ceilH : null),"),
+     {C_ROOF: "FAIL", C_MOUTH: "FAIL"}),
+    # ── interior ──
+    ("BREAK interior: bevel cells carved open and the corner-spread wall rule gone (caves laterally open again; "
+     "either site alone is masked by the other)",
+     [(_WALLCARVE, "wallCarve: true, source: best.source};"), _SPREAD], None,
+     {C_INTERIOR: "FAIL", C_HEAD: "FAIL"}),
+    # ── N14 / steep feather and D1 on the approach ──
+    ("BREAK N14/steep feather: the approach ramp descends over 15% of its length",
+     _AXIAL, _AXIAL.replace("along / outer", "along / (outer * 0.15)"),
+     {C_STEP: "FAIL", C_IN: "FAIL", C_OUT: "FAIL"}),
+    ("BREAK D1: the approach ramp targets 1.5 h above the cave floor",
+     _TARGET, "var target = (typeof e.floorH === 'number' ? e.floorH : -e.depth) + 1.5;",
+     {C_STEP: "FAIL", C_IN: "FAIL", C_OUT: "FAIL"}),
+    # ── E4 ──
+    ("BREAK E4: the cap clamp lifts every cap to 3.0 h above its ceiling",
+     _CLAMP, "if (capH[iC] < cz + 3.0) capH[iC] = cz + 3.0;",
+     {C_E4: "FAIL", C_CAP: "PASS"}),
+    # ── E2 in the surface, and the river carve record it reads ──
+    ("BREAK E2-surface: the per-chunk 3x3 entrance blur that skips neighbours outside the chunk, put back",
+     _NO_BLUR, _BLUR,
+     {C_SURF: "FAIL"}),
+    ("BREAK surface seam: every odd chunk column's pre-stamp surface 0.1 h higher",
+     _NO_BLUR, _NO_BLUR + "  for (var _sk = 0; _sk < cHeights.length; _sk++) cHeights[_sk] += (cx & 1) ? 0.1 : 0;\n",
+     {C_SURF: "FAIL"}),
+    ("CONTROL surface seam: the same offset at 0.03 h (inside the 0.05 h tolerance)",
+     _NO_BLUR, _NO_BLUR + "  for (var _sk = 0; _sk < cHeights.length; _sk++) cHeights[_sk] += (cx & 1) ? 0.03 : 0;\n",
      {C_SURF: "PASS"}),
+    ("GUARD: the river carve keeps no record of the ground it changed",
+     "  var carved = 0, saved = mesh.waterCarveSaved = {};", "  var carved = 0, saved = {};",
+     {C_SURF: "PRECONDITION", C_LEVEE: "PRECONDITION"}),
+    ("CONTROL: water system off (no carve): the surface verdict is unchanged, the levee check has no subjects",
+     "var WATER_SYSTEM_ENABLED = true;", "var WATER_SYSTEM_ENABLED = false;",
+     {C_SURF: "PASS", C_LEVEE: "PRECONDITION"}),
+    # ── river levees ──
+    ("FIX levee C: no carved point rises more than 0.75 h above a 4-neighbour's natural ground",
+     _LEVEE_CLAMP,
+     _LEVEE_CLAMP +
+     "      var _lvN = Infinity; [q - 1, q + 1, q - w, q + w].forEach(function (o) { var z = o in saved ? saved[o] : H[o]; if (z === z && z < _lvN) _lvN = z; });\n"
+     "      if (ground > H[q] && ground > _lvN + 0.75) ground = Math.max(H[q], _lvN + 0.75);\n",
+     {C_LEVEE: "PASS"}),
+    ("FIX levee B: carving raises ground at most 0.6 h",
+     "var WATER_MAX_FILL = 1.0, WATER_MAX_CUT = 1.0;", "var WATER_MAX_FILL = 0.6, WATER_MAX_CUT = 1.0;",
+     {C_LEVEE: "PASS"}),
+    ("PARTIAL FIX levee A (mechanism witness): a 36 u levee fall alone still leaves the steps beside ground "
+     "_waterCarvable refuses to shape",
+     "var WATER_LEVEE_FALL = 18;", "var WATER_LEVEE_FALL = 36;",
+     {C_LEVEE: "FAIL"}),
     ("FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
      "var wallTerrain = terrainNoise(wx, wy) + (geographyNoise(wx, wy) - 0.5) * 8.0;",
      "var _hw1Ws = noiseSeed; noiseSeed = oldSeed; var wallTerrain = terrainNoise(wx, wy) + "
      "(geographyNoise(wx, wy) - 0.5) * 8.0; noiseSeed = _hw1Ws;",
      {C_WATER: "PASS"}),
-    # ── BREAK probes: inject a bug, a passing check must go FAIL ──
-    ("BREAK: skip the cap insertion sort in assembleWindow (also shows D6's mechanism: "
-     "without the re-sort l0 stays the floor and getFloorHeightAt passes)",
-     "while (sj >= 0 && layerTmpZ[sj] > vz) {", "while (false) {",
+    # ── layer stacks and caps ──
+    ("BREAK D6 + skip the cap insertion sort: stacks stay unsorted and l0 stays the floor (the cap is always "
+     "appended last and highest, so the sort binds only once D6 puts a ceiling under the floor)",
+     [_D6, _SORT], None,
      {C_SORTED: "FAIL", C_GFH: "PASS"}),
-    ("BREAK: drop the cap >= ceiling + 0.25 clamp (and with it E4's lift)",
-     "if (capH[iC] < cz + 0.25) capH[iC] = cz + 0.25;", "",
-     {C_CAP: "FAIL", C_E4: "PASS"}),
-    ("BREAK: raise every chunk's west column of stamped cave floor by 1 h (a seam)",
-     _LERP, _LERP.replace("cg.fade;", "cg.fade + (cmx === 0 ? 1.0 : 0);"),
+    ("BREAK: the cap is built from the cave floor and the clamp that lifts it above the ceiling is gone",
+     [(_CAPSRC, "capH[iN] = needsCap[iN] ? fhN : fhN;"), (_CLAMP, "")], None,
+     {C_CAP: "FAIL"}),
+    ("CONTROL: the cap is built from the cave floor but the clamp still lifts it above the ceiling",
+     _CAPSRC, "capH[iN] = needsCap[iN] ? fhN : fhN;",
+     {C_CAP: "PASS"}),
+    # ── chunk seams in the cave floor ──
+    ("BREAK: every odd chunk column's stamped cave floor 1 h higher (a seam)",
+     _FLOOR, _FLOOR.replace("cg.floorH;", "cg.floorH + ((cx & 1) ? 1.0 : 0);"),
      {C_SEAM: "FAIL"}),
     ("BREAK sensitivity: the same seam at 0.4 h",
-     _LERP, _LERP.replace("cg.fade;", "cg.fade + (cmx === 0 ? 0.4 : 0);"),
+     _FLOOR, _FLOOR.replace("cg.floorH;", "cg.floorH + ((cx & 1) ? 0.4 : 0);"),
      {C_SEAM: "FAIL"}),
+    # ── truncation ──
     ("BREAK: generateChunk consults only its own row of cave regions",
      "for (var cvdy = -1; cvdy <= 1; cvdy++) {", "for (var cvdy = 0; cvdy <= 0; cvdy++) {",
+     {C_TRUNC: "FAIL"}),
+    ("BREAK: generateChunk consults only its own column of cave regions",
+     "for (var cvdx = -1; cvdx <= 1; cvdx++) {", "for (var cvdx = 0; cvdx <= 0; cvdx++) {",
+     {C_TRUNC: "FAIL"}),
+    ("BREAK: generateChunk's entrance reach 0 (approach chunks in the next region miss the network)",
+     "var entReach = ENTRANCE_ZONE_REACH;", "var entReach = 0;",
      {C_TRUNC: "FAIL"}),
     ("BREAK: generateChunk's network AABB margin 100 -> 0 (cuts corridor and chamber feathers at chunk lines)",
      "var margin = 100; // generous margin", "var margin = 0; // generous margin",
      {C_TRUNC: "FAIL"}),
-    ("BREAK precondition: no cave entrances at all (RNG draw kept) -- nothing may pass vacuously",
-     "var numEntrances = rng() < 0.4 ? 2 : 1;", "var numEntrances = (rng(), 0);",
-     {C_WORLD: "FAIL", C_SORTED: "FAIL", C_CAP: "FAIL", C_SEAM: "FAIL", C_TRUNC: "FAIL"}),
+    # ── preconditions and load ──
+    ("BREAK precondition: no cave networks at all -- nothing may pass vacuously",
+     "  var rng = chunkRng(regionX, regionY, 100);\n  var entryAngle",
+     "  endlessCaveNetworks[netKey] = null; return null;\n  var rng = chunkRng(regionX, regionY, 100);\n  var entryAngle",
+     {C_WORLD: "FAIL", C_SORTED: "PRECONDITION", C_CAP: "PRECONDITION", C_SEAM: "PRECONDITION",
+      C_TRUNC: "PRECONDITION", C_SURF: "PRECONDITION", C_ANGLE: "PRECONDITION"}),
     ("BREAK: the page throws while loading",
      "function resetEndlessMode() {", "throw new Error('probe: page fails to load'); function resetEndlessMode() {",
      {C_LOAD: "FAIL"}),
 ]
 
-CavesGeometrySuite = suite_testcase("caves_geometry", KNOWN_BUGS, min_checks=19)
+CavesGeometrySuite = suite_testcase("caves_geometry", KNOWN_BUGS, min_checks=20)
 CavesGeometryProbes = probe_testcase("caves_geometry", PROBES)
 
 if __name__ == "__main__":
