@@ -160,8 +160,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
                 r"ct31337/E0: [1-9]\d*/\d+ bad landings"),
 }
 
-# (description, anchor, replacement, {check id: "PASS" | "FAIL"}). Anchors occur
-# exactly once in game_lab.game_js(); every probe was run and seen to flip.
+# (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"}).
+# Anchors occur exactly once in game_lab.game_js(); every probe was run in the
+# October 2026 refresh and seen to flip exactly the checks it declares.
 _CEIL_CLAMP = (
     "    var _pz0 = pos.floorZ || 60;\n"
     "    pos.floorZ = (pos.floorZ || 60) + jumpVelZ * dt;\n"
@@ -239,116 +240,124 @@ _CONTAIN_FAST_FIX = (
     "  }\n"
     "  // DEBUG: log wall collision details periodically")
 
-PROBES: list[tuple[str, str, str, dict[str, str]]] = [
-    # ── FIX probes: remove the audited cause, the check must go PASS ──
-    ("FIX D10: run the underground test even with the day/night cycle disabled",
-     "  if (!settings.dayNight) {\n    // Cycle disabled",
-     "  if (false) {\n    // Cycle disabled",
-     {DAYNIGHT: "PASS"}),
-    ("FIX D13: stand the Cave Test spawn on the top walkable layer of its cell",
-     "      cam.ang = _ctE.angle; // face into the cave",
-     "      cam.ang = _ctE.angle; // face into the cave\n"
-     "      pos.floorZ = 60 + 40 * getWalkableLayerTopAt(pos.x, pos.y, 1e6).topH;",
-     {SPAWN_LAYER: "PASS", SPAWN_AIR: "PASS"}),
-    ("FIX D12: start an edge-fall only when the picker found no walkable layer in step range",
-     "    if (pos.floorZ > groundZ2 + 3) {",
-     "    if ((!walk_e || walk_e.idx < 0) && pos.floorZ > groundZ2 + 3) {",
-     {WALK_AIR: "PASS"}),
-    ("FIX D3: cap the entrance mouth too (no CAP_EXCL hole), so 'underground' has no gap",
-     "  var CAP_EXCL_SQ = 30 * 30;",
-     "  var CAP_EXCL_SQ = 0;",
-     {WALK_UG: "PASS", WALK_AMB: "PASS", CAP_DROP: "PASS"}),
-    ("FIX U6/D3 (step): rate-limit ambient, sun and fog instead of switching them in one tick",
-     "  // Pre-compute shade per wall normal direction (4 values, reused for all faces)",
-     "  if (typeof __hw1pa === 'number') {\n"
-     "    ambientLight = Math.max(__hw1pa - 0.1, Math.min(__hw1pa + 0.1, ambientLight));\n"
-     "    sunIntensity = Math.max(__hw1ps - 0.1, Math.min(__hw1ps + 0.1, sunIntensity));\n"
-     "    fogFloor = Math.max(__hw1pf - 0.025, Math.min(__hw1pf + 0.025, fogFloor));\n"
-     "  }\n"
-     "  __hw1pa = ambientLight; __hw1ps = sunIntensity; __hw1pf = fogFloor;\n"
-     "  // Pre-compute shade per wall normal direction (4 values, reused for all faces)",
-     {WALK_AMB_STEP: "PASS", WALK_SUN_FOG: "PASS"}),
-    ("FIX N3: make ceilings solid to both the rising integrator and the landing/floor picker",
-     [("    pos.floorZ = (pos.floorZ || 60) + jumpVelZ * dt;", _CEIL_CLAMP),
-      ("    if (t !== 1 && t !== 3 && t !== 4) continue;\n    // No ceiling-reachability check",
-       "    if (t === 2 && z > playerH) break;\n"
-       "    if (t !== 1 && t !== 3 && t !== 4) continue;\n    // No ceiling-reachability check")],
+# The constants above are the frozen audit's FIX texts for the pre-milestone
+# code; their anchors no longer exist and no probe below uses them.
+#
+# The first playable cave milestone (already in the 0.0 snapshot) repaired
+# D3, D9, D10, D12, D13, E4, N3, N5 and U6, so their old FIX probes either
+# lost their anchors or passed whether or not the fix was applied. Each is now
+# a BREAK probe that puts the defect back into the current code; G3 (DITHER)
+# is still a known bug and keeps its FIX probe.
+_WALK_EASE = "      pos.floorZ = meshHeightToPlayerZ(playerH_t) + zDiff * (1 - Math.pow(0.7, dt * 60));"
+_STEP_START = "function step(dt) {\n  updatePlayerCaveSpace();"
+_CAVE_SPACE = "function updatePlayerCaveSpace() {"
+_MOUTH_BAND = (
+    "function __hw1Mouth(x, y) { for (var __q = 0; __q < deepCaveEntrances.length; __q++) { "
+    "var __E = deepCaveEntrances[__q], __dx = x - __E.x, __dy = y - __E.y, "
+    "__al = -__dx * Math.cos(__E.angle) - __dy * Math.sin(__E.angle), "
+    "__pp = Math.abs(__dx * Math.sin(__E.angle) - __dy * Math.cos(__E.angle)); "
+    "if (__al < -50 && __al > -80 && __pp < 40) return true; } return false; } ")
+
+PROBES: list = [
+    ("BREAK D10: with the cycle disabled neither updateDayNight nor step reclassifies playerUnderground",
+     [("    ambientLight = 0.9; sunIntensity = 0.6; fogFloor = 0.3;\n    sunDirX = 0; sunDirZ = 1;",
+       "    ambientLight = 0.9; sunIntensity = 0.6; fogFloor = 0.3;\n    sunDirX = 0; sunDirZ = 1; return;"),
+      ("  playerUnderground = getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground;",
+       "  if (settings.dayNight) playerUnderground = getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground;")],
      None,
-     {JUMP_SOLID: "PASS", JUMP_LAND: "PASS"}),
-    # ── BREAK probes: inject a bug, a passing check must go FAIL ──
+     {DAYNIGHT: "FAIL"}),
+    ("BREAK D13: leave the Cave Test spawn at h=0 instead of on its cell's walkable layer",
+     "  settlePlayerAtSpawn(!CAVE_TEST_MODE);",
+     "  settlePlayerAtSpawn(!CAVE_TEST_MODE); if (CAVE_TEST_MODE) pos.floorZ = 60;",
+     {SPAWN_LAYER: "FAIL", SPAWN_AIR: "FAIL"}),
+    ("BREAK D12: start an edge-fall whenever the feet are 0.075 h above a walkable layer in step range",
+     "      fallingOffEdge = walk_e.action === 'fall';",
+     "      fallingOffEdge = walk_e.action === 'fall' || (walk_e.action === 'walk' && getPlayerFloorH() > walk_e.topH + 0.075);",
+     {WALK_AIR: "FAIL"}),
+    ("BREAK D3: classify a band 50-80 u inside each entrance as outdoors (a hole in 'underground' past the mouth)",
+     [(_CAVE_SPACE, _MOUTH_BAND + _CAVE_SPACE),
+      ("  playerUnderground = getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground;",
+       "  playerUnderground = getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground && !__hw1Mouth(pos.x, pos.y);"),
+      ("    playerUnderground = !!getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground;",
+       "    playerUnderground = !!getCaveSpaceAt(pos.x, pos.y, getPlayerFloorH()).underground && !__hw1Mouth(pos.x, pos.y);")],
+     None,
+     {WALK_UG: "FAIL", WALK_AMB: "FAIL"}),
+    ("BREAK U6/D3 (step): switch the camera cave blend 0->1 on the playerUnderground flip",
+     "  renderCameraCaveBlend = getPortalRenderBlendAt(pos.x, pos.y, playerUnderground);",
+     "  renderCameraCaveBlend = playerUnderground ? 1 : 0;",
+     {WALK_AMB_STEP: "FAIL", WALK_SUN_FOG: "FAIL"}),
+    ("BREAK N3: drop the ceiling clamp from the rising airborne integrator (the landing half is probe 06)",
+     "      if (jumpVelZ > 0 && getPlayerFloorH() + PLAYER_BODY_H > ceiling_j) {",
+     "      if (false) {",
+     {JUMP_SOLID: "FAIL"}),
     ("BREAK: land every jump on the highest walkable layer below h+50 (the cap)",
-     "      var walk_j = getWalkableLayerTopAt(pos.x, pos.y, playerH_j);",
-     "      var walk_j = getWalkableLayerTopAt(pos.x, pos.y, playerH_j + 50);",
-     {JUMP_LAND: "FAIL", WALK_REACH: "FAIL"}),
+     "      var walk_j = getWalkableLayerTopAt(pos.x, pos.y, previousH, {stepUp: 0});",
+     "      var walk_j = getWalkableLayerTopAt(pos.x, pos.y, previousH + 50, {stepUp: 0});",
+     {JUMP_LAND: "FAIL", JUMP_SOLID: "FAIL"}),
     ("BREAK: rebase pos.x by 99% of the window shift (player skips ~5 u forward)",
      "    pos.x -= shiftX;",
      "    pos.x -= shiftX * 0.99;",
      {SHIFT_POS: "FAIL"}),
-    ("BREAK: reset the player's height to h=0 on every window re-centre",
+    ("BREAK: reset an underground player's height to h=0 on every window re-centre",
      "    pos.x -= shiftX;",
-     "    pos.x -= shiftX; pos.floorZ = 60;",
+     "    pos.x -= shiftX; if (playerUnderground) pos.floorZ = 60;",
      {SHIFT_H: "FAIL"}),
-    ("BREAK: toggle playerUnderground inside assembleWindow's rebase",
-     "    pos.x -= shiftX;",
-     "    pos.x -= shiftX; playerUnderground = !playerUnderground;",
+    ("BREAK: invert playerUnderground for the tick that re-centred the window (after its post-move classification)",
+     [(_CAVE_SPACE, "var __hw1Flick = false; " + _CAVE_SPACE),
+      ("    pos.x -= shiftX;", "    pos.x -= shiftX; __hw1Flick = true;"),
+      ("  updatePlayerCaveSpace();\n\n  // Death check",
+       "  updatePlayerCaveSpace();\n  if (__hw1Flick) { __hw1Flick = false; playerUnderground = !playerUnderground; }\n\n  // Death check")],
+     None,
      {SHIFT_UG: "FAIL"}),
     ("BREAK: make the surface-cap height depend on the window origin",
      "    capH[iN] = needsCap[iN] ? floorMesh.surfaceH[iN] : fhN;",
      "    capH[iN] = needsCap[iN] ? floorMesh.surfaceH[iN] + (windowOriginX + windowOriginY) / 480 : fhN;",
-     {SHIFT_STACK: "FAIL", WALK_SUNK: "FAIL"}),
+     {SHIFT_STACK: "FAIL"}),
     ("BREAK: make resetEndlessMode a syntax error (load diagnostics stay one line)",
-     "function resetEndlessMode() {\n  ENDLESS_MODE = true;",
-     "function resetEndlessMode() {\n  ENDLESS_MODE = true; )",
+     "function resetEndlessMode() {",
+     "function resetEndlessMode() { )",
      {LOAD: "FAIL"}),
-    ("BREAK: land a short edge-fall 1.25 h inside its floor",
-     "pos.floorZ = groundZ;",
-     "pos.floorZ = groundZ - (jumpVelZ > -200 ? 50 : 0);",
+    ("BREAK: sink the player 1.25 h into the floor for the first underground tick of each stretch",
+     [(_CAVE_SPACE, "var __hw1Sank = 0; " + _CAVE_SPACE),
+      (_STEP_START, "function step(dt) {\n  if (__hw1Sank === 1) { pos.floorZ += 50; __hw1Sank = 2; }\n  updatePlayerCaveSpace();"),
+      (_WALK_EASE, _WALK_EASE + "\n      if (!playerUnderground) __hw1Sank = 0; else if (__hw1Sank === 0) { __hw1Sank = 1; pos.floorZ -= 50; }")],
+     None,
      {WALK_SUNK: "FAIL"}),
-    ("BREAK re-centre: lift every layer by 3 h in odd-X windows",
+    ("BREAK re-centre: lift every layer by 3 h in odd-X windows (the picker holds the player inside the lifted floor)",
      "          floorMesh.l4TopZ[ti] = cmesh.l4TopZ[si]; floorMesh.l4Type[ti] = cmesh.l4Type[si]; floorMesh.l4Color[ti] = cmesh.l4Color[si];",
      "          floorMesh.l4TopZ[ti] = cmesh.l4TopZ[si]; floorMesh.l4Type[ti] = cmesh.l4Type[si]; floorMesh.l4Color[ti] = cmesh.l4Color[si];\n"
      "          if (Math.round(windowOriginX / CHUNK_SIZE) & 1) { floorMesh.l0TopZ[ti] += 3; floorMesh.l1TopZ[ti] += 3; floorMesh.l2TopZ[ti] += 3; floorMesh.l3TopZ[ti] += 3; floorMesh.l4TopZ[ti] += 3; floorMesh.surfaceH[ti] += 3; }",
-     {SHIFT_STACK: "FAIL", SHIFT_H: "FAIL", SHIFT_UG: "FAIL"}),
-    ("FIX N5: reset airborne state when a new Endless world starts",
-     "  // Clear all state\n  walls = [];",
-     "  // Clear all state\n  jumpAirborne = false; jumpVelZ = 0; jumpPressed = false;\n  walls = [];",
-     {RESTART_AIR: "PASS"}),
-    ("FIX D9: weight cave ambient by closeness to the entrance, not distance from it",
-     "ambientLight = ambientLight + ((_caveAmbient - ambientLight) * (1.0 - _entrBlend));",
-     "ambientLight = ambientLight + ((_caveAmbient - ambientLight) * _entrBlend);",
-     {ENTRANCE_LIGHT: "PASS"}),
+     {SHIFT_STACK: "FAIL", CAP_DROP: "FAIL"}),
+    ("BREAK N5: settlePlayerAtSpawn keeps the previous world's jumpAirborne/jumpVelZ",
+     "  jumpVelZ = 0;\n  jumpAirborne = false;\n  pos.floorZ = 60 + h * 40;",
+     "  pos.floorZ = 60 + h * 40;",
+     {RESTART_AIR: "FAIL"}),
+    ("BREAK D9: darken open ground within 120 u of an entrance marker",
+     "  if (!covered) return 0;",
+     "  if (!covered) { var __d = Infinity; (typeof deepCaveEntrances !== 'undefined' ? deepCaveEntrances : []).forEach(function (e) { "
+     "__d = Math.min(__d, Math.hypot(x - e.x, y - e.y)); }); return __d < 120 ? 0.5 * (1 - __d / 120) : 0; }",
+     {ENTRANCE_LIGHT: "FAIL"}),
     ("FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
      "  if (pcx !== centerCX || pcy !== centerCY) {",
      "  if ((pcx !== centerCX || pcy !== centerCY) &&\n"
      "      (Math.abs(trueX - (centerCX + 0.5) * CHUNK_SIZE) > CHUNK_SIZE * 0.5 + 48 ||\n"
      "       Math.abs(trueY - (centerCY + 0.5) * CHUNK_SIZE) > CHUNK_SIZE * 0.5 + 48)) {",
      {DITHER: "PASS"}),
-    ("FIX D3/E4: require a real ceiling and update the flag after player movement",
-     [("    // Still compute entrance distance for ambient lighting blend below",
-       "    if (playerUnderground) {\n"
-       "      var __mi = _pgy * floorMesh.w + _pgx, __ceil = false;\n"
-       "      var __Z = [floorMesh.l0TopZ, floorMesh.l1TopZ, floorMesh.l2TopZ, floorMesh.l3TopZ, floorMesh.l4TopZ];\n"
-       "      var __T = [floorMesh.l0Type, floorMesh.l1Type, floorMesh.l2Type, floorMesh.l3Type, floorMesh.l4Type];\n"
-       "      var __ref = _walk_u.idx >= 0 ? _walk_u.topH : _playerH_u;\n"
-       "      for (var __li = 0; __li < floorMesh.layerCount[__mi]; __li++) if (__T[__li][__mi] === 2 && __Z[__li][__mi] > __ref) { __ceil = true; break; }\n"
-       "      playerUnderground = __ceil;\n"
-       "    }\n"
-       "    // Still compute entrance distance for ambient lighting blend below"),
-      ("  updateDayNight(dt);\n  updateViewCamera();",
-       "  updateViewCamera();"),
-      ("  step(dt);            // player movement → repelFromWalls → repelFromEnemies (push only)\n  updateTreasureChests();",
-       "  step(dt);            // player movement → repelFromWalls → repelFromEnemies (push only)\n"
-       "  updateDayNight(dt);   // classify and light the position produced by this step\n"
-       "  updateTreasureChests();")],
+    ("BREAK E4: count a cap within step height above the feet as a roof",
+     "      if ((type === 2 || (type === 4 && h > feetH + 1.0)) && h > feetH + 0.001 && h < ceilingH) ceilingH = h;",
+     "      if ((type === 2 || type === 4) && h > feetH + 0.001 && h < ceilingH) ceilingH = h;",
+     {CAP_UG: "FAIL"}),
+    ("BREAK network height: raise an underground player 0.5 h for one tick every 40 walking ticks",
+     [(_CAVE_SPACE, "var __hw1Bump = 0, __hw1BumpN = 0; " + _CAVE_SPACE),
+      (_STEP_START, "function step(dt) {\n  if (__hw1Bump) { pos.floorZ -= 20; __hw1Bump = 0; }\n  updatePlayerCaveSpace();"),
+      (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1BumpN % 40 === 0) { __hw1Bump = 1; pos.floorZ += 20; }")],
      None,
-     {CAP_UG: "PASS"}),
-    ("BREAK network height: make the selected walkable height alternate by 2 h between mesh cells",
-     "  if (best_idx >= 0) return {topH: best_topH, idx: best_idx, type: best_type, action: 'walk'};",
-     "  if (best_idx >= 0) return {topH: best_topH + (((Math.floor(x / 12) + Math.floor(y / 12)) & 1) ? 2 : 0), idx: best_idx, type: best_type, action: 'walk'};",
      {NET_DH: "FAIL"}),
-    ("BREAK network support: report every selected walkable layer 2 h below its real height",
-     "  if (best_idx >= 0) return {topH: best_topH, idx: best_idx, type: best_type, action: 'walk'};",
-     "  if (best_idx >= 0) return {topH: best_topH - 2, idx: best_idx, type: best_type, action: 'walk'};",
+    ("BREAK network support: sink an underground player 1.25 h for one tick every 40 walking ticks",
+     [(_CAVE_SPACE, "var __hw1Sink = 0, __hw1SinkN = 0; " + _CAVE_SPACE),
+      (_STEP_START, "function step(dt) {\n  if (__hw1Sink) { pos.floorZ += 50; __hw1Sink = 0; }\n  updatePlayerCaveSpace();"),
+      (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1SinkN % 40 === 0) { __hw1Sink = 1; pos.floorZ -= 50; }")],
+     None,
      {NET_SUNK: "FAIL"}),
     ("BREAK real-loop coverage: throw at the start of every draw",
      "function draw() {",
@@ -359,6 +368,9 @@ PROBES: list[tuple[str, str, str, dict[str, str]]] = [
 # Historical explanations/probes above document the frozen audit. The first
 # playable cave milestone repaired these contracts; only chunk hysteresis is
 # still a known baseline failure. Do not silently accept a repaired regression.
+# The FIX probes for the contracts the milestone repaired are now BREAK probes
+# (see the PROBES header): each repaired check is shown to fail again when its
+# defect is put back.
 KNOWN_BUGS = {DITHER: KNOWN_BUGS[DITHER]}
 CavesTransitionSuite = suite_testcase("caves_transition", KNOWN_BUGS, min_checks=33)
 CavesTransitionProbes = probe_testcase("caves_transition", PROBES)
