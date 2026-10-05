@@ -20,14 +20,15 @@ What this suite covers (harness: tools/webui/harness/game_perf_harness.js):
   - steady-state play (N17, G6): console lines AND console.errors, and
     _rgbCache growth against a generous bound, over real loop() play at one
     near and two far sites, render errors a precondition;
-  - frame-rate independence (G7/N1; this suite owns it): arrow-key yaw, WASD
+  - frame-rate independence (G7/N1, repaired; this suite owns it): arrow-key yaw, WASD
     walking, gamepad stick yaw and gamepad X walking, the real loop() driven at
     60 fps vs 30 fps for one second of game time;
   - fullscreen honouring the resolution setting (G4);
   - per-frame work that should not be per-frame: parseInt per floor quad (G1),
     biome noise per wall cell (G2), the overview map's per-frame redraw (G5);
-  - the first frame on a fresh page toggling the control mode (N11), gamepad
-    polling without an in-flight guard (E6), the Perf HUD fps formula (G8).
+  - the first frame on a fresh page toggling the control mode (N11, repaired),
+    gamepad polling without an in-flight guard (E6), the Perf HUD fps formula
+    (G8, repaired).
 
 Not here, by ownership: whether a fixed level's floor pass completes (D24,
 repaired -- render suite), Apply duplicating enemies (D23 -- persistence), chunk-state
@@ -78,9 +79,6 @@ _G2 = "perf: a repeated walls pass samples no biome noise"
 _G3LINES = "perf: a window re-centre writes at most 2 console lines"
 _HUD = "perf: the Perf HUD fps readout matches the rate the loop runs at"
 
-_FPS_WHY = ("loop() calls handleInput(FIXED_DT) once per RENDER frame (L21910) while gameUpdate runs once per "
-            "physics step (L21916-21920), so at 30 fps every per-handleInput quantity accrues half as fast per second")
-
 # check id -> (why it fails today, regex its FAIL detail must match). The regex
 # pins the mechanism: a known bug that starts failing for another reason (a
 # PRECONDITION, a different count) stops being "expected".
@@ -98,45 +96,36 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "(~20 console lines each)",
         r"10/10 crossings, (?:[3-9]|\d\d+) rebuilds"),
     _SPAM: (
-        "N17: loop() (L21953-21966) console.warns a [STATE] line on ~0.5% of frames once the player is >1500 u "
-        "from the origin (or after any render error); seed 424242, reseeded windows: 0 lines near spawn, "
-        "4 + 8 in 900 frames at each far site (~2,520 and ~2,260 u out)",
+        "N17: loop() (21-frame-loop.js) console.warns a [STATE] line every 3 s of loop time once the player is "
+        ">1500 u from the origin (or after any render error); seed 424242: 0 lines near spawn, 5 at each far site "
+        "(~2,517 and ~2,264 u out)",
         r"\[STATE @"),
-    _TURN: (
-        "audit G7: " + _FPS_WHY + "; arrow yaw adds 2.0*dt per call (L19080): 2.000 rad at 60 fps vs 1.000 at 30",
-        r"30 fps [\d.]+ rad \(ratio 0\.[3-6]\d*\)"),
-    _WALK: (
-        "N1 (owned here; physics dropped its 20 fps duplicate): " + _FPS_WHY + "; applyGamepad adds a velocity "
-        "impulse per call (L9822-9841) while damping runs per physics step (L10195): 61.5 u vs 31.1 u in 1 s",
-        r"30 fps [\d.]+ u \(ratio 0\.[3-6]\d*\)"),
-    _GPTURN: (
-        "G7/N1, gamepad path: " + _FPS_WHY + "; Stick Aim yaw adds x*STICK_CAM_YAW_SPEED*dt per call (L19173): "
-        "1.800 rad vs 0.900 in 1 s -- a fix that only rescales the arrow-key yaw (L19080) leaves this",
-        r"30 fps [\d.]+ rad \(ratio 0\.[3-6]\d*\)"),
-    _GPWALK: (
-        "G7/N1, gamepad path: " + _FPS_WHY + "; Stick Aim X adds a velocity impulse per call (L19180-19185), "
-        "a separate code path from applyGamepad: 41.0 u vs 20.7 u in 1 s",
-        r"30 fps [\d.]+ u \(ratio 0\.[3-6]\d*\)"),
+    # _TURN/_WALK/_GPTURN/_GPWALK (audit G7/N1: handleInput(FIXED_DT) ran once
+    # per RENDER frame while gameUpdate ran per physics step: 2.000 vs 1.000
+    # rad, 61.5 vs 31.1 u, 1.800 vs 0.900 rad, 41.0 vs 20.7 u in 1 s at 30 fps)
+    # were repaired before the 0.0 snapshot: runSimulationTick
+    # (02-simulation-clock.js) consumes input once per fixed tick. Their FIX
+    # probes became the BREAK probes below, in the same slots.
     # _FS (audit G4, V01) was repaired by the 3D-integration Stage B: entering
     # fullscreen now sizes the canvas with fullscreenCanvasSize (Resolution,
     # then the fullscreen row cap). Its FIX probe became the BREAK probe below.
-    _N11: (
-        "N11: gpLast starts {buttons:0, valid:false} (L998); buttons are active-low, so handleInput reads SELECT "
-        "as held (L19000) without checking gpLast.valid, and the first loop() frame for a keyboard player toggles "
-        "CONTROL_MODE from Stick Aim (2) to Gyro Aim (1) and logs '[CTRL] toggled' (L19001-19007)",
-        r"CONTROL_MODE 2 -> 1 on the first frame"),
+    # _N11 (gpLast starts {buttons:0, valid:false}; buttons are active-low, so
+    # SELECT read as held and the first loop() frame toggled CONTROL_MODE 2 ->
+    # 1) was repaired before the 0.0 snapshot: pollInputControls requires
+    # gpLast.valid. Its FIX probe became the BREAK probe below.
     _E6: (
         "audit E6: startGamepadPolling (L9772-9800) calls hw.fetchJSON every 16 ms with no in-flight guard, so a "
         "device slower than 16 ms per request accumulates requests on its single httpd task: 10 in 160 ms",
         r"(?:[2-9]|\d\d+) requests in flight"),
     _OVERVIEW: (
         "audit G5: drawDebugOverview (L18285) redraws one fillRect per grid cell every frame (L18305-18333): "
-        "78,484 fills per overview frame vs 6,164 for a whole 3D frame; resetEndlessMode opens it by itself 100 ms "
-        "after every Endless start (L7648)",
+        "78,484 fills per overview frame vs 5,091 for a whole 3D frame; resetEndlessMode opens it by itself 100 ms "
+        "after an Endless start while 'Auto overview on load' is checked (the page default; the headless stub "
+        "leaves it unchecked, so the harness opens it)",
         r"overview frame \d{5,} fills vs normal 3D frame \d+"),
     _G1: (
         "audit G1: drawLayersFloor3D parses the '#rrggbb' layer colour with parseInt for EVERY quad (L12856) and "
-        "builds a fresh 'rgb()' string per quad (L12872): 5,138 parseInt calls for 5,138 fills, on every frame",
+        "builds a fresh 'rgb()' string per quad (L12872): 5,229 parseInt calls for 3,973 fills, on every frame",
         r"parseInt calls [1-9]\d* for \d+ floor fills"),
     _G2: (
         "audit G2: drawWalls3D samples getWallBiomeRGB (L12083) and getBiomeAt (L12100) -- smoothNoise underneath "
@@ -177,24 +166,32 @@ def _lod(dist: int) -> str:
 
 _SKIP_FIXED_FLOOR = ("function drawLayersFloor3D() {\n  if (!floorMesh || !floorMesh.layerCount) return;",
                      "function drawLayersFloor3D() {\n  if (!floorMesh || !floorMesh.layerCount) return;\n  if (!ENDLESS_MODE) return;")
-_STATE = "if (ENDLESS_MODE && Math.random() < 0.005) {"
-_STATE_OFF = (_STATE, "if (ENDLESS_MODE && Math.random() < 0.005 && false) {")
+_STATE = "  if (ENDLESS_MODE && loopStart - _stateDumpAt >= 3000) {"
+_STATE_OFF = (_STATE, "  if (ENDLESS_MODE && loopStart - _stateDumpAt >= 3000 && false) {")
+# loop()'s render call, followed by its performance-logging block.
+_RENDER = "  renderInterpolatedFrame(_physicsAccum / FIXED_DT_MS);\n\n  // Performance logging"
 _WALLS_THROW = ("function drawWalls3D() {", "function drawWalls3D() {\n  if (ENDLESS_MODE) throw new Error('probe walls crash');")
 _RGB_CAP_4096 = ("  _rgbCache[key] = s;\n",
                  "  if (_cacheStats.rgbQ.size >= 4096) { _rgbCache = {}; _cacheStats.rgbQ.size = 0; }\n  _rgbCache[key] = s;\n")
 _HYSTERESIS = ("  if (pcx !== centerCX || pcy !== centerCY) {",
                "  var _hyX = trueX - (centerCX + 0.5) * CHUNK_SIZE, _hyY = trueY - (centerCY + 0.5) * CHUNK_SIZE;\n"
                "  if (Math.abs(_hyX) > CHUNK_SIZE / 2 + 24 || Math.abs(_hyY) > CHUNK_SIZE / 2 + 24) {")
-_HANDLE_INPUT = "_pt('handleInput', function(){ handleInput(FIXED_DT); });"
-_N11_FIX = ("  var selectDown = ((btn & BTN_SELECT) === 0);",
-            "  var selectDown = !!(gpLast && gpLast.valid) && ((btn & BTN_SELECT) === 0);")
+# runSimulationTick consumes input once per fixed tick (G7/N1's repair), and
+# loop()'s fixed-step block that runs those ticks.
+_TICK_INPUT = "  _pt('handleInput', function(){ updateInputCamera(dt); handleInput(dt); });\n"
+_PHYS = "  // Physics runs at fixed timestep for determinism\n  if (!paused) {\n    _physicsAccum += elapsed;"
+# N11's repair: pollInputControls ignores a pad that has not answered.
+_N11_BREAK = ("  if (!USE_GAMEPAD || USE_MOUSE || !gpLast || !gpLast.valid) {\n    lastSelectDown = false; lastStartMenuDown = false;",
+              "  if (!USE_GAMEPAD || USE_MOUSE || !gpLast) {\n    lastSelectDown = false; lastStartMenuDown = false;")
+_NO_POLL = ("  pollInputControls();\n  var elapsed = ", "  /* no input poll */\n  var elapsed = ")
 _E6_FIX = [
-    ("    if (now < gpBackoffUntil) return;\n    hw.fetchJSON('/api/sensors?sensor=input&ts=' + now)",
+    ("    if (now < gpBackoffUntil) return;\n    var sampleGeneration = _gameRunGeneration;\n"
+     "    hw.fetchJSON('/api/sensors?sensor=input&ts=' + now)",
      "    if (now < gpBackoffUntil || tick._busy) return;\n    tick._busy = true;\n"
-     "    hw.fetchJSON('/api/sensors?sensor=input&ts=' + now)"),
-    ("      }).catch(function(_) { gpLast.valid = false; gpBackoffUntil = Date.now() + 200; });",
-     "      }).catch(function(_) { gpLast.valid = false; gpBackoffUntil = Date.now() + 200; })\n"
-     "      .then(function() { tick._busy = false; });"),
+     "    var sampleGeneration = _gameRunGeneration;\n    hw.fetchJSON('/api/sensors?sensor=input&ts=' + now)"),
+    ("        gpLast.valid = false; gpBackoffUntil = Date.now() + 200;\n      });\n  }\n  gpPoll = setInterval(tick, 16);",
+     "        gpLast.valid = false; gpBackoffUntil = Date.now() + 200;\n      })\n"
+     "      .then(function() { tick._busy = false; });\n  }\n  gpPoll = setInterval(tick, 16);"),
 ]
 
 # (description, anchor, replacement, {check_id: "PASS" | "FAIL"})
@@ -215,18 +212,22 @@ PROBES: list = [
     ("FIX G3: 24 u of hysteresis before re-centring the window",
      _HYSTERESIS[0], _HYSTERESIS[1],
      {_JITTER: "PASS", _NO_REBUILD: "PASS", _G3LINES: "FAIL"}),
-    ("FIX N17: silence loop()'s random [STATE] dump (Math.random still consumed)",
+    ("FIX N17: silence loop()'s periodic [STATE] dump",
      _STATE_OFF[0], _STATE_OFF[1],
      {_SPAM: "PASS"}),
-    ("FIX G7/N1: handleInput gets the real frame interval instead of FIXED_DT",
-     _HANDLE_INPUT, "_pt('handleInput', function(){ handleInput(Math.min(elapsed, 100) / 1000); });",
-     {_TURN: "PASS", _WALK: "PASS", _GPTURN: "PASS", _GPWALK: "PASS"}),
-    ("FIX G7/N1, a structurally different fix: sample input once per PHYSICS step",
-     [(_HANDLE_INPUT, "/* input moved into the fixed step */"),
-      ("      _pt('gameUpdate', function(){ gameUpdate(FIXED_DT); });",
-       "      _pt('handleInput', function(){ handleInput(FIXED_DT); });\n"
-       "      _pt('gameUpdate', function(){ gameUpdate(FIXED_DT); });")], None,
-     {_TURN: "PASS", _WALK: "PASS", _GPTURN: "PASS", _GPWALK: "PASS"}),
+    # G7/N1 is repaired; its two FIX probes became these BREAK probes, in the
+    # same slots.
+    ("BREAK G7/N1 (repaired): handleInput(FIXED_DT) runs once per RENDER frame again, outside runSimulationTick",
+     [(_TICK_INPUT, ""),
+      (_PHYS, "  if (!paused) _pt('handleInput', function(){ updateInputCamera(FIXED_DT); handleInput(FIXED_DT); });\n"
+       + _PHYS)], None,
+     {_TURN: "FAIL", _WALK: "FAIL", _GPTURN: "FAIL", _GPWALK: "FAIL"}),
+    ("BREAK G7/N1, a structurally different regression: input is consumed only on a frame's first physics step",
+     [(_TICK_INPUT, "  if (typeof _probeFirstStep === 'undefined' || _probeFirstStep) "
+                    "_pt('handleInput', function(){ updateInputCamera(dt); handleInput(dt); });\n"),
+      ("      runSimulationTick(FIXED_DT);\n      steps++;",
+       "      _probeFirstStep = steps === 0;\n      runSimulationTick(FIXED_DT);\n      steps++;")], None,
+     {_TURN: "FAIL", _WALK: "FAIL", _GPTURN: "FAIL", _GPWALK: "FAIL"}),
     ("BREAK G4 (repaired): the fullscreen rAF goes back to innerWidth x innerHeight, ignoring Resolution",
      "    requestAnimationFrame(function() { applyFullscreenCanvasSize(); });",
      "    requestAnimationFrame(function() {\n"
@@ -237,9 +238,10 @@ PROBES: list = [
     ("FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
      _RGB_CAP_4096[0], _RGB_CAP_4096[1],
      {_RGB: "PASS"}),
-    ("FIX N11: SELECT counts only from a connected pad",
-     _N11_FIX[0], _N11_FIX[1],
-     {_N11: "PASS"}),
+    ("BREAK N11 (repaired): pollInputControls reads SELECT from a pad that has not answered yet (gpLast.valid "
+     "unchecked)",
+     _N11_BREAK[0], _N11_BREAK[1],
+     {_N11: "FAIL"}),
     ("FIX E6: at most one gamepad request in flight",
      _E6_FIX, None,
      {_E6: "PASS"}),
@@ -289,14 +291,12 @@ PROBES: list = [
      "}\n"
      "function _assembleWindowQuiet(centerCX, centerCY) {",
      {_G3LINES: "PASS", _JITTER: "FAIL"}),
-    ("FIX G8: the Perf HUD derives fps from the interval between its own draws",
+    # G8 was repaired before the 0.0 snapshot: drawPerfHud reads
+    # getPerfFrameCadence's rAF intervals. Its FIX probe became this BREAK.
+    ("BREAK G8 (repaired): drawPerfHud derives fps from the average JS time per frame again",
+     "  var avgFt = cnt > 0 ? sumFt / cnt : 0;\n  var fps = getPerfFrameCadence().fps;\n  var TARGET_MS = 16.67;",
      "  var avgFt = cnt > 0 ? sumFt / cnt : 0;\n  var fps = avgFt > 0 ? (1000 / avgFt) : 0;\n  var TARGET_MS = 16.67;",
-     "  var avgFt = cnt > 0 ? sumFt / cnt : 0;\n"
-     "  var _hudNow = performance.now(), _hudIv = drawPerfHud._t ? _hudNow - drawPerfHud._t : 0;\n"
-     "  drawPerfHud._t = _hudNow;\n"
-     "  if (_hudIv > 0) drawPerfHud._iv = drawPerfHud._iv ? drawPerfHud._iv * 0.9 + _hudIv * 0.1 : _hudIv;\n"
-     "  var fps = drawPerfHud._iv > 0 ? (1000 / drawPerfHud._iv) : 0;\n  var TARGET_MS = 16.67;",
-     {_HUD: "PASS"}),
+     {_HUD: "FAIL"}),
 
     # ── BREAK probes: inject a bug, a passing check must go FAIL ──
     ("BREAK: the page script throws at load (and the FAIL line must still parse under the real id)",
@@ -320,18 +320,19 @@ PROBES: list = [
      {_NO_REBUILD: "FAIL"}),
     ("BREAK: [STATE] silenced, but every loop() frame writes a console.error (console.error counts as output)",
      [_STATE_OFF,
-      ("  renderFrame();\n\n  // Performance logging",
-       "  renderFrame();\n  console.error('[probe] per-frame console.error');\n\n  // Performance logging")], None,
+      (_RENDER, "  renderInterpolatedFrame(_physicsAccum / FIXED_DT_MS);\n"
+                "  console.error('[probe] per-frame console.error');\n\n  // Performance logging")], None,
      {_SPAM: "FAIL"}),
-    ("BREAK: [STATE] silenced, and the walls pass throws on every Endless frame (render errors void steady state)",
+    ("BREAK: [STATE] silenced, and the walls pass throws on every Endless frame (render errors void steady state: "
+     "both checks must FAIL on their PRECONDITION)",
      [_STATE_OFF, _WALLS_THROW], None,
-     {_SPAM: "FAIL", _NO_REBUILD: "FAIL"}),
+     {_SPAM: "PRECONDITION", _NO_REBUILD: "PRECONDITION"}),
 
     # ── GUARD probes: a plausible change that must NOT turn a check green / red ──
-    ("GUARD D25: with the growth fix, fixed levels that skip the floor pass must FAIL (pass wrote no cells), "
-     "not read an earlier pass's counters",
+    ("GUARD D25: with the growth fix, fixed levels that skip the floor pass must FAIL on the precondition (pass "
+     "wrote no cells), not read an earlier pass's counters",
      _SKIP_FIXED_FLOOR[0], _SKIP_FIXED_FLOOR[1],
-     {_L4: "FAIL", _ENDLESS_BUF: "PASS"}),
+     {_L4: "PRECONDITION", _ENDLESS_BUF: "PASS"}),
     ("GUARD D25: with the growth removed and a 20,000-cell start buffer, culling harder beyond 1200 u, counted in "
      "a NEW counter, brings the Endless check back to PASS (the cells written really drop under 20,000 at ultra; "
      "a cull-counter formula would still read more than 20,000)",
@@ -339,19 +340,19 @@ PROBES: list = [
      {_ENDLESS_BUF: "PASS"}),
     ("GUARD G3: updateChunks moved from gameUpdate into loop() -- still no hysteresis, so jitter must still FAIL",
      [("  if (ENDLESS_MODE) updateChunks();\n\n  // Wall collision", "  /* moved to loop() */\n\n  // Wall collision"),
-      ("  renderFrame();\n\n  // Performance logging",
-       "  if (ENDLESS_MODE) updateChunks();\n  renderFrame();\n\n  // Performance logging")], None,
+      (_RENDER, "  if (ENDLESS_MODE) updateChunks();\n" + _RENDER)], None,
      {_JITTER: "FAIL", _NO_REBUILD: "PASS", _G3LINES: "FAIL"}),
-    ("GUARD G6: with the 4,096 cap, a walls pass that throws every frame must void the cache check (fewer colours seen)",
+    ("GUARD G6: with the 4,096 cap, a walls pass that throws every frame must void the cache check (its "
+     "PRECONDITION: render errors during play)",
      [_RGB_CAP_4096, _WALLS_THROW], None,
-     {_RGB: "FAIL"}),
-    ("GUARD N11: with the SELECT fix, a loop that never calls handleInput must FAIL the precondition",
-     [_N11_FIX, (_HANDLE_INPUT, "/* no input */")], None,
-     {_N11: "FAIL"}),
+     {_RGB: "PRECONDITION"}),
+    ("GUARD N11: a loop that never polls the pad's UI controls must FAIL the precondition, not pass vacuously",
+     _NO_POLL[0], _NO_POLL[1],
+     {_N11: "PRECONDITION"}),
     ("GUARD E6: with the in-flight fix, polling that never starts must FAIL the precondition",
      _E6_FIX + [("function startGamepadPolling() {\n  if (gpPoll) return;",
                  "function startGamepadPolling() {\n  if (gpPoll) return;\n  return;")], None,
-     {_E6: "FAIL"}),
+     {_E6: "PRECONDITION"}),
 
     # ── D25, repaired: appended so the slots above keep their test_probe_NN ──
     ("BREAK D25: the growth is reached only in Endless (as if moved into the Endless window rebuild), so Level 4 "
@@ -372,12 +373,15 @@ PROBES: list = [
 
 # Checks whose ONLY flipping probe is a FIX of the known bug (no BREAK possible
 # while the bug is present), for the record:
-#   _TURN/_WALK/_GPTURN/_GPWALK, _N11, _E6, _OVERVIEW, _G1, _G2, _G3LINES, _HUD, _JITTER, _SPAM, _RGB
-# each has a FIX above (plus a GUARD where a vacuous pass was possible). _FS is
-# repaired and now has the BREAK probe that reintroduces the viewport size. _L4
-# (D25) is repaired and has BREAK probes that remove the buffer growth, reach
-# it only in Endless or collect before it, plus a GUARD that it measures real
-# writes, not culls.
+#   _E6, _OVERVIEW, _G1, _G2, _G3LINES, _JITTER, _SPAM, _RGB
+# each has a FIX above (plus a GUARD where a vacuous pass was possible). The
+# repaired checks have BREAK probes that reintroduce their defect by its own
+# mechanism: _TURN/_WALK/_GPTURN/_GPWALK (G7/N1: input once per render frame,
+# or only on a frame's first physics step), _N11 (an unanswered pad's SELECT),
+# _HUD (G8: fps from JS time), _FS (G4: the viewport size), and _L4 (D25: no
+# buffer growth, growth only in Endless, or collecting before it, plus a GUARD
+# that it measures real writes, not culls). A GUARD that voids its check
+# declares "PRECONDITION": the check must FAIL on its precondition.
 
 PerfSuite = suite_testcase("perf", KNOWN_BUGS, min_checks=20)
 PerfProbes = probe_testcase("perf", PROBES)

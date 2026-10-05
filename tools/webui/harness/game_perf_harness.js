@@ -468,9 +468,10 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     //    900 at each far site. Math.random is reseeded at the start of each
     //    measured window, so the window does not inherit the random state
     //    earlier scenarios left behind (the far-site line count moved 3+4 ->
-    //    1+2 -> 4+3 with scenario order before this); the far windows are long
-    //    enough that the 0.5%-per-frame [STATE] dump (L21953) is expected ~9
-    //    times (P(none) ~ 1e-4), not ~6 as with 600 frames per site.
+    //    1+2 -> 4+3 with scenario order before this, when the [STATE] dump
+    //    was random). loop() now writes that dump every 3 s of loop time
+    //    beyond 1500 u (21-frame-loop.js), so each 900-frame far window sees
+    //    it several times.
     // ════════════════════════════════════════════════════════════════════
     var NEAR_CHUNKS = [[0, 0], [-1, 0], [0, -1], [-1, -1]];
     var FAR1_CHUNKS = [[5, 0], [5, 1], [5, -1], [6, 0]];
@@ -533,7 +534,7 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
             });
         } finally { aw.restore(); }
         check("perf: steady-state play writes nothing to the console", spamOk,
-            spamParts.join("; ") + "; console.log/info/warn AND console.error; loop() L21953-21966 console.warns a [STATE] line on 0.5% of frames beyond 1500 u from the origin or after any render error");
+            spamParts.join("; ") + "; console.log/info/warn AND console.error; loop() (21-frame-loop.js) console.warns a [STATE] line every 3 s of loop time beyond 1500 u from the origin or after any render error");
         check("perf: walking inside one chunk triggers no window rebuild", rbOk, rbParts.join("; "));
         check("perf: colour-string cache stays bounded (at most 8,192 entries) during play", rgbOk,
             "Object.keys(_rgbCache).length, fresh cache, 60+400 frames near spawn and 60+900 at each of two far sites: " + rgbParts.join("; ") +
@@ -608,15 +609,18 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
                 LAB.metric("perf.fps." + key + "_ratio_30_over_60", ratio);
             }
         });
-        var WHY = "; 1 s of game time; loop() calls handleInput(FIXED_DT) once per render frame (L21910) while gameUpdate runs per physics step (L21916-21920)";
+        // Audit G7/N1 (handleInput once per RENDER frame, gameUpdate once per
+        // physics step) was repaired before the 0.0 snapshot: input now runs
+        // inside runSimulationTick, once per fixed tick, like gameUpdate.
+        var WHY = "; 1 s of game time; runSimulationTick (02-simulation-clock.js) consumes input once per fixed tick, as gameUpdate runs";
         check("perf: arrow-key turn rate is the same at 30 fps and 60 fps (within 5%)", R.turn.ok,
-            R.turn.parts.join("; ") + WHY + "; arrow yaw += 2.0*dt per handleInput (L19080)");
+            R.turn.parts.join("; ") + WHY + "; arrow yaw += 2.0*dt per handleInput");
         check("perf: walking speed is the same at 30 fps and 60 fps (within 5%)", R.walk.ok,
-            R.walk.parts.join("; ") + WHY + "; applyGamepad adds a velocity impulse per handleInput call (L9822-9841), damping runs per physics step (L10195)");
+            R.walk.parts.join("; ") + WHY + "; applyGamepad adds a velocity impulse per handleInput call, damping runs per physics step");
         check("perf: gamepad stick turn rate is the same at 30 fps and 60 fps (within 5%)", R.gpturn.ok,
-            R.gpturn.parts.join("; ") + WHY + "; Stick Aim yaw += x*STICK_CAM_YAW_SPEED*dt per handleInput (L19173)");
+            R.gpturn.parts.join("; ") + WHY + "; Stick Aim yaw += x*STICK_CAM_YAW_SPEED*dt per handleInput");
         check("perf: gamepad X-button walking speed is the same at 30 fps and 60 fps (within 5%)", R.gpwalk.ok,
-            R.gpwalk.parts.join("; ") + WHY + "; Stick Aim X adds a velocity impulse per handleInput call (L19180-19185)");
+            R.gpwalk.parts.join("; ") + WHY + "; Stick Aim X adds a velocity impulse per handleInput call");
     });
 
     // ════════════════════════════════════════════════════════════════════
@@ -654,40 +658,51 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
     });
 
     // ════════════════════════════════════════════════════════════════════
-    // 7. N11: the first loop() frame on a freshly loaded page, keyboard
-    //    player, no gamepad. gpLast starts {buttons:0, valid:false} (L998);
-    //    buttons are active-low, so 0 reads as SELECT held (L19000).
-    //    LAB.freshPage restores exactly that page-load state; the pad is NOT
-    //    released before the measured frame. Controls: handleInput ran on that
-    //    frame, and a connected pad that really presses SELECT does toggle.
+    // 7. N11 (repaired): the first loop() frame on a freshly loaded page,
+    //    no pad answering yet. gpLast starts {buttons:0, valid:false}
+    //    (01-config-state.js); buttons are active-low, so 0 would read as
+    //    SELECT held. pollInputControls (17-input-lighting-update.js) reads
+    //    SELECT once per loop() frame, paused or not, and now ignores a pad
+    //    that has not answered (gpLast.valid). LAB.freshPage restores exactly
+    //    that page-load state; the pad is NOT released before the measured
+    //    frame. The page loads in gamepad mode (chkGamepad checked: USE_GAMEPAD
+    //    true, USE_MOUSE false); LAB's start selects keyboard+mouse, a mode
+    //    pollInputControls ignores outright, so the measured frame and the
+    //    control run in the page's load-time input mode. Controls:
+    //    pollInputControls ran on that frame, and a connected pad that really
+    //    presses SELECT does toggle.
     // ════════════════════════════════════════════════════════════════════
     scenario("perf: first frame on a fresh page", function () {
         LAB.freshPage();
         LAB.startEndless(SEEDS[0]);
         LAB.freezeDay(0.5);
-        var cm0 = CONTROL_MODE, lc0 = LAB.logCount, errs = 0;
+        var sv = { gp: USE_GAMEPAD, mouse: USE_MOUSE, kb: USE_KEYBOARD };
+        var cm0 = CONTROL_MODE, cm1 = CONTROL_MODE, lc0 = LAB.logCount, errs = 0, polls = 0, ctrl = [], pressToggles = false;
         var gp0 = JSON.stringify({ buttons: gpLast.buttons, valid: gpLast.valid }) + " lastSelectDown " + lastSelectDown;
-        var hi = LAB.countCalls("handleInput");
-        try { errs += LAB.frame(); } finally { hi.restore(); }
-        var cm1 = CONTROL_MODE;
-        var ctrl = newLines(lc0).filter(function (s) { return /\[CTRL\]/.test(s); });
-        // positive control: a connected pad pressing SELECT toggles
-        LAB.releasePad();
-        LAB.advance(SELECT_TOGGLE_COOLDOWN + 1);
-        errs += LAB.frame();
-        var cmA = CONTROL_MODE;
-        gpLast = { x: 0, y: 0, buttons: ~BTN_SELECT, valid: true };
-        errs += LAB.frame();
-        var pressToggles = CONTROL_MODE !== cmA;
-        LAB.releasePad();
-        var pre = hi.calls >= 1 && errs === 0 && pressToggles;
+        try {
+            USE_GAMEPAD = true; USE_MOUSE = false; USE_KEYBOARD = false;
+            var pc = LAB.countCalls("pollInputControls");
+            try { errs += LAB.frame(); } finally { pc.restore(); }
+            polls = pc.calls;
+            cm1 = CONTROL_MODE;
+            ctrl = newLines(lc0).filter(function (s) { return /\[CTRL\]/.test(s); });
+            // positive control: a connected pad pressing SELECT toggles
+            LAB.releasePad();
+            LAB.advance(SELECT_TOGGLE_COOLDOWN + 1);
+            errs += LAB.frame();
+            var cmA = CONTROL_MODE;
+            gpLast = { x: 0, y: 0, buttons: ~BTN_SELECT, valid: true };
+            errs += LAB.frame();
+            pressToggles = CONTROL_MODE !== cmA;
+        } finally { LAB.releasePad(); USE_GAMEPAD = sv.gp; USE_MOUSE = sv.mouse; USE_KEYBOARD = sv.kb; }
+        var pre = polls >= 1 && errs === 0 && pressToggles;
         check("perf: the first frame on a freshly loaded page does not toggle the control mode", pre && cm1 === cm0 && ctrl.length === 0,
-            (pre ? "" : "PRECONDITION: " + (hi.calls >= 1 ? "" : "handleInput did not run on the first frame; ") +
+            (pre ? "" : "PRECONDITION: " + (polls >= 1 ? "" : "pollInputControls did not run on the first frame; ") +
                 (errs ? errs + " render errors; " : "") + (pressToggles ? "" : "a pad pressing SELECT did not toggle either; ")) +
-            "CONTROL_MODE " + cm0 + " -> " + cm1 + " on the first frame (page-load pad state gpLast " + gp0 +
+            "CONTROL_MODE " + cm0 + " -> " + cm1 + " on the first frame in gamepad mode (page-load pad state gpLast " + gp0 +
             "), " + ctrl.length + " [CTRL] lines" + (ctrl.length ? " '" + digitless(ctrl[0]) + "'" : "") +
             "; control: SELECT on a connected pad toggles " + (pressToggles ? "yes" : "NO") +
-            "; handleInput reads SELECT from gpLast.buttons without checking gpLast.valid (L18997-19010)");
+            "; pollInputControls reads SELECT (active-low) from gpLast.buttons once per loop() frame");
     });
 
     // ════════════════════════════════════════════════════════════════════
@@ -893,7 +908,7 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
                 (counter === null ? "the settings FPS counter drew nothing; " : (Math.abs(counter - 30) > 3 ? "the settings FPS counter read " + counter + "; " : "")) +
                 (errs ? errs + " render errors; " : "")) +
             "HUD reads " + hud + " fps, settings FPS counter reads " + counter + " FPS, frames every 33.3 ms with 10 ms of JS each" +
-            "; drawPerfHud computes fps = 1000 / average JS time per frame (L20774-20777), not the frame interval");
+            "; drawPerfHud reads getPerfFrameCadence().fps, built from rAF intervals (audit G8 computed 1000 / average JS time per frame)");
     });
 
     // ════════════════════════════════════════════════════════════════════
