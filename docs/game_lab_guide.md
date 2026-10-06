@@ -11,12 +11,19 @@ realistic risks, proven setup, independent expectations and causal controls.
 The planned shared-physics architecture and benchmark gates are in
 `docs/game_physics_plan.md`; that document does not describe implemented physics.
 
-The September 2026 repair updates the default headless baseline and current
-render mutations. Older opt-in mutation collections are not all refreshed:
-an anchor inventory still finds stale entries in browser, cave geometry/cave
-transition, loot, performance and diagnostic-tools probes. They fail loudly;
-do not call the entire historical mutation matrix validated. Browser pixel
-grading also needs a fresh browser baseline, independent of the headless gate.
+The September 2026 repair updated the default headless baseline and current
+render mutations. In October 2026 the opt-in mutation collections were
+refreshed against the merged tree in two passes: render, loot, browser,
+performance, persistence and physics first, then cave geometry, cave
+milestone, cave transition, enemies and the diagnostic tools (and physics
+again, for its D15 wallFaceBase fixture). Each suite passed its base and
+probe unittests on jsc when its pass landed, with known bugs failing for
+their documented reasons. A FIX probe whose repair had
+already shipped passes whether or not it is applied, so those became BREAK
+probes that put the defect back. The frozen-tree FIX matrix below was run
+after the second pass only for the FIX probes it added or changed, so do not
+call the entire historical mutation matrix validated. Browser pixel grading
+also needs a fresh browser baseline, independent of the headless gate.
 
 `game_lab.py` extracts the shipping JavaScript from
 `components/hardwareone/WebPage_Games.h`, preserves its header line numbers,
