@@ -64,3 +64,28 @@ class MutationVerdictTests(unittest.TestCase):
         result = self.grade([game_lab.Check("unrelated", False, "a different bug")])
         self.assertEqual(1, len(result.failures))
         self.assertIn("got MISSING", result.failures[0][1])
+
+    def test_detail_regex_expectation_accepts_the_stated_witness(self):
+        result = self.grade([game_lab.Check("contact", False, "1/3 stuck: brute@1,2")],
+                            want=("FAIL", r"^1/3 stuck: brute@1,2$"))
+        self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
+
+    def test_detail_regex_expectation_rejects_the_same_verdict_with_another_witness(self):
+        # A partial-fix witness FAILs exactly like the baseline; only the detail
+        # can show it left the subjects stuck that its description names.
+        result = self.grade([game_lab.Check("contact", False, "2/3 stuck: brute@1,2; scout@5,6")],
+                            want=("FAIL", r"^1/3 stuck: brute@1,2$"))
+        self.assertEqual(1, len(result.failures))
+        self.assertIn("detail does not match", result.failures[0][1])
+
+    def test_detail_regex_expectation_still_requires_the_verdict(self):
+        result = self.grade([game_lab.Check("contact", True, "1/3 stuck: brute@1,2")],
+                            want=("FAIL", r"^1/3 stuck: brute@1,2$"))
+        self.assertEqual(1, len(result.failures))
+        self.assertIn("expected FAIL, got PASS", result.failures[0][1])
+
+    def test_malformed_expectation_is_rejected(self):
+        with self.assertRaises(game_lab.GameLabError):
+            game_lab.probe_expectation(("FAIL",))
+        with self.assertRaises(game_lab.GameLabError):
+            game_lab.probe_expectation("FIAL")

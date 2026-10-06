@@ -114,9 +114,10 @@ def main(argv: list[str]) -> int:
             was = base_v[s].get(cid)
             if was is None or was == ok:
                 continue
+            want = game_lab.probe_expectation(expect[cid])[0] if cid in expect else None
             flips.append({"check": cid, "to": "PASS" if ok else "FAIL",
-                          "expected": cid in expect and
-                          {"PRECONDITION": "FAIL"}.get(expect[cid], expect[cid]) == ("PASS" if ok else "FAIL")})
+                          "expected": want is not None and
+                          {"PRECONDITION": "FAIL"}.get(want, want) == ("PASS" if ok else "FAIL")})
         missing = [cid for cid in expect if s == ps and cid not in now]
         collateral_breaks = [f for f in flips if not f["expected"] and f["to"] == "FAIL"]
         regressions += len(collateral_breaks)

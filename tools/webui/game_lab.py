@@ -326,6 +326,20 @@ def apply_probe(base: str, anchor, replacement) -> tuple[str, list[str]]:
     return text, bad
 
 
+def probe_expectation(spec) -> tuple[str, str | None]:
+    """A probe expectation as (verdict, detail regex or None).
+
+    `spec` is "PASS" | "FAIL" | "PRECONDITION", or (verdict, r"detail regex").
+    """
+    if isinstance(spec, tuple):
+        if len(spec) != 2 or spec[0] not in ("PASS", "FAIL", "PRECONDITION"):
+            raise GameLabError(f"bad probe expectation {spec!r}")
+        return spec[0], spec[1]
+    if spec not in ("PASS", "FAIL", "PRECONDITION"):
+        raise GameLabError(f"bad probe expectation {spec!r}")
+    return spec, None
+
+
 def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]], *,
                    args: list[str] | None = None):
     """Mutation meta-test for one game harness. OPT-IN: set HW1_GAME_PROBES=1.
@@ -337,7 +351,6 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
         (description, anchor, replacement, {check_id: "PASS" | "FAIL" | "PRECONDITION"})
         (description, [(anchor, replacement), ...], None, {check_id: ...})   # multi-site
 
-
       - a FIX probe removes the cause of a known bug; its check must go PASS
         (proves the check fails for the reason the audit gave, not another);
       - a BREAK probe injects a bug; a passing check must go FAIL
@@ -347,6 +360,12 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
         that removes the check's subjects, or a BREAK aimed at a precondition
         gate): the check must FAIL and its detail must carry the PRECONDITION
         marker. A FAIL without the marker, or a PASS, does not satisfy it.
+
+    An expectation may also be (verdict, r"detail regex"): the verdict must
+    match AND the regex must be found in the check's detail. A witness probe
+    whose verdict equals the baseline (a partial fix that still FAILs) states
+    its witness that way, so the claim about WHICH subjects stay broken is
+    enforced rather than only the unchanged verdict.
 
     `anchor` must occur exactly once in the extracted game JS, so a page edit
     that moves the code fails loudly instead of silently mutating nothing.
@@ -372,6 +391,8 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
                 if not _bad:
                     cls.futures[i] = submit(suite, args, js_text=mutated)
 
+    import re as _re
+
     def make(i, desc, anchor, replacement, expect):
         def test(self) -> None:
             _mutated, bad = apply_probe(game_js(), anchor, replacement)
@@ -382,7 +403,8 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
             self.assertEqual([], crashed, "a crashed scenario is not evidence that the intended defect was detected")
             by_id = run.by_id()
             wrong = []
-            for cid, want in expect.items():
+            for cid, spec in expect.items():
+                want, rx = probe_expectation(spec)
                 got = ("PASS" if by_id[cid].ok else "FAIL") if cid in by_id else "MISSING"
                 pre = cid in by_id and "PRECONDITION" in by_id[cid].detail.upper()
                 detail = f"  [{by_id[cid].detail}]" if cid in by_id else ""
@@ -394,6 +416,8 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
                     wrong.append(f"{cid}: expected {want}, got {got}" + detail)
                 elif want == "FAIL" and pre:
                     wrong.append(f"{cid}: setup failed instead of detecting the intended defect{detail}")
+                if rx is not None and cid in by_id and not _re.search(rx, by_id[cid].detail):
+                    wrong.append(f"{cid}: detail does not match {rx!r}{detail}")
             self.assertEqual([], wrong, f"probe '{desc}' did not flip the checks it should:\n  " + "\n  ".join(wrong))
         test.__name__ = f"test_probe_{i:02d}"
         test.__doc__ = desc

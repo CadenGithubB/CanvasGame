@@ -58,6 +58,13 @@ gate -- declares `PRECONDITION` instead of `FAIL`: the check must then fail
 with the `PRECONDITION` marker in its detail, and a marker-free failure or a
 pass does not satisfy it.
 
+An expectation may also be a `(verdict, r"detail regex")` pair: the verdict
+must match and the regex must be found in the check's detail. Use it when the
+declared verdict equals the baseline verdict -- a partial fix that still
+fails, or a BREAK applied on top of a FIX -- because the verdict alone cannot
+show that the probe changed anything; the regex states the witness (for
+example, which enemies stay stuck).
+
 The common seed arguments have one meaning everywhere: `--seeds` supplies Cave
 Test worlds and `--endless-seeds` supplies normal Endless worlds. A readable
 seed sweep and a machine-readable result use the same runner:
