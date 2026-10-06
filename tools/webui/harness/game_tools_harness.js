@@ -612,7 +612,7 @@ if (LAB.loaded) {
         LAB.check(P + "the control map paints a cell as cave floor only if the cell has a walkable floor below the surface",
             pre.length === 0 && badN === 0,
             (pre.length ? "PRECONDITION: " + pre.join("; ") + " || " : "") + badN + "/" + ug + " underground-painted cells have no walkable layer below -0.1 " +
-            "(L21641 colours by l0TopZ, which is the CEILING where assembleWindow's Z-sort put it at the bottom, L6724): " + bad.join("; "));
+            "(the map colours each cell by l0TopZ; since D6's repair l0 is the lowest walkable floor, so this fails if a ceiling sorts below the floor into l0): " + bad.join("; "));
         LAB.metric("tools.controlmap.cells", painted);
         LAB.metric("tools.controlmap.underground_cells", ug);
         LAB.metric("tools.controlmap.teal_cells", teal);

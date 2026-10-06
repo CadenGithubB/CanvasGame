@@ -53,7 +53,10 @@ Thresholds, and why ANY correct implementation meets them:
              required, else PRECONDITION).
   0 cells    the control map may paint a cell with its underground palette only
              if the cell has a walkable layer below -0.1 (the map's own
-             threshold, L21649).
+             threshold, L21649). The map colours by l0TopZ; since D6's repair
+             l0 is the lowest walkable floor, and the D6 BREAK probe (a ceiling
+             sorted into l0) shows the check catches the l0 rule painting a
+             ceiling as cave floor.
   0.25 h     debugCaveAt at a cell's stamping point with fade 1 must give the
              stamped floor and ceiling (the stamper writes exactly those there,
              L5618/L5621); feather cells are metrics only (debugCaveAt reports the
@@ -189,9 +192,11 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"DEBUG_TEXTURE surface .*identical.*underground .*identical"),
 }
 
-# (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"}).
-# Anchors occur exactly once in game_lab.game_js(); every probe was run in the
-# October 2026 refresh and seen to flip exactly the checks it declares.
+# (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"
+# | (verdict, r"detail regex")}). Anchors occur exactly once in
+# game_lab.game_js(). Every probe was rerun in the third October 2026 pass and
+# flipped no check it does not declare; a declared verdict equal to the
+# baseline verdict (a BREAK on top of a FIX) carries a detail regex.
 _WALKABLE_FH = (
     "      var fh = floorMesh.l0TopZ[idx];\n"
     "      for (var _q = 0; _q < floorMesh.layerCount[idx]; _q++) { "
@@ -199,6 +204,11 @@ _WALKABLE_FH = (
     "if (_qt === 1 || _qt === 3 || _qt === 4) { "
     "fh = [floorMesh.l0TopZ, floorMesh.l1TopZ, floorMesh.l2TopZ, floorMesh.l3TopZ, floorMesh.l4TopZ][_q][idx]; break; } }\n"
     "      var _ovmLc")
+
+# caves_geometry's D6 BREAK: the pre-milestone feather floor lerps toward the
+# surface (it can end above the ceiling) instead of bevelling toward the roof.
+_D6_FLOOR_LERP = ("var floor = best.floor + Math.max(0, ceiling - best.floor) * (1 - bestFade);",
+                  "var floor = best.floor + (surface - best.floor) * (1 - bestFade);")
 
 PROBES: list = [
     # ── FIX probes: remove the cause, the check must go PASS ──
@@ -231,11 +241,14 @@ PROBES: list = [
      "if (_ceils[_ci4] > 0.1) {",
      "if (_ceils[_ci4] !== 0) {",
      {_P1: "PASS"}),
+    # On top of the FIX above, so the check FAILs as at baseline; the regex
+    # pins the BREAK's own witness: a ceiling vertex drawn at the sample's x
+    # with a wrong height (at baseline nothing is drawn there: "got none").
     ("BREAK: the profile draws every ceiling at the right x but six height units too high",
      [("if (_ceils[_ci4] > 0.1) {", "if (_ceils[_ci4] !== 0) {"),
       ("_ceils.push(_sch);", "_ceils.push(_sch ? _sch + 6 : 0);")],
      None,
-     {_P1: "FAIL"}),
+     {_P1: ("FAIL", r"matched 0/\d+ ceiling samples by x and height .*: x=-?[\d.]+ want -?[\d.]+ got -?[\d.]+")}),
     ("FIX: the profile chart samples the walkable layer nearest the player's height",
      "var _sfh = getFloorHeightAt(_sx2, _sy3);",
      "var _sfh = getWalkableLayerTopAt(_sx2, _sy3, (pos.floorZ - 60) / 40).topH;",
@@ -271,9 +284,16 @@ PROBES: list = [
      "if (!L0 || L0[1] !== 2) { __caveStats.ceilSkipLowCeil++; continue; }",
      "if (!L0 || L0[1] !== 2) { continue; }",
      {_NO_CEIL: "PASS"}),
-    ("FIX: the control map colours each cell by its lowest walkable layer",
-     "      var fh = floorMesh.l0TopZ[idx];\n      var _ovmLc",
-     _WALKABLE_FH,
+    # The old FIX (colour each cell by its lowest walkable layer) selected the
+    # same value as the map's l0 rule once D6 was repaired, so it flipped
+    # nothing. The map's l0 rule is now shown to matter by putting D6 back
+    # (a feather floor lerped above its ceiling sorts the ceiling into l0),
+    # and the walkable-layer rule is the positive control on that geometry.
+    ("BREAK D6 under the map: the feather floor lerps toward the surface, so the ceiling sorts into l0",
+     *_D6_FLOOR_LERP,
+     {_MAP: "FAIL"}),
+    ("CONTROL: the same D6 geometry with the map colouring each cell by its lowest walkable layer",
+     [_D6_FLOOR_LERP, ("      var fh = floorMesh.l0TopZ[idx];\n      var _ovmLc", _WALKABLE_FH)], None,
      {_MAP: "PASS"}),
     # The old FIX (pass the stamper's 21x21 surface maximum instead of a
     # hard-coded 2.0) ships in another form, and the core cells no longer
