@@ -25,8 +25,9 @@ window at the nearest cave network). What it checks:
     The wallFaceBase checks use a deterministic fixture: the old window's
     floor is read at every mesh cell just before the shift / after the
     previous world's last frame, so the cache is full of old heights under
-    the same local keys (>= 100 of them must disagree with the new window,
-    else PRECONDITION)                                              [D15]
+    the same local keys (>= 20 reads on the new window -- D15_MIN_STALE in
+    the harness -- must find an old height still cached, else PRECONDITION;
+    the default fixtures reach 60-214)                              [D15]
   - walking into ordinary surface walls never puts the player inside one
     (regression guard)
   - a lethal enemy hit ends the game within 2 s                    [D21]
