@@ -161,8 +161,12 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
 }
 
 # (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"}).
-# Anchors occur exactly once in game_lab.game_js(); every probe was run in the
-# October 2026 refresh and seen to flip exactly the checks it declares.
+# Anchors occur exactly once in game_lab.game_js(). Every probe was rerun in the
+# third October 2026 pass and fails each check it declares for its own reason.
+# Collateral flips are not asserted (most are PRECONDITION voids of walks a
+# BREAK stops short), but every check retired from KNOWN_BUGS is declared on a
+# probe that fails it. "walk-in: the walk reaches ..." is the walk precondition
+# itself and can only fail with PRECONDITION (as under the re-centre BREAKs).
 _CEIL_CLAMP = (
     "    var _pz0 = pos.floorZ || 60;\n"
     "    pos.floorZ = (pos.floorZ || 60) + jumpVelZ * dt;\n"
@@ -251,6 +255,7 @@ _CONTAIN_FAST_FIX = (
 _WALK_EASE = "      pos.floorZ = meshHeightToPlayerZ(playerH_t) + zDiff * (1 - Math.pow(0.7, dt * 60));"
 _STEP_START = "function step(dt) {\n  updatePlayerCaveSpace();"
 _CAVE_SPACE = "function updatePlayerCaveSpace() {"
+_CEIL_STAMP = "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }"
 _MOUTH_BAND = (
     "function __hw1Mouth(x, y) { for (var __q = 0; __q < deepCaveEntrances.length; __q++) { "
     "var __E = deepCaveEntrances[__q], __dx = x - __E.x, __dy = y - __E.y, "
@@ -322,7 +327,7 @@ PROBES: list = [
       (_STEP_START, "function step(dt) {\n  if (__hw1Sank === 1) { pos.floorZ += 50; __hw1Sank = 2; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (!playerUnderground) __hw1Sank = 0; else if (__hw1Sank === 0) { __hw1Sank = 1; pos.floorZ -= 50; }")],
      None,
-     {WALK_SUNK: "FAIL"}),
+     {WALK_SUNK: "FAIL", WALK_DH: "FAIL", MOUTH_SUNK: "FAIL"}),
     ("BREAK re-centre: lift every layer by 3 h in odd-X windows (the picker holds the player inside the lifted floor)",
      "          floorMesh.l4TopZ[ti] = cmesh.l4TopZ[si]; floorMesh.l4Type[ti] = cmesh.l4Type[si]; floorMesh.l4Color[ti] = cmesh.l4Color[si];",
      "          floorMesh.l4TopZ[ti] = cmesh.l4TopZ[si]; floorMesh.l4Type[ti] = cmesh.l4Type[si]; floorMesh.l4Color[ti] = cmesh.l4Color[si];\n"
@@ -352,17 +357,46 @@ PROBES: list = [
       (_STEP_START, "function step(dt) {\n  if (__hw1Bump) { pos.floorZ -= 20; __hw1Bump = 0; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1BumpN % 40 === 0) { __hw1Bump = 1; pos.floorZ += 20; }")],
      None,
-     {NET_DH: "FAIL"}),
+     {NET_DH: "FAIL", WALK_DH: "FAIL"}),
     ("BREAK network support: sink an underground player 1.25 h for one tick every 40 walking ticks",
      [(_CAVE_SPACE, "var __hw1Sink = 0, __hw1SinkN = 0; " + _CAVE_SPACE),
       (_STEP_START, "function step(dt) {\n  if (__hw1Sink) { pos.floorZ += 50; __hw1Sink = 0; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1SinkN % 40 === 0) { __hw1Sink = 1; pos.floorZ -= 50; }")],
      None,
-     {NET_SUNK: "FAIL"}),
+     {NET_SUNK: "FAIL", LAT_SUNK: "FAIL", LAT_RAISE: "FAIL"}),
     ("BREAK real-loop coverage: throw at the start of every draw",
      "function draw() {",
      "function draw() { throw new Error('probe draw failure');",
      {FPS_ERRORS: "FAIL"}),
+    # D14/F6/D2 (retired). The lateral corridor edge is now contained by more
+    # than one mechanism: walls where the bevel closes, the 2.8 h body
+    # clearance, the step limit and the floor picker's ceiling separation. The
+    # review's "reopen the edge" BREAK (bevel cells carved open and the
+    # corner-spread wall rule gone) flips nothing here, alone or together, so
+    # these probes put back the GEOMETRY each defect produced instead.
+    ("BREAK D14 rock: in the corridor bevel the roof is stamped half a height unit below the floor "
+     "(the D6 inversion, on cells the player can walk)",
+     _CEIL_STAMP,
+     "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.fade < 0.999 ? cg.floorH - 0.5 : cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }",
+     {LAT_ROCK: "FAIL", LAT_ROOF: "FAIL"}),
+    ("BREAK D14/F6 roof: the roof is stamped only over the corridor core (fade 1), not over its walkable bevel",
+     _CEIL_STAMP,
+     "if (cg.ceilZ !== null && cg.fade >= 0.999) { cCaveCeilH[cmIdx] = cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }",
+     {LAT_ROOF: "FAIL"}),
+    ("BREAK D2 rock at the mouth: the roof of the first 24 u inside the mouth is stamped half a height unit "
+     "below the floor",
+     _CEIL_STAMP,
+     "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.isEntrance ? cg.floorH - 0.5 : cg.ceilZ; cCaveHasCeil[cmIdx] = 1; }",
+     {WALK_ROCK: "FAIL"}),
+    # The 2.8 h body (spatialPlayerBody's height and PLAYER_BODY_H) keeps the
+    # 2.4 h eye clear of any roof it lets the player under, so a low roof alone
+    # stops the walk instead; the probe also shortens the body.
+    ("BREAK D1/D2 headroom: the stamped roof sits 2.0 h above the floor and the player's body is 1.8 h tall "
+     "(movement body and floor picker)",
+     [(_CEIL_STAMP, "if (cg.ceilZ !== null) { cCaveCeilH[cmIdx] = cg.floorH + 2.0; cCaveHasCeil[cmIdx] = 1; }"),
+      ("var PLAYER_BODY_H = 2.8;", "var PLAYER_BODY_H = 1.8;"),
+      ("radius:6,height:70,stepHeight:25,", "radius:6,height:45,stepHeight:25,")], None,
+     {WALK_HEAD: "FAIL"}),
 ]
 
 # Historical explanations/probes above document the frozen audit. The first
