@@ -776,9 +776,9 @@ if (LAB.loaded) (function () {
     // Roof pairs use the REAL gameUpdate (LAB.tick) so the player's own physics
     // decides where they stand. Every roof point lies inside the window's
     // centre chunk (24 u margin) so placing the player there does not re-centre
-    // the window: a re-centre runs the enemy save pass, which drops the
-    // underground flag (D19, persistence owns it) and would make a flag-based
-    // LOS fix look broken. Each pair is wrapped in LAB.countCalls("assembleWindow");
+    // the window: a re-centre runs the enemy save pass, which dropped the
+    // underground flag before D19 was repaired (persistence owns it) and would
+    // make a flag-based LOS fix look broken. Each pair is wrapped in LAB.countCalls("assembleWindow");
     // a pair that re-centred anyway is dropped and counted, and the world rebuilt.
     function roofSpot(e, dists, ok) {
         for (var k = 0; k < 16; k++) for (var di = 0; di < dists.length; di++) {
@@ -909,9 +909,9 @@ if (LAB.loaded) (function () {
     // ═════════════════════════════════════════════════════════════════════════
     // The Cave Test spawn teleport (L7609-7617) moves the player into another
     // chunk without updateChunks, so the first step() re-centres the window
-    // (L10306 -> L7491), and the re-centre's save pass drops `underground`
-    // (L7369-7382). Saving the flag repairs the D19 consequence only; the N6
-    // verdict also requires that the unnecessary first-tick rebuild not occur.
+    // (L10306 -> L7491). The re-centre's save pass used to drop `underground`
+    // (D19); it now saves the flag (05-endless-world.js saveEnemyStateToChunks),
+    // so the remaining N6 verdict is the unnecessary first-tick rebuild.
     var N6 = { worlds: 0, ug0: 0, ug1: 0, calls: 0, parts: [] };
     forWorlds("Cave Test first tick", ["cavetest"], function (W) {
         var ug0 = enemies.filter(function (e) { return e.underground === true; }).length;
@@ -1187,7 +1187,7 @@ if (LAB.loaded) (function () {
         LAB.check("enemies: a cave enemy does not chase a player standing on the cave roof",
             ROOF.pairs >= 3 && ROOF.violations.length === 0,
             (ROOF.pairs < 3 ? "PRECONDITION FAILED: only " + ROOF.pairs + " valid pairs (tried " + ROOF.tried + "; control never chased " + ROOF.ctlNoChase +
-                (ROOF.ctlFlagCleared ? " -- " + ROOF.ctlFlagCleared + " of them had lost the underground flag (D19 cleared the flag)" : "") +
+                (ROOF.ctlFlagCleared ? " -- " + ROOF.ctlFlagCleared + " of them had lost the underground flag (the repaired D19 flag loss is back)" : "") +
                 "; player not held on the cap " + ROOF.capInvalid + "; re-centred " + ROOF.recentred + "; no roof spot in the centre chunk " + ROOF.noSpot + "); " : "") +
             ROOF.violations.length + "/" + ROOF.pairs + " chased the player on the roof (each pair's control: the same enemy chases when the player stands on the cave floor at the same x,y; " +
             "no pair re-centred the window)" + (ROOF.violations.length ? " e.g. " + head(ROOF.violations, 3) : "") + " (hasLineOfSight L9940 is 2D; chase L11423)");
@@ -1217,7 +1217,7 @@ if (LAB.loaded) (function () {
             N6.worlds >= 1 && N6.ug0 >= 5 && N6.calls === 0 && N6.ug1 === N6.ug0,
             (N6.worlds < 1 || N6.ug0 < 5 ? "PRECONDITION FAILED: " + N6.worlds + " Cave Test worlds, " + N6.ug0 + " cave enemies at start; " : "") +
             "first tick re-centred the window " + N6.calls + " time" + (N6.calls === 1 ? "" : "s") + "; still underground: " + N6.ug1 + "/" + N6.ug0 + "; " + N6.parts.join("; ") +
-            " (spawn teleport L7609-7617 skips updateChunks -> first step() re-centres; the save pass drops the flag L7369-7382)");
+            " (spawn teleport L7609-7617 skips updateChunks -> first step() re-centres; the save pass keeps the flag since D19's repair)");
 
         // [z save/restore] re-centre
         var pre = SH.recentred >= 1 && SH.compared >= 5;
@@ -1241,7 +1241,7 @@ if (LAB.loaded) (function () {
             FT.post.trials >= 5 && FT.post.varied >= 20 && FT.post.off === 0,
             (FT.post.trials < 5 || FT.post.varied < 20 ? "PRECONDITION FAILED: " + FT.post.trials + " chases, " + FT.post.varied + " samples on a floor away from the starting z; " : "") +
             ftDetail(FT.post) + "; " + (FT.post.flagLost || 0) + "/" + FT.post.trials + " subjects had lost the underground flag" +
-            (FT.post.ex.length ? " e.g. " + head(FT.post.ex, 3) : "") + " (floor tracking needs the flag, L11458; the re-centre's save pass drops it, L7369-7382)");
+            (FT.post.ex.length ? " e.g. " + head(FT.post.ex, 3) : "") + " (floor tracking needs a cave-stratum marker: the underground flag, which saveEnemyStateToChunks keeps since D19's repair, or caveSpawnId, 05-endless-world.js / entityFeetSpatialZ)");
         LAB.metric("enemies.floor_tracking.before.off", FT.pre.off);
         LAB.metric("enemies.floor_tracking.after.off", FT.post.off);
 

@@ -56,9 +56,11 @@ survey only, and checks, aggregated over them:
   - Cave Test start (N6): the first physics tick neither re-centres the window
     nor clears the cave enemies' underground flags;
   - across a window re-centre: underground enemies keep their Z; and a moving
-    cave enemy stands on the cave floor before AND after a re-centre (after it,
-    the flag D19 dropped stops the floor tracking -- a consumer of D19, which
-    the persistence suite owns).
+    cave enemy stands on the cave floor before AND after a re-centre (floor
+    tracking needs a cave-stratum marker the re-centre's save pass keeps: the
+    underground flag, repaired with D19 -- which the persistence suite owns --
+    or the chamber spawn id; the BREAK probe that drops both fails this check,
+    while dropping the flag alone does not reach it).
 
 Review disposition: render owns F5's camera-distance walk-cycle observable; E7
 remains a suspected cache issue rather than a game-lab verdict because the
@@ -179,9 +181,14 @@ _RUIN_ORDER = (
     "        cEnemies = cEnemies.filter(function (en) {\n"
     "          var egx = Math.floor((en.x - cx * CHUNK_SIZE) / cell), egy = Math.floor((en.y - cy * CHUNK_SIZE) / cell);\n"
     "          return !cGrid[egy * CHUNK_CELLS + egx];\n        });\n")
-_D19_SAVE_FLAG = (
-    "      patrolIdx: e.patrolIdx || 0, facing: e.facing || 0\n    });",
-    "      patrolIdx: e.patrolIdx || 0, facing: e.facing || 0, underground: e.underground || false\n    });")
+# D19's underground half is repaired (saveEnemyStateToChunks saves
+# `underground: e.underground || false`). For chamber enemies the flag is no
+# longer the only stratum marker: entityFeetSpatialZ also reads caveSpawnId, so
+# dropping the flag alone (persistence's D19 BREAK) leaves the floor tracking
+# below intact (the check still passes; seen in the October refresh). The
+# BREAK therefore drops both markers the save pass carries.
+_D19_DROP_STRATUM = ("caveSpawnId: e.caveSpawnId || null, underground: e.underground || false,",
+                     "caveSpawnId: null, underground: false,")
 # Fix sites R1 and R2 for the F2 route-planning bug (see KNOWN_BUGS).
 _R1_WAYPOINT_FEET = (
     "  if (npcNavigateToward(e,wp.x,wp.y,wpFeet,e.speed*.38,dt===undefined?.08:dt,eRad*.6,0)) return 1;",
@@ -252,9 +259,12 @@ MOTION_PROBES: list[tuple] = [
 # (description, anchor, replacement, {check_id: expected verdict}) or the
 # multi-site form (description, [(anchor, replacement), ...], None, {...}).
 PROBES: list[tuple] = [
-    ("FIX D19: saveEnemyStateToChunks keeps the underground flag",
-     [_D19_SAVE_FLAG], None,
-     {_FLOOR_AFTER: "PASS"}),
+    # The old FIX D19 appended a second `underground` key to an object that
+    # already saves the flag, so it changed nothing; the repaired save is now
+    # shown to matter by putting the loss back (see _D19_DROP_STRATUM).
+    ("BREAK D19 + caveSpawnId: saveEnemyStateToChunks drops both cave-stratum markers on a re-centre",
+     [_D19_DROP_STRATUM], None,
+     {_FLOOR_AFTER: "FAIL"}),
     ("FIX N6: Cave Test assembles its first window around the chunk the spawn teleport lands in",
      [("  // Build initial window\n  assembleWindow(0, 0);\n",
        "  // Build initial window\n  var _spawnCX = 0, _spawnCY = 0;\n"
