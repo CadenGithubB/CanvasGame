@@ -3,7 +3,9 @@
 // geometry or movement algorithm is introduced by this harness.
 (0, eval)(slurp('tools/webui/harness/_game_env.js'));
 LAB.init(__out, slurp, __engine, __argv);
-LAB.check('cave_milestone: page evaluates', LAB.load(__argv[0]), LAB.loadError || '');
+// One line only: loadError carries a stack, and a newline inside a verdict
+// detail makes game_lab fold the detail into the check id.
+LAB.check('cave_milestone: page evaluates', LAB.load(__argv[0]), (LAB.loadError || '').split('\n')[0]);
 
 if (LAB.loaded) {
     var G = (0, eval)('this');
