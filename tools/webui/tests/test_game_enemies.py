@@ -1,11 +1,11 @@
 """Enemy AI in the Endless crawler: movement, collision and awareness.
 
 Runs tools/webui/harness/game_enemies_harness.js against the shipping game in
-components/hardwareone/WebPage_Games.h. The harness builds five worlds (normal
-Endless seeds 424242 and 777000 at spawn, the same two seeds with the window
-re-centred onto their nearest cave network, and Cave Test 12345 with
-caveEnemies on) plus ten extra spawn windows for the generation survey only,
-and checks, aggregated over them:
+components/hardwareone/WebPage_Games.h. The harness builds nine worlds (normal
+Endless seeds 424242, 777000 and 777 at spawn, the same three seeds with the
+window re-centred onto their nearest cave network, and Cave Test 12345, 424242
+and 777 with caveEnemies on) plus ten extra spawn windows for the generation
+survey only, and checks, aggregated over them:
 
   - generation: no enemy stands on a wall cell; no enemy on an open cell has a
     wall inside its footprint at the radius the game's own movement code uses
@@ -20,15 +20,30 @@ and checks, aggregated over them:
   - return after a chase (F2): an enemy that chased the player past a wall gets
     back to its patrol route within its OWN walking budget in every trial. The
     budget is the enemy's remembered-target search (NPC_PROFILES.enemy.memoryMs)
-    plus 1.5 x (the chase path it walked + its spawn's distance to the nearest
-    waypoint) at its patrol speed (speed x PATROL_FACTOR, measured from the
-    game's own patrol step) slowed by the slowest water on the chase path:
-    retracing the chase and walking the spawn's clear sight line to the route
-    is a physical return path, and 1.5x allows slides and route-planning delay.
-    Every subject must also pass a positive control (unchased, from its spawn
-    point, it reaches its route inside the same budget). The trial set is
-    fixed by the seeds, so a percentage threshold would buy no noise tolerance
-    and would only hide permanently stuck enemies;
+    plus 1.5 x (the chase path it walked + its spawn's distance to the waypoint
+    the game is steering it to when the return starts, patrolWaypoints[
+    patrolIdx]) at its patrol speed (speed x PATROL_FACTOR, measured from the
+    game's own patrol step) slowed by the slowest water on that path (the chase
+    path and the spawn-to-waypoint line): retracing the chase and walking the
+    spawn's clear sight line to that waypoint is a physical return path, and
+    1.5x allows slides and route-planning delay. (An earlier budget used the
+    spawn's NEAREST waypoint; with F1 repaired the spawn is waypoint 0, so it
+    left out the walk to the waypoint actually targeted and failed correctly
+    patrolling enemies.) The budget is per enemy, so it is NOT the old fixed
+    20 s: it is looser for slow or wading enemies (17/44 baseline budgets exceed
+    20 s, max 58 s) and tighter for fast ones; the detail lists every return
+    later than 20 s with its route failures, so a route-planning delay the
+    budget absorbs stays visible (KNOWN_BUGS names the two baseline cases).
+    A trial whose chase ends within the arrival radius of a waypoint would
+    return in 0 s and is excluded. Every subject must pass a positive control:
+    unchased, from its spawn point, it walks to a waypoint at least twice the
+    arrival radius away (so a spawn that is itself a waypoint cannot pass in
+    0 s) within 1.5 x that distance at its patrol speed. A trial that misses its
+    budget is walked on to a 60 s horizon so the detail tells stuck from slow.
+    The trial set is fixed by the seeds, so a percentage threshold would buy no
+    noise tolerance and would only hide permanently stuck enemies. The "FIX
+    every patrol defect" probe (F1+F3+ruin order+R1+R2) passes it: the contract
+    any correct implementation meets;
   - separation: separateEnemies() never leaves an enemy with a wall in its
     footprint (sites taken next to real enemies);
   - collision parity, both ways: a surface enemy can follow a path a surface
@@ -117,13 +132,20 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "first hop from the enemy's off-grid position to a neighbouring cell centre never is, so on a slope every "
         "request fails after expanding only its root (69 requests, 69 nodes expanded, 0 routes; a 60000-node "
         "budget changes nothing). While the route is 'failed', _patrolEnemy flips patrolIdx every frame and the "
-        "enemy stands still: endless 777000 cave Brute@-5250,738 (43.8 u from its route, 1030 flips, route failed "
-        "93% of frames, still stuck after 60 s) and endless 777 cave Scout@16446,-702 (route failed 39% / pending "
-        "42% of frames); both reach their route unchased from spawn. The FIX R1+R2 probe passes it; R1 alone leaves "
-        "the Brute stuck and R2 alone leaves 3 stuck. The navigation code is unchanged since main, which shows the "
-        "same stuck subjects",
+        "enemy stands still: 42/44 return; endless 777000 cave Brute@-5250,738 (43.8 u from its route after its "
+        "21.0 s budget, route failed 93% of frames, 1057 flips) and endless 777 cave Scout@16446,-702 (51.7 u after "
+        "8.5 s, route failed 41% / pending 41%) are both still stuck at 60 s, and both walk their route unchased "
+        "from spawn (4.0 s and 1.1 s). FIX R1+R2 passes it (44/44), and so does every patrol fix together "
+        "(F1+F3+ruin order+R1+R2, 42/42); R1 alone leaves only the Brute stuck (43/44) and R2 alone leaves the "
+        "same two as baseline (42/44); F1+F3+ruin order alone leaves the Brute stuck and two enemies late (39/42). "
+        "The budget is per enemy, not the old fixed 20 s: 17/44 budgets exceed 20 s (max 58.0 s, a Brute wading "
+        "at 0.55 speed), and two baseline returns take longer than 20 s and pass only because of that: 424242 "
+        "cave Brute@282,2682 20.2 s (19.9 s under FIX R1+R2, water-slowed) and 777000 cave Brute@-5166,-30 22.5 s "
+        "(16.3 s under FIX R1+R2), so part of R1's delay sits inside the budget; the detail lists every return "
+        "later than 20 s with its route failures. The navigation code is unchanged since main, whose page shows "
+        "the same two stuck enemies",
         r"[1-9]\d*/\d+ returned .*stuck: .*after \d+\.\d s \(route failed [1-9]\d*% / pending \d+% of frames, "
-        r"[1-9]\d* waypoint flips\)"),
+        r"[1-9]\d* waypoint flips; still stuck at 60 s\)"),
 }
 
 # Reusable probe sites.
@@ -172,6 +194,12 @@ _R2_ROOT_HOP = (
     "  if(Math.abs(body.feetZ-from.z)>.01 && Math.abs(x-from.x)>.00001 && Math.abs(y-from.y)>.00001)return null;\n",
     "  if(from.parent && Math.abs(body.feetZ-from.z)>.01 && Math.abs(x-from.x)>.00001 && Math.abs(y-from.y)>.00001)return null;\n")
 _PATROL_NAV = _R1_WAYPOINT_FEET[0]
+# F2 witnesses: the stuck list closes the detail, one "...; still stuck at 60 s)"
+# entry per enemy that never reaches its route.
+_BRUTE_STUCK = r"endless 777000 cave surface\.tank@-5250,738 stopped [^;]+; still stuck at 60 s\)"
+_SCOUT_STUCK = r"endless 777 cave surface\.fast@16446,-702 stopped [^;]+; still stuck at 60 s\)"
+_STUCK_ONLY_BRUTE = r"; stuck: " + _BRUTE_STUCK + r"$"
+_STUCK_BRUTE_AND_SCOUT = r"; stuck: " + _BRUTE_STUCK + r"; " + _SCOUT_STUCK + r"$"
 
 _ROOF = "enemies: a cave enemy does not chase a player standing on the cave roof"
 _RROOF = "enemies: a surface enemy does not chase a player standing in the cave below it"
@@ -206,15 +234,19 @@ MOTION_PROBES: list[tuple] = [
      "  if (isInGridWall(entity.x+dx,entity.y+dy,radius)) return {hitX:true,hitY:true,status:'blocked'};\n",
      {_TRV: "FAIL", _TRV_REV: "PASS"}),
     # The F2 check fails at baseline on R1/R2, so a BREAK that only expects FAIL
-    # would be vacuous: the historical patrol is put back on top of FIX R2 (the
-    # FIX R1+R2 probe in PROBES is its PASS control).
+    # would be vacuous: the historical patrol replaces the navigation call (R1's
+    # site) on top of FIX R2 (the FIX R1+R2 probe in PROBES is its PASS
+    # control), and the detail regex pins its own witness: an enemy stuck with
+    # no route use at all, flipping waypoints. Every baseline stuck enemy has
+    # route failures, so the baseline detail does not match.
     ("BREAK F2 (on top of FIX R2): patrol has no route and no slide, rejects the whole step and flips waypoints",
      [_R2_ROOT_HOP,
       (_PATROL_NAV,
        "  var _st=Math.min(wpDist,e.speed*.38*(dt===undefined?.08:dt)),_nx=e.x+wpDx/wpDist*_st,_ny=e.y+wpDy/wpDist*_st;\n"
        "  if (!spatialBodyBlocked(spatialActorBody(e,eRad*.6),_nx,_ny)) { moveSpatialActor(e,_nx-e.x,_ny-e.y,eRad*.6); return 1; }\n"
        "  e.patrolIdx = ((e.patrolIdx || 0) + 1) % e.patrolWaypoints.length; return 0;")], None,
-     {_F2: "FAIL", _TRV: "PASS"}),
+     {_F2: ("FAIL", r"stuck: .*\(route failed 0% / pending 0% of frames, [1-9]\d* waypoint flips; still stuck at 60 s\)"),
+      _TRV: "PASS"}),
 ]
 
 # (description, anchor, replacement, {check_id: expected verdict}) or the
@@ -272,11 +304,20 @@ PROBES: list[tuple] = [
      "reset (+ ruin order)",
      [_F1_VALIDATED_WAYPOINTS, _RUIN_ORDER], None,
      {_SPAN: "PASS", _WPWALL: "PASS"}),
-    # F2 is covered by the FIX R1+R2 probe below, not by this one.
+    # F2 still fails under this probe: the route-planning bug (R1/R2) keeps the
+    # Brute stuck (and two enemies late, re-planning while their goal height
+    # moves). The probe after it adds R1+R2 and passes F2.
     ("FIX patrol freeze: F1 storey-aware validated waypoints, patrolIdx reset + F3 Brute size + ruin order "
      "(shared movement supplies wall slide)",
      [_F1_VALIDATED_WAYPOINTS, _F3_BRUTE_SIZE, _RUIN_ORDER], None,
-     {_PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS"}),
+     {_PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS", _F2: ("FAIL", r"stuck: .*" + _BRUTE_STUCK)}),
+    # With F1 repaired the spawn is waypoint 0, so the F2 budget must cover the
+    # walk to the waypoint the game actually steers to and the unchased
+    # control must walk away from the spawn: this is the contract any correct
+    # implementation meets once every patrol defect is repaired.
+    ("FIX every patrol defect: F1 storey-aware validated waypoints + F3 Brute size + ruin order + R1 + R2",
+     [_F1_VALIDATED_WAYPOINTS, _F3_BRUTE_SIZE, _RUIN_ORDER, _R2_ROOT_HOP, _R1_WAYPOINT_FEET], None,
+     {_F2: "PASS", _PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS"}),
     ("BREAK chase: enemies never close in",
      "      var moveSpeed=e.speed;\n",
      "      var moveSpeed=0;\n",
@@ -317,16 +358,18 @@ PROBES: list[tuple] = [
        "  /* mutation: floor tracking lost during actor preparation */")], None,
      {_FLOOR_BEFORE: "FAIL", _FLOOR_AFTER: "FAIL"}),
     # F2 (KNOWN_BUGS): both route-planning fixes are needed, and each alone is not enough.
+    # The partial fixes FAIL like the baseline, so their witness (WHICH enemies
+    # stay stuck) is pinned with a detail regex.
     ("FIX R1+R2: patrol plans to its waypoint's own support height; the planner root may change height on its "
      "first off-grid hop",
      [_R2_ROOT_HOP, _R1_WAYPOINT_FEET], None,
      {_F2: "PASS"}),
-    ("PARTIAL FIX R1 only (witness that R2 is needed): the Brute on the slope stays stuck",
+    ("PARTIAL FIX R1 only (witness that R2 is needed): the Brute on the slope stays stuck, the Scout returns",
      [_R1_WAYPOINT_FEET], None,
-     {_F2: "FAIL"}),
-    ("PARTIAL FIX R2 only (witness that R1 is needed): enemies whose waypoints stand at another height stay stuck",
+     {_F2: ("FAIL", _STUCK_ONLY_BRUTE)}),
+    ("PARTIAL FIX R2 only (witness that R1 is needed): the same two enemies as baseline stay stuck",
      [_R2_ROOT_HOP], None,
-     {_F2: "FAIL"}),
+     {_F2: ("FAIL", _STUCK_BRUTE_AND_SCOUT)}),
 ]
 
 EnemiesSuite = suite_testcase("enemies", KNOWN_BUGS, min_checks=18)

@@ -9,12 +9,15 @@ LAB.check("enemies: game script evaluates without throwing", LAB.load(__argv[0])
 // behave; tools/webui/tests/test_game_enemies.py lists the ones today's code
 // fails (KNOWN_BUGS) with the audit reference for each.
 //
-// usage (via tools/webui/game_lab.py): <extracted game js> [--seeds a,b] [--endless-seeds a,b]
-//   --seeds          Cave Test worlds (default 12345)
-//   --endless-seeds  normal Endless worlds (default 424242,777000). Without it,
-//                    the generation survey ALSO reads ten extra spawn windows
-//                    (GEN_EXTRA below, ~2.6 s): F3 embeds 2 of 340 enemies on the
-//                    default worlds, too few to see a partial fix.
+// usage (via tools/webui/game_lab.py): <extracted game js> [--seeds a,b] [--endless-seeds a,b] [--f2-trace]
+//   --seeds          Cave Test worlds (default 12345,424242,777)
+//   --endless-seeds  normal Endless worlds (default 424242,777000,777). Without
+//                    it, the generation survey ALSO reads ten extra spawn
+//                    windows (GEN_EXTRA below, ~2.6 s): F3 embeds 2 of 340
+//                    enemies on the default worlds, too few to see a partial fix.
+//   --f2-trace       one NOTE per return-to-patrol trial (target waypoint, chase
+//                    length, water factor, budget, return or stuck, route
+//                    failures, control walk)
 //
 // WORLDS (each measurement starts from a freshly built world, LAB.freshPage first):
 //   surface   normal Endless spawn window (surface enemies only near spawn)
@@ -417,15 +420,27 @@ if (LAB.loaded) (function () {
     // remembered-target search, NPC_PROFILES.enemy.memoryMs) and patrols. It
     // must get back to its route -- within the game's arrival radius of one of
     // its waypoints -- inside its OWN walking budget:
-    //   memoryMs + 1.5 x (chase path length + spawn-to-nearest-waypoint) /
-    //   (speed x PATROL_FACTOR x slowest water factor on the chase path).
-    // Retracing the chase and walking the spawn's clear sight line to the route
-    // is a physical return path; 1.5x allows slides and route-planning delay.
-    // Only well-formed patrols are used (every waypoint on an open cell and in
-    // view of the spawn point), no enemy embedded at spawn, and every subject
-    // must pass a positive control: unchased, from its spawn point, it reaches
-    // its route inside the same budget. Every trial must return: the trial set
-    // is fixed by the seeds and does not vary with the clock phase.
+    //   memoryMs + 1.5 x (chase path length + spawn-to-TARGET waypoint) /
+    //   (speed x PATROL_FACTOR x slowest water on that return path),
+    // where the target is the waypoint the game is steering the enemy to when
+    // the return starts (patrolWaypoints[patrolIdx]). Retracing the chase and
+    // then walking the spawn's clear sight line to that waypoint is a physical
+    // return path (the water factor is sampled along both legs); 1.5x allows
+    // slides and route-planning delay. The budget is per enemy, so it is NOT a
+    // fixed 20 s: a slow Brute wading back a long way gets more (the detail
+    // reports how many budgets exceed 20 s and which returns took longer than
+    // 20 s with route-planning failures, so a delay absorbed by a large budget
+    // stays visible). Only well-formed patrols are used (every waypoint on an
+    // open cell and in view of the spawn point), no enemy embedded at spawn;
+    // a trial whose chase ends within the arrival radius of a waypoint would
+    // return in 0 s and is excluded. Every subject must pass a positive
+    // control: unchased, from its spawn point, it walks to a waypoint at least
+    // twice the arrival radius from the spawn (so a spawn that is itself a
+    // waypoint cannot pass it in 0 s; it must cover at least one arrival
+    // radius) inside 1.5 x the farthest such straight-line distance at its
+    // patrol speed and the slowest water on those lines. Every trial must
+    // return: the trial set is fixed by the seeds and does not vary with the
+    // clock phase.
     var PATROL_FACTOR = NaN;
     function measurePatrolFactor(e) {           // one patrol tick toward a far waypoint, 8 directions, median
         return alone(e, function () {
@@ -445,8 +460,18 @@ if (LAB.loaded) (function () {
             return f[4];
         });
     }
-    var F2 = { trials: 0, ok: 0, noReach: 0, noDisplace: 0, noSpot: 0, noControl: 0, fails: [], used: [], perWorld: {} };
-    var MEMORY_S = NPC_PROFILES.enemy.memoryMs / 1000;
+    // Slowest water factor on the straight line a -> b (the game's own
+    // per-position wading slowdown, sampled every 2 u).
+    function lineWade(a, b) {
+        if (typeof waterActorSpeedFactor !== "function") return 1;
+        var d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(d / 2)), w = 1;
+        for (var i = 0; i <= n; i++) w = Math.min(w, waterActorSpeedFactor({ x: a.x + (b.x - a.x) * i / n, y: a.y + (b.y - a.y) * i / n }));
+        return w;
+    }
+    var F2 = { trials: 0, ok: 0, noReach: 0, noDisplace: 0, noSpot: 0, onRoute: 0, noCtlRoute: 0, noControl: 0, fails: [], used: [], perWorld: {},
+               budgets: [], over20: 0, late: [], ctlS: [] };
+    var MEMORY_S = NPC_PROFILES.enemy.memoryMs / 1000, OLD_LIMIT_S = 20;
+    var F2_TRACE = !!LAB.opt("f2-trace", false);     // one NOTE per trial (budget, return, control)
     forWorlds("return to patrol after a chase", null, function (W) {
         var n = 0, pw = F2.perWorld[W.label] = [0, 0];
         if (isNaN(PATROL_FACTOR) && enemies.length) PATROL_FACTOR = measurePatrolFactor(enemies[0]);
@@ -468,6 +493,7 @@ if (LAB.loaded) (function () {
             var from = fmtW(e);
             alone(e, function () {
                 var snap0 = snapE(e), sx = e.x, sy = e.y, len = 0, wade = 1, reached = false, t, px, py;
+                var vPatrol = e.speed * PATROL_FACTOR;
                 setPlayerAt(P.x, P.y, e.underground);
                 for (t = 0; t < 600 && !reached; t++) {
                     px = e.x; py = e.y;
@@ -478,14 +504,18 @@ if (LAB.loaded) (function () {
                 }
                 if (!reached) { F2.noReach++; return; }
                 if (Math.hypot(e.x - sx, e.y - sy) < 40) { F2.noDisplace++; return; }
-                var dw = Infinity;
-                e.patrolWaypoints.forEach(function (w) { dw = Math.min(dw, Math.hypot(w.x - sx, w.y - sy)); });
-                var budgetS = MEMORY_S + 1.5 * (len + dw) / (e.speed * PATROL_FACTOR * wade), frames = Math.ceil(budgetS * 60);
-                function walkBack() {
-                    var r = { best: Infinity, t: 0, failed: 0, pending: 0, flips: 0 }, idx = e.patrolIdx;
-                    for (r.t = 0; r.t < frames && !(r.best < ARRIVAL); r.t++) {
+                function nearest(ws) { var d = Infinity; ws.forEach(function (w) { d = Math.min(d, Math.hypot(w.x - e.x, w.y - e.y)); }); return d; }
+                if (nearest(e.patrolWaypoints) < ARRIVAL) { F2.onRoute++; return; }
+                // The waypoint the game is steering to when the return starts.
+                var tgt = e.patrolWaypoints[e.patrolIdx || 0], tgtIdx = e.patrolIdx || 0, dT = Math.hypot(tgt.x - sx, tgt.y - sy);
+                wade = Math.min(wade, lineWade({ x: sx, y: sy }, tgt));
+                var budgetS = MEMORY_S + 1.5 * (len + dT) / (vPatrol * wade), frames = Math.ceil(budgetS * 60);
+                function walkBack(targets, limit, r) {
+                    r = r || { best: Infinity, t: 0, failed: 0, pending: 0, flips: 0 };
+                    var idx = e.patrolIdx;
+                    for (; r.t < limit && !(r.best < ARRIVAL); r.t++) {
                         enemyTick(1);
-                        e.patrolWaypoints.forEach(function (w) { r.best = Math.min(r.best, Math.hypot(w.x - e.x, w.y - e.y)); });
+                        targets.forEach(function (w) { r.best = Math.min(r.best, Math.hypot(w.x - e.x, w.y - e.y)); });
                         var nav = e.npc && e.npc.navigation;
                         if (nav && nav.status === "failed") r.failed++;
                         if (nav && nav.status === "pending") r.pending++;
@@ -494,17 +524,42 @@ if (LAB.loaded) (function () {
                     return r;
                 }
                 shopMarker = { x: pos.x, y: pos.y };
-                var tr = walkBack();
-                // Positive control: the same enemy, unchased, from its spawn point.
+                var tr = walkBack(e.patrolWaypoints, frames), late = "";
+                if (!(tr.best < ARRIVAL)) {
+                    // Failure artifact only (the verdict is already decided):
+                    // keep walking to a 60 s horizon to tell stuck from slow.
+                    var ext = { best: tr.best, t: tr.t, failed: 0, pending: 0, flips: 0 };
+                    walkBack(e.patrolWaypoints, Math.max(frames, 3600), ext);
+                    late = ext.best < ARRIVAL ? "; reached its route after " + LAB.fx(ext.t / 60, 1) + " s" : "; still stuck at " + LAB.fx(ext.t / 60, 0) + " s";
+                }
+                // Positive control: the same enemy, unchased, from its spawn
+                // point, must WALK to a waypoint at least twice the arrival
+                // radius away (so it covers at least one arrival radius).
                 restE(e, snap0); if (e.npc) { npcCancelAction(e); npcForgetTarget(e); }
+                var far = snap0.patrolWaypoints.filter(function (w) { return Math.hypot(w.x - sx, w.y - sy) >= 2 * ARRIVAL; });
+                if (!far.length) { F2.noCtlRoute++; return; }
+                var dC = 0, wadeC = 1;
+                far.forEach(function (w) { dC = Math.max(dC, Math.hypot(w.x - sx, w.y - sy)); wadeC = Math.min(wadeC, lineWade({ x: sx, y: sy }, w)); });
+                var ctlFrames = Math.ceil(60 * 1.5 * dC / (vPatrol * wadeC));
                 setPlayerAt(sx + 30, sy, e.underground); shopMarker = { x: pos.x, y: pos.y };
-                var ctl = walkBack();
+                var ctl = walkBack(far, ctlFrames);
                 if (!(ctl.best < ARRIVAL)) { F2.noControl++; return; }
                 F2.trials++; n++; pw[1]++;
-                if (tr.best < ARRIVAL) { F2.ok++; pw[0]++; F2.used.push(tr.t / frames); }
-                else F2.fails.push(W.label + " " + kindOf(e) + "." + e.enemyType.id + "@" + from + " stopped " + LAB.fx(tr.best, 1) +
-                    "u from its nearest waypoint after " + LAB.fx(budgetS, 1) + " s (route failed " + Math.round(100 * tr.failed / tr.t) + "% / pending " +
-                    Math.round(100 * tr.pending / tr.t) + "% of frames, " + tr.flips + " waypoint flips)");
+                F2.ctlS.push(ctl.t / 60);
+                F2.budgets.push(budgetS);
+                if (budgetS > OLD_LIMIT_S) F2.over20++;
+                var tag = W.label + " " + kindOf(e) + "." + e.enemyType.id + "@" + from;
+                var navTxt = "route failed " + Math.round(100 * tr.failed / Math.max(1, tr.t)) + "% / pending " +
+                    Math.round(100 * tr.pending / Math.max(1, tr.t)) + "% of frames, " + tr.flips + " waypoint flips";
+                if (F2_TRACE) LAB.note("F2 trial " + tag + " target wp" + tgtIdx + " " + LAB.fx(dT, 1) + "u from spawn, chase " + LAB.fx(len, 1) +
+                    "u, wade " + LAB.fx(wade, 2) + ", budget " + LAB.fx(budgetS, 1) + " s, " + (tr.best < ARRIVAL ? "returned in " + LAB.fx(tr.t / 60, 1) + " s" :
+                    "stuck " + LAB.fx(tr.best, 1) + "u") + " (" + navTxt + "); control " + LAB.fx(ctl.t / 60, 1) + " s of " + LAB.fx(ctlFrames / 60, 1) + " s to " +
+                    LAB.fx(dC, 1) + "u");
+                if (tr.best < ARRIVAL) {
+                    F2.ok++; pw[0]++; F2.used.push(tr.t / frames);
+                    if (tr.t / 60 > OLD_LIMIT_S) F2.late.push(tag + " " + LAB.fx(tr.t / 60, 1) + " s of " + LAB.fx(budgetS, 1) + " s (" + navTxt + ")");
+                }
+                else F2.fails.push(tag + " stopped " + LAB.fx(tr.best, 1) + "u from its nearest waypoint after " + LAB.fx(budgetS, 1) + " s (" + navTxt + late + ")");
             });
         });
     });
@@ -1072,20 +1127,30 @@ if (LAB.loaded) (function () {
 
         // [F2] back to patrol after a chase
         F2.used.sort(function (a, b) { return a - b; });
+        F2.budgets.sort(function (a, b) { return a - b; });
+        F2.ctlS.sort(function (a, b) { return a - b; });
         var pfOk = PATROL_FACTOR > 0;
         LAB.check("enemies: after chasing the player past a wall an enemy gets back to its patrol route within its own walking budget (every trial)",
             F2.trials >= 30 && arrOk && pfOk && F2.ok === F2.trials,
             (F2.trials < 30 || !arrOk || !pfOk ? "PRECONDITION FAILED: " + F2.trials + " trials (no grazing spot " + F2.noSpot + ", chase never reached windup " + F2.noReach +
-                ", chase moved < 40 u " + F2.noDisplace + ", unchased control missed its route " + F2.noControl + "), arrival radius " + LAB.fx(ARRIVAL, 2) +
+                ", chase moved < 40 u " + F2.noDisplace + ", chase ended on its route " + F2.onRoute + ", no waypoint 2 x the arrival radius from the spawn " + F2.noCtlRoute +
+                ", unchased control missed its route " + F2.noControl + "), arrival radius " + LAB.fx(ARRIVAL, 2) +
                 ", patrol factor " + LAB.fx(PATROL_FACTOR, 3) + "; " : "") +
             F2.ok + "/" + F2.trials + " returned to within the arrival radius of a waypoint inside memory " + LAB.fx(MEMORY_S, 1) +
-            " s + 1.5 x (chase path + spawn-to-route) at speed x " + LAB.fx(PATROL_FACTOR, 3) + " (slowest water on the path)" +
-            "; excluded: no grazing spot " + F2.noSpot + ", no windup " + F2.noReach + ", moved < 40 u " + F2.noDisplace + ", control missed " + F2.noControl +
+            " s + 1.5 x (chase path + spawn-to-target waypoint) at speed x " + LAB.fx(PATROL_FACTOR, 3) + " (slowest water on that path)" +
+            "; excluded: no grazing spot " + F2.noSpot + ", no windup " + F2.noReach + ", moved < 40 u " + F2.noDisplace + ", ended on its route " + F2.onRoute +
+            ", no waypoint 2 x arrival from spawn " + F2.noCtlRoute + ", control missed " + F2.noControl +
+            "; budget median " + LAB.fx(F2.budgets[F2.budgets.length >> 1], 1) + " s max " + LAB.fx(F2.budgets[F2.budgets.length - 1], 1) + " s, " +
+            F2.over20 + "/" + F2.trials + " budgets exceed the old fixed " + OLD_LIMIT_S + " s" +
             "; budget used max " + LAB.fx(F2.used[F2.used.length - 1], 2) + " median " + LAB.fx(F2.used[F2.used.length >> 1], 2) +
+            "; unchased controls walked median " + LAB.fx(F2.ctlS[F2.ctlS.length >> 1], 1) + " s min " + LAB.fx(F2.ctlS[0], 1) + " s" +
+            "; returned later than " + OLD_LIMIT_S + " s: " + F2.late.length + (F2.late.length ? " (" + head(F2.late, 4) + ")" : "") +
             (F2.fails.length ? "; stuck: " + head(F2.fails, 4) : ""));
         LAB.metric("enemies.return_to_patrol.trials", F2.trials);
         LAB.metric("enemies.return_to_patrol.stuck", F2.trials - F2.ok);
         LAB.metric("enemies.return_to_patrol.patrol_factor", PATROL_FACTOR);
+        LAB.metric("enemies.return_to_patrol.budget_over_old_limit", F2.over20);
+        LAB.metric("enemies.return_to_patrol.returned_after_old_limit", F2.late.length);
         perWorld("enemies.return_to_patrol.ok_of_trials", F2.perWorld);
 
         // [F4] separation into walls
