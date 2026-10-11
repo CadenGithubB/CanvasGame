@@ -48,7 +48,7 @@ if (LAB.loaded) {
     var ENDLESS_SEEDS = LAB.seeds([424242, 777000, 777, 1], "endless-seeds");
     var CAVE_MATCH_R = 0.5;           // a cave chest sits ON its chamber centre
     var CAVE_NET_R = 12;              // Endless: networks within 12 regions of spawn
-    var SURFACE_TILES = [-5, 0, 5];   // Endless: surface sample = chunks -7..7 (3x3 windows) + cave tiles
+    var SURFACE_R = 7;                // Endless: surface sample = chunks -7..7 (surfaceTiles()) + cave tiles
     var ENDLESS_FLOOR_MAX = 8;        // Endless: cave chests of the nearest network used by the floor/cap passes
     var TRIP_CHUNKS = 4;              // re-centre trip: > WINDOW_CHUNKS/2 (any hysteresis must re-centre), < WINDOW_CHUNKS+2 (no eviction)
     var WALK_FPS = 30;
@@ -65,7 +65,8 @@ if (LAB.loaded) {
         terms: [],             // {world, wx, wy, ok, why}
         floor: [], cap: [], persist: [], walk: [], tierControls: [],
         prompt: null, reserve: null,
-        notIsolated: 0
+        notIsolated: 0,
+        unjudged: []           // terminal chambers no window placement could judge (a fixture failure)
     };
 
     // startEndless reseeds Math.random, startCaveTest does not: reseed here so
@@ -108,6 +109,23 @@ if (LAB.loaded) {
     function usable(wx, wy) {
         var k = chunkOf(wx, wy);
         return k.cx >= windowCX + 1 && k.cx <= windowCX + WINDOW_CHUNKS - 2 && k.cy >= windowCY + 1 && k.cy <= windowCY + WINDOW_CHUNKS - 2;
+    }
+    // The usable chunks as offsets lo..hi from the window's centre chunk
+    // (updateChunks centres the window on the player's chunk at
+    // windowCX + floor(WINDOW_CHUNKS / 2)). WINDOW_CHUNKS is a setting -- 7
+    // today, 5 under persistence's FIX D23a -- so every window placement below
+    // is derived from it: a cover that assumed +-2 judged 2 of 44 cave chests
+    // in 5-chunk windows.
+    function usableSpan() {
+        var half = Math.floor(WINDOW_CHUNKS / 2);
+        return { lo: 1 - half, hi: WINDOW_CHUNKS - 2 - half };
+    }
+    // Window centre offsets whose usable spans tile -SURFACE_R..SURFACE_R
+    // (-5, 0, 5 in 7-chunk windows).
+    function surfaceTiles() {
+        var u = usableSpan(), out = [];
+        for (var c = -SURFACE_R - u.lo; c + u.lo <= SURFACE_R; c += u.hi - u.lo + 1) out.push(c);
+        return out;
     }
     function emptySlots() { equipment = { armor: null, hat: null, robes: null, boots: null, relic: null }; }
     function slotIds() {
@@ -328,21 +346,32 @@ if (LAB.loaded) {
         });
     }
     // Visit windows until every terminal chamber has been judged: greedy
-    // centres chosen so each covers the most pending chambers (usable = +-2).
+    // centres, among those whose usable span holds the first pending chamber,
+    // chosen so each covers the most pending chambers. Every placement judges
+    // that first chamber; one that does not is recorded, never skipped.
     function harvestAll(world, terms, seen) {
         harvest(world, terms, seen);
-        var guard = 0;
+        var u = usableSpan();
         for (;;) {
             var pending = terms.filter(function (t) { return !t.judged; });
-            if (!pending.length || guard++ > 200) break;
+            if (!pending.length) break;
             var p0 = chunkOf(pending[0].wx, pending[0].wy), best = null;
-            for (var ox = -2; ox <= 2; ox++) for (var oy = -2; oy <= 2; oy++) {
+            for (var ox = -u.hi; ox <= -u.lo; ox++) for (var oy = -u.hi; oy <= -u.lo; oy++) {
                 var ccx = p0.cx + ox, ccy = p0.cy + oy, n = 0;
-                pending.forEach(function (t) { var q = chunkOf(t.wx, t.wy); if (Math.abs(q.cx - ccx) <= 2 && Math.abs(q.cy - ccy) <= 2) n++; });
+                pending.forEach(function (t) { var q = chunkOf(t.wx, t.wy);
+                    if (q.cx - ccx >= u.lo && q.cx - ccx <= u.hi && q.cy - ccy >= u.lo && q.cy - ccy <= u.hi) n++; });
                 if (!best || n > best.n) best = { cx: ccx, cy: ccy, n: n };
             }
-            LAB.placeWorld(best.cx * CHUNK_SIZE + CHUNK_SIZE / 2, best.cy * CHUNK_SIZE + CHUNK_SIZE / 2, "top");
-            harvest(world, terms, seen);
+            if (best) {
+                LAB.placeWorld(best.cx * CHUNK_SIZE + CHUNK_SIZE / 2, best.cy * CHUNK_SIZE + CHUNK_SIZE / 2, "top");
+                harvest(world, terms, seen);
+            }
+            if (!pending[0].judged) {
+                A.unjudged.push(world + ": " + terms.filter(function (t) { return !t.judged; }).length + " terminal chamber(s) left unjudged; " +
+                    (best ? "the window centred on chunk " + best.cx + "," + best.cy : "a " + WINDOW_CHUNKS + "-chunk window (no usable chunk)") +
+                    " did not judge (" + r1(pending[0].wx) + "," + r1(pending[0].wy) + ")");
+                break;
+            }
         }
     }
 
@@ -564,7 +593,8 @@ if (LAB.loaded) {
             A.worlds.push({ world: world, terminals: terms.length });
             var seen = {}, cave0 = A.cave.length, surf0 = A.surf.length;
             harvestAll(world, terms, seen);
-            SURFACE_TILES.forEach(function (ty) { SURFACE_TILES.forEach(function (tx) {
+            var tiles = surfaceTiles();
+            tiles.forEach(function (ty) { tiles.forEach(function (tx) {
                 LAB.placeWorld(tx * CHUNK_SIZE + CHUNK_SIZE / 2, ty * CHUNK_SIZE + CHUNK_SIZE / 2, "top");
                 harvest(world, terms, seen);
             }); });
@@ -668,9 +698,10 @@ if (LAB.loaded) {
         // terminal chambers
         var noTerm = A.worlds.filter(function (w) { return w.terminals === 0; });
         LAB.check("loot: precondition: every world has terminal cave chambers to judge",
-            A.worlds.length > 0 && noTerm.length === 0,
+            A.worlds.length > 0 && noTerm.length === 0 && !A.unjudged.length,
             A.worlds.map(function (w) { return w.world + " " + w.terminals; }).join(", ") +
             (noTerm.length ? "; PRECONDITION: no terminal chamber in " + noTerm.map(function (w) { return w.world; }).join(",") : "") +
+            (A.unjudged.length ? "; PRECONDITION: window placement left chambers unjudged: " + A.unjudged.join("; ") : "") +
             " (terminal chambers 4537-4545)");
         var T = A.terms, Tok = T.filter(function (t) { return t.ok; });
         var perWorld = {};

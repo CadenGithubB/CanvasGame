@@ -23,6 +23,13 @@ loot path in handleInput, the chest draw pass in a real loop() frame):
   - a looted chest stays looted across a measured window re-centre;
   - chests inside a cave entrance reserve are filtered out of the window.
 
+Chests are judged in chunks at least one chunk inside the window edge, and the
+windows that cover every terminal chamber (and Endless chunks -7..7 for the
+surface sample) are placed from WINDOW_CHUNKS, a setting: a cover built for
+7-chunk windows judged 2 of 44 cave chests under persistence's FIX D23a (a
+5-chunk start window). A chamber no placement judges fails the terminal-chamber
+precondition instead of dropping out.
+
 Moved to the persistence suite (it owns them): swapped-item quality/identity
 across a re-centre or an eviction (H3) and collected-chest-after-eviction.
 
