@@ -223,8 +223,8 @@ PROBES: list = [
     ("BREAK: saveAllEntityDeltas forgets that a chest was collected (L7397)",
      _SAVE_COLLECTED, "        tcChunk.treasureChests[tc._chunkIdx].collected = false;",
      {_KEEP_RE: "FAIL"}),
-    ("Re-centre hysteresis alone (a plausible G3 perf change, L7483): the 4-chunk trip still re-centres, "
-     "so the re-centre check's precondition holds and it stays PASS",
+    ("CONTROL: re-centre hysteresis alone (a plausible G3 perf change, L7483): the 4-chunk trip still "
+     "re-centres, so the re-centre check's precondition holds and it stays PASS",
      _RECENTRE, _HYSTERESIS, {_KEEP_RE: "PASS"}),
     ("BREAK under re-centre hysteresis (review p8): with the collected write-back broken, the check "
      "must FAIL because of ITS OWN trip (the 2-chunk trip it replaced did not re-centre under hysteresis)",

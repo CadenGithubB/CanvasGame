@@ -326,6 +326,42 @@ def apply_probe(base: str, anchor, replacement) -> tuple[str, list[str]]:
     return text, bad
 
 
+# A GUARD or CONTROL probe states that a plausible change leaves a verdict
+# where it is (or voids it), so the unmutated game may satisfy all of its
+# declarations. Every other probe must declare something it changes.
+NON_FLIP_PROBE_PREFIXES = ("GUARD", "CONTROL")
+
+
+def is_non_flip_probe(desc: str) -> bool:
+    return desc.startswith(NON_FLIP_PROBE_PREFIXES)
+
+
+def unmet_declarations(by_id: dict[str, Check], expect: dict) -> list[str]:
+    """Each declaration of a probe that one run's checks (HarnessRun.by_id()) do not satisfy, with the reason.
+
+    Empty means the run satisfies the probe. The rules are probe_testcase's:
+    a PRECONDITION declaration needs a FAIL carrying the marker, a FAIL
+    declaration rejects one that carries it, and a detail regex must be found.
+    """
+    wrong = []
+    for cid, spec in expect.items():
+        want, rx = probe_expectation(spec)
+        got = ("PASS" if by_id[cid].ok else "FAIL") if cid in by_id else "MISSING"
+        pre = cid in by_id and "PRECONDITION" in by_id[cid].detail.upper()
+        detail = f"  [{by_id[cid].detail}]" if cid in by_id else ""
+        if want == "PRECONDITION":
+            if got != "FAIL" or not pre:
+                wrong.append(f"{cid}: expected a FAIL on its PRECONDITION, got {got}" +
+                             ("" if pre or got != "FAIL" else " (detected without a PRECONDITION)") + detail)
+        elif got != want:
+            wrong.append(f"{cid}: expected {want}, got {got}" + detail)
+        elif want == "FAIL" and pre:
+            wrong.append(f"{cid}: setup failed instead of detecting the intended defect{detail}")
+        if rx is not None and cid in by_id and not re.search(rx, by_id[cid].detail):
+            wrong.append(f"{cid}: detail does not match {rx!r}{detail}")
+    return wrong
+
+
 def probe_expectation(spec) -> tuple[str, str | None]:
     """A probe expectation as (verdict, detail regex or None).
 
@@ -367,6 +403,13 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
     its witness that way, so the claim about WHICH subjects stay broken is
     enforced rather than only the unchanged verdict.
 
+    A probe the UNMUTATED game already satisfies shows nothing about its
+    mutation, so the class also runs the unmutated suite (the same run the
+    suite's own test uses, shared through `submit`) and fails if it satisfies
+    every declaration of any probe that is not a GUARD or CONTROL (see
+    NON_FLIP_PROBE_PREFIXES). That catches a FIX of a repair that already
+    shipped and a witness regex the baseline detail also matches.
+
     `anchor` must occur exactly once in the extracted game JS, so a page edit
     that moves the code fails loudly instead of silently mutating nothing.
     Opt-in because each probe is one more full harness run.
@@ -383,7 +426,9 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
 
         @classmethod
         def setUpClass(cls) -> None:
-            # Submit every probe of this suite at once; each test collects its own.
+            # Submit the unmutated suite first (shared with the suite's own
+            # test), then every probe of this suite; each test collects its own.
+            cls.baseline = submit(suite, args)
             base = game_js()
             cls.futures = {}
             for i, (_d, anchor, replacement, _e) in enumerate(probes):
@@ -391,7 +436,17 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
                 if not _bad:
                     cls.futures[i] = submit(suite, args, js_text=mutated)
 
-    import re as _re
+        def test_no_probe_is_satisfied_by_the_unmutated_game(self) -> None:
+            run = type(self).baseline.result()
+            self.assertEqual(1, len(run.verdicts), f"the unmutated suite did not finish\n{run.stdout[-2000:]}\n{run.stderr[-1500:]}")
+            by_id = run.by_id()
+            vacuous = [f"test_probe_{i:02d}: {desc}" for i, (desc, _a, _r, expect) in enumerate(probes)
+                       if not is_non_flip_probe(desc) and not unmet_declarations(by_id, expect)]
+            self.assertEqual([], vacuous, "the unmutated game already satisfies every declaration of these probes, "
+                             "so passing them shows nothing about their mutation (a FIX of a repair that already "
+                             "shipped, or a witness regex the baseline detail also matches); declare what the "
+                             "mutation changes, or label a deliberate non-flip GUARD or CONTROL:\n  " +
+                             "\n  ".join(vacuous))
 
     def make(i, desc, anchor, replacement, expect):
         def test(self) -> None:
@@ -401,23 +456,7 @@ def probe_testcase(suite: str, probes: list[tuple[str, str, str, dict[str, str]]
             self.assertEqual(1, len(run.verdicts), f"harness did not finish under probe\n{run.stdout[-2000:]}\n{run.stderr[-1500:]}")
             crashed = [c.id for c in run.checks if not c.ok and c.id.endswith("scenario ran to completion")]
             self.assertEqual([], crashed, "a crashed scenario is not evidence that the intended defect was detected")
-            by_id = run.by_id()
-            wrong = []
-            for cid, spec in expect.items():
-                want, rx = probe_expectation(spec)
-                got = ("PASS" if by_id[cid].ok else "FAIL") if cid in by_id else "MISSING"
-                pre = cid in by_id and "PRECONDITION" in by_id[cid].detail.upper()
-                detail = f"  [{by_id[cid].detail}]" if cid in by_id else ""
-                if want == "PRECONDITION":
-                    if got != "FAIL" or not pre:
-                        wrong.append(f"{cid}: expected a FAIL on its PRECONDITION, got {got}" +
-                                     ("" if pre or got != "FAIL" else " (detected without a PRECONDITION)") + detail)
-                elif got != want:
-                    wrong.append(f"{cid}: expected {want}, got {got}" + detail)
-                elif want == "FAIL" and pre:
-                    wrong.append(f"{cid}: setup failed instead of detecting the intended defect{detail}")
-                if rx is not None and cid in by_id and not _re.search(rx, by_id[cid].detail):
-                    wrong.append(f"{cid}: detail does not match {rx!r}{detail}")
+            wrong = unmet_declarations(run.by_id(), expect)
             self.assertEqual([], wrong, f"probe '{desc}' did not flip the checks it should:\n  " + "\n  ".join(wrong))
         test.__name__ = f"test_probe_{i:02d}"
         test.__doc__ = desc
