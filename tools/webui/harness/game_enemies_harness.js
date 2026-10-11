@@ -1144,7 +1144,9 @@ if (LAB.loaded) (function () {
             F2.over20 + "/" + F2.trials + " budgets exceed the old fixed " + OLD_LIMIT_S + " s" +
             "; budget used max " + LAB.fx(F2.used[F2.used.length - 1], 2) + " median " + LAB.fx(F2.used[F2.used.length >> 1], 2) +
             "; unchased controls walked median " + LAB.fx(F2.ctlS[F2.ctlS.length >> 1], 1) + " s min " + LAB.fx(F2.ctlS[0], 1) + " s" +
-            "; returned later than " + OLD_LIMIT_S + " s: " + F2.late.length + (F2.late.length ? " (" + head(F2.late, 4) + ")" : "") +
+            // Every late return, not the first few: a route-planning delay the
+            // per-enemy budget absorbs must stay visible however many there are.
+            "; returned later than " + OLD_LIMIT_S + " s: " + F2.late.length + (F2.late.length ? " (" + F2.late.join("; ") + ")" : "") +
             (F2.fails.length ? "; stuck: " + head(F2.fails, 4) : ""));
         LAB.metric("enemies.return_to_patrol.trials", F2.trials);
         LAB.metric("enemies.return_to_patrol.stuck", F2.trials - F2.ok);
