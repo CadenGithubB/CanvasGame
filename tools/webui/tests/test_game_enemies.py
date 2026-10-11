@@ -144,7 +144,8 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "8.5 s, route failed 41% / pending 41%) are both still stuck at 60 s, and both walk their route unchased "
         "from spawn (4.0 s and 1.1 s). FIX R1+R2 passes it (44/44), and so does every patrol fix together "
         "(F1+F3+ruin order+R1+R2, 42/42); R1 alone leaves only the Brute stuck (43/44) and R2 alone leaves the "
-        "same two as baseline (42/44); F1+F3+ruin order alone leaves the Brute stuck and two enemies late (39/42). "
+        "same two as baseline (42/44), the Brute's route pending 41% of frames instead of 2%; F1+F3+ruin order "
+        "alone leaves the Brute stuck and two enemies late (39/42). "
         "The budget is per enemy, not the old fixed 20 s: 17/44 budgets exceed 20 s (max 58.0 s, a Brute wading "
         "at 0.55 speed), and two baseline returns take longer than 20 s and pass only because of that: 424242 "
         "cave Brute@282,2682 20.2 s (19.9 s under FIX R1+R2, water-slowed) and 777000 cave Brute@-5166,-30 22.5 s "
@@ -214,7 +215,13 @@ _PATROL_NAV = _R1_WAYPOINT_FEET[0]
 _BRUTE_STUCK = r"endless 777000 cave surface\.tank@-5250,738 stopped [^;]+; still stuck at 60 s\)"
 _SCOUT_STUCK = r"endless 777 cave surface\.fast@16446,-702 stopped [^;]+; still stuck at 60 s\)"
 _STUCK_ONLY_BRUTE = r"; stuck: " + _BRUTE_STUCK + r"$"
-_STUCK_BRUTE_AND_SCOUT = r"; stuck: " + _BRUTE_STUCK + r"; " + _SCOUT_STUCK + r"$"
+# R2 alone leaves the same two enemies stuck as the baseline, so WHICH enemies
+# cannot be its witness. What R2 changes is how the Brute's route requests
+# fail: no longer refused at their root, they stay pending for 41% of frames
+# (baseline 2%, route failed 93%) and still never produce a route (R1).
+_BRUTE_STUCK_SEARCHING = (r"endless 777000 cave surface\.tank@-5250,738 stopped [^;(]+\(route failed \d+% / pending "
+                          r"(?:[2-9]\d|100)% of frames, \d+ waypoint flips; still stuck at 60 s\)")
+_STUCK_SEARCHING_BRUTE_AND_SCOUT = r"; stuck: " + _BRUTE_STUCK_SEARCHING + r"; " + _SCOUT_STUCK + r"$"
 
 _ROOF = "enemies: a cave enemy does not chase a player standing on the cave roof"
 _RROOF = "enemies: a surface enemy does not chase a player standing in the cave below it"
@@ -379,8 +386,11 @@ PROBES: list[tuple] = [
        "  /* mutation: floor tracking lost during actor preparation */")], None,
      {_FLOOR_BEFORE: "FAIL", _FLOOR_AFTER: "FAIL"}),
     # F2 (KNOWN_BUGS): both route-planning fixes are needed, and each alone is not enough.
-    # The partial fixes FAIL like the baseline, so their witness (WHICH enemies
-    # stay stuck) is pinned with a detail regex.
+    # The partial fixes FAIL like the baseline, so each pins a witness the
+    # baseline detail lacks: R1 alone frees the Scout (only the Brute is
+    # stuck); R2 alone leaves the same two stuck, so its witness is the Brute's
+    # route requests staying pending instead of failing at their root.
+    # ReturnToPatrolWitnessTests checks both regexes against recorded details.
     ("FIX R1+R2: patrol plans to its waypoint's own support height; the planner root may change height on its "
      "first off-grid hop",
      [_R2_ROOT_HOP, _R1_WAYPOINT_FEET], None,
@@ -388,15 +398,116 @@ PROBES: list[tuple] = [
     ("PARTIAL FIX R1 only (witness that R2 is needed): the Brute on the slope stays stuck, the Scout returns",
      [_R1_WAYPOINT_FEET], None,
      {_F2: ("FAIL", _STUCK_ONLY_BRUTE)}),
-    ("PARTIAL FIX R2 only (witness that R1 is needed): the same two enemies as baseline stay stuck",
+    ("PARTIAL FIX R2 only (witness that R1 is needed): the same two enemies as baseline stay stuck, but the "
+     "Brute's route requests are no longer refused at their root (pending >= 20% of frames, baseline 2%)",
      [_R2_ROOT_HOP], None,
-     {_F2: ("FAIL", _STUCK_BRUTE_AND_SCOUT)}),
+     {_F2: ("FAIL", _STUCK_SEARCHING_BRUTE_AND_SCOUT)}),
 ]
 
 EnemiesSuite = suite_testcase("enemies", KNOWN_BUGS, min_checks=18)
 EnemiesProbes = probe_testcase("enemies", PROBES)
 EnemiesMotionProbes = probe_testcase("enemies", MOTION_PROBES)
 EnemiesMotionProbes.__name__ = EnemiesMotionProbes.__qualname__ = "Game_enemies_MotionProbes"
+
+
+class ReturnToPatrolWitnessTests(unittest.TestCase):
+    """The F2 partial-fix regexes tell their probe from the unmutated game (no JS engine needed).
+
+    A partial fix FAILs the return-to-patrol check exactly like the baseline,
+    so only its detail regex can show that the mutation changed anything. The
+    details below are what jsc printed for the unmutated game, PARTIAL FIX R1
+    only and PARTIAL FIX R2 only (October 2026, fifth audit-lab pass). Each
+    partial fix's declared regex must accept its own detail and reject the
+    baseline's and the other partial fix's; the KNOWN_BUGS regex must accept
+    all three (they are the same known bug). An earlier R2 regex named only
+    the two stuck enemies, which the baseline detail also ends with, so a
+    probe whose mutation changed nothing passed it.
+    """
+
+    BASELINE = (
+        "42/44 returned to within the arrival radius of a waypoint inside memory 3.0 s + 1.5 x (chase path + "
+        "spawn-to-target waypoint) at speed x 0.380 (slowest water on that path); excluded: no grazing spot "
+        "296, no windup 11, moved < 40 u 18, ended on its route 1, no waypoint 2 x arrival from spawn 6, "
+        "control missed 0; budget median 16.8 s max 58.0 s, 17/44 budgets exceed the old fixed 20 s; budget "
+        "used max 0.72 median 0.43; unchased controls walked median 1.7 s min 0.6 s; returned later than 20 "
+        "s: 2 (endless 424242 cave surface.tank@282,2682 20.2 s of 58.0 s (route failed 8% / pending 0% of "
+        "frames, 0 waypoint flips); endless 777000 cave surface.tank@-5166,-30 22.5 s of 31.3 s (route failed"
+        " 0% / pending 3% of frames, 1 waypoint flips)); stuck: endless 777000 cave surface.tank@-5250,738 "
+        "stopped 43.8u from its nearest waypoint after 21.0 s (route failed 93% / pending 2% of frames, 1057 "
+        "waypoint flips; still stuck at 60 s); endless 777 cave surface.fast@16446,-702 stopped 51.7u from "
+        "its nearest waypoint after 8.5 s (route failed 41% / pending 41% of frames, 210 waypoint flips; "
+        "still stuck at 60 s)")
+    R1_ONLY = (
+        "43/44 returned to within the arrival radius of a waypoint inside memory 3.0 s + 1.5 x (chase path + "
+        "spawn-to-target waypoint) at speed x 0.380 (slowest water on that path); excluded: no grazing spot "
+        "296, no windup 11, moved < 40 u 18, ended on its route 1, no waypoint 2 x arrival from spawn 6, "
+        "control missed 0; budget median 16.8 s max 58.0 s, 17/44 budgets exceed the old fixed 20 s; budget "
+        "used max 0.72 median 0.42; unchased controls walked median 1.7 s min 0.6 s; returned later than 20 "
+        "s: 1 (endless 424242 cave surface.tank@282,2682 20.2 s of 58.0 s (route failed 8% / pending 0% of "
+        "frames, 0 waypoint flips)); stuck: endless 777000 cave surface.tank@-5250,738 stopped 43.8u from its"
+        " nearest waypoint after 21.0 s (route failed 52% / pending 43% of frames, 541 waypoint flips; still "
+        "stuck at 60 s)")
+    R2_ONLY = (
+        "42/44 returned to within the arrival radius of a waypoint inside memory 3.0 s + 1.5 x (chase path + "
+        "spawn-to-target waypoint) at speed x 0.380 (slowest water on that path); excluded: no grazing spot "
+        "296, no windup 11, moved < 40 u 18, ended on its route 1, no waypoint 2 x arrival from spawn 6, "
+        "control missed 0; budget median 16.9 s max 58.0 s, 16/44 budgets exceed the old fixed 20 s; budget "
+        "used max 0.78 median 0.40; unchased controls walked median 1.7 s min 0.6 s; returned later than 20 "
+        "s: 1 (endless 777000 cave surface.tank@-5166,-30 22.5 s of 29.2 s (route failed 0% / pending 3% of "
+        "frames, 1 waypoint flips)); stuck: endless 777000 cave surface.tank@-5250,738 stopped 43.8u from its"
+        " nearest waypoint after 21.0 s (route failed 54% / pending 41% of frames, 612 waypoint flips; still "
+        "stuck at 60 s); endless 777 cave surface.fast@16446,-702 stopped 51.8u from its nearest waypoint "
+        "after 8.5 s (route failed 44% / pending 41% of frames, 225 waypoint flips; still stuck at 60 s)")
+
+    @staticmethod
+    def declared(probes, prefix):
+        """The F2 detail regex a probe declares, looked up by its description."""
+        import tools.webui.game_lab as game_lab
+        hits = [expect[_F2] for desc, _a, _r, expect in probes if desc.startswith(prefix)]
+        if len(hits) != 1:
+            raise AssertionError(f"expected one probe starting {prefix!r}, found {len(hits)}")
+        verdict, rx = game_lab.probe_expectation(hits[0])
+        if verdict != "FAIL" or rx is None:
+            raise AssertionError(f"{prefix!r} must declare (\"FAIL\", regex) on the return check, not {hits[0]!r}")
+        return rx
+
+    def matches(self, rx, detail):
+        import re
+        return re.search(rx, detail) is not None
+
+    def test_the_known_bug_regex_accepts_every_recorded_detail(self):
+        for name in ("BASELINE", "R1_ONLY", "R2_ONLY"):
+            self.assertTrue(self.matches(KNOWN_BUGS[_F2][1], getattr(self, name)), name)
+
+    def test_r1_only_witness_rejects_the_baseline(self):
+        rx = self.declared(PROBES, "PARTIAL FIX R1 only")
+        self.assertTrue(self.matches(rx, self.R1_ONLY))
+        self.assertFalse(self.matches(rx, self.BASELINE), "R1's witness is satisfied by the unmutated game")
+        self.assertFalse(self.matches(rx, self.R2_ONLY))
+
+    def test_r2_only_witness_rejects_the_baseline(self):
+        rx = self.declared(PROBES, "PARTIAL FIX R2 only")
+        self.assertTrue(self.matches(rx, self.R2_ONLY))
+        self.assertFalse(self.matches(rx, self.BASELINE), "R2's witness is satisfied by the unmutated game")
+        self.assertFalse(self.matches(rx, self.R1_ONLY))
+
+    def test_r2_only_witness_needs_the_brute_searching_and_both_stuck(self):
+        # The pending share is the witness: at the 20% bound it holds, just
+        # below it (or at the baseline's 2%) it does not.
+        rx = self.declared(PROBES, "PARTIAL FIX R2 only")
+        brute = "(route failed 54% / pending 41% of frames, 612 waypoint flips"
+        self.assertIn(brute, self.R2_ONLY)
+        for pending, ok in (("20", True), ("19", False), ("2", False), ("100", True)):
+            self.assertEqual(ok, self.matches(rx, self.R2_ONLY.replace(brute, brute.replace("41%", pending + "%"))),
+                             f"Brute pending {pending}%")
+        scout = "; endless 777 cave surface.fast@16446,-702 stopped"
+        self.assertIn(scout, self.R2_ONLY)
+        self.assertFalse(self.matches(rx, self.R2_ONLY[:self.R2_ONLY.index(scout)]), "the Scout returned")
+
+    def test_break_f2_witness_rejects_every_recorded_detail(self):
+        rx = self.declared(MOTION_PROBES, "BREAK F2 (on top of FIX R2)")
+        for name in ("BASELINE", "R1_ONLY", "R2_ONLY"):
+            self.assertFalse(self.matches(rx, getattr(self, name)), name)
 
 if __name__ == "__main__":
     unittest.main()
