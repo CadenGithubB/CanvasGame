@@ -145,7 +145,10 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         "cave Brute@282,2682 20.2 s (19.9 s under FIX R1+R2, water-slowed) and 777000 cave Brute@-5166,-30 22.5 s "
         "(16.3 s under FIX R1+R2), so part of R1's delay sits inside the budget; the detail lists every return "
         "later than 20 s with its route failures. The navigation code is unchanged since main, whose page shows "
-        "the same two stuck enemies",
+        "the same two stuck enemies. Both stuck enemies sit in windows re-centred on the nearest cave network, so a "
+        "change that moves cave networks moves them out of the fixture: under cave geometry's FIX D16 (an "
+        "independent cave gate) 52/52 return and this check reads PASS with R1 and R2 untouched. After such a "
+        "change a PASS here is not a route-planning repair until stuck subjects are found again",
         r"[1-9]\d*/\d+ returned .*stuck: .*after \d+\.\d s \(route failed [1-9]\d*% / pending \d+% of frames, "
         r"[1-9]\d* waypoint flips; still stuck at 60 s\)"),
 }

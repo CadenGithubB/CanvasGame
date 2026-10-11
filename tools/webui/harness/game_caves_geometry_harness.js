@@ -15,6 +15,8 @@
 //                        defaults because it is the one that reaches N14 (an
 //                        approach cell 284 u out, beyond the 260 u STEP_DOWN
 //                        relaxation).
+//   bearing census       fixed normal Endless seeds (BEARING_SEEDS) for the D16
+//                        mouth-bearing check; not changed by --endless-seeds.
 //   --networks N|all     normal Endless windows per seed, nearest network
 //                        first (default 1). A triage sweep; game_lab's CLI does
 //                        not forward it -- pass it through
@@ -52,6 +54,16 @@ var NETWORKS_PER_SEED = (function () {
 })();
 var CT_SEEDS = LAB.seeds([12345, 1, 777, 424242]);
 var ENDLESS_SEEDS = LAB.seeds([424242, 999983, 123], "endless-seeds");
+// D16 bearing census: fixed normal Endless worlds, every network within
+// BEARING_RADIUS regions of spawn (about 450 networks), binned by the mouth's
+// bearing from its region centre. Uniform bearings give a chi-square with
+// BEARING_BINS - 1 = 11 degrees of freedom; 31.26 is its 0.999 quantile, so a
+// correct generator fails this census with probability 0.001.
+var BEARING_SEEDS = [424242, 999983, 123, 777000, 777, 1, 3, 8, 55555, 31337, 12345, 98765, 2024, 4242, 99];
+var BEARING_RADIUS = 20;
+var BEARING_BINS = 12;        // 30 deg bins
+var BEARING_CHI_MAX = 31.26;  // chi-square, 11 dof, p = 0.001
+var BEARING_MIN_N = 240;      // networks (>= 20 expected per bin)
 
 // ── small helpers (reading, never re-deriving) ──────────────────────────────
 var fx = LAB.fx;
@@ -98,7 +110,7 @@ var A = {
     levee: { bad: 0, pairs: 0, high: 0, per: [], ex: [] },
     trunc: { miss: 0, extra: 0, want: 0, chunks: 0, per: [], minMargin: Infinity },
     water: { wall: 0, water: 0, bad: false, per: [] },
-    angle: { n: 0, lower: 0, max: -1, per: [] },
+    angle: { n: 0, lower: 0, max: -1, per: [], bins: Array.apply(null, Array(BEARING_BINS)).map(function () { return 0; }), chi: NaN },
     f6: 0
 };
 
@@ -636,7 +648,6 @@ if (LAB.loaded) {
         });
     });
 
-    var normalNets = [];
     ENDLESS_SEEDS.forEach(function (seed) {
         LAB.scenario(P + "normal endless seed " + seed, function () {
             LAB.freshPage();
@@ -646,7 +657,6 @@ if (LAB.loaded) {
             var regions = (2 * NET_RADIUS + 1) * (2 * NET_RADIUS + 1);
             LAB.metric("caves_geometry.n" + seed + ".regions_with_network_pct", 100 * found.length / regions, "%");
             LAB.metric("caves_geometry.n" + seed + ".nearest_entrance_u", found.length ? found[0].dist : -1, "u");
-            found.forEach(function (f) { normalNets.push({ seed: seed, net: f.net }); });
             if (!found.length) { A.expectedWorlds++; A.worlds.push("n" + seed + ": NO cave network within " + NET_RADIUS + " regions"); return; }
             var seen = {};
             for (var k = 0; k < Math.min(NETWORKS_PER_SEED, found.length); k++) {
@@ -688,22 +698,35 @@ if (LAB.loaded) {
     // shared stream still shows in the mouth's bearing from its region centre:
     // entryAngle = rng() * 2 pi is the first draw of chunkRng(rx, ry, 100),
     // the stream whose first draw already had to pass the 30% gate
-    // rng2() <= 0.30 (rng2 is the same chunkRng(rx, ry, 100)).
+    // rng2() <= 0.30 (rng2 is the same chunkRng(rx, ry, 100)). Each region's
+    // network is drawn from its own seed, so an unbiased generator gives
+    // independent, uniform bearings (a hillside mouth turns from entryAngle by
+    // a terrain-driven multiple of 11.25 deg, which favours no absolute
+    // direction). The census is fixed and does not follow --endless-seeds: it
+    // is a statistical check, and its threshold is set for this census.
     LAB.scenario(P + "normal endless cave mouth bearings", function () {
-        var per = {}, multi = 0;
-        normalNets.forEach(function (o) {
-            var n = o.net, e = n.entrances[0];
-            if (n.entrances.length !== 1) multi++;
-            if (!e) return;
-            var cxw = (n.regionX * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2, cyw = (n.regionY * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2;
-            var a = Math.atan2(e.y - cyw, e.x - cxw); if (a < 0) a += 2 * Math.PI;
-            A.angle.n++; if (a >= Math.PI) A.angle.lower++;
-            if (a > A.angle.max) A.angle.max = a;
-            per[o.seed] = per[o.seed] || { n: 0, lower: 0 };
-            per[o.seed].n++; if (a >= Math.PI) per[o.seed].lower++;
+        var multi = 0;
+        BEARING_SEEDS.forEach(function (seed) {
+            LAB.freshPage();
+            LAB.startEndless(seed);
+            var s = { n: 0, lower: 0 };
+            LAB.findCaveNetworks(BEARING_RADIUS).forEach(function (f) {
+                var n = f.net, e = n.entrances[0];
+                if (n.entrances.length !== 1) multi++;
+                if (!e) return;
+                var cxw = (n.regionX * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2, cyw = (n.regionY * 3 + 1) * CHUNK_SIZE + CHUNK_SIZE / 2;
+                var a = Math.atan2(e.y - cyw, e.x - cxw); if (a < 0) a += 2 * Math.PI;
+                A.angle.n++; s.n++;
+                A.angle.bins[Math.min(BEARING_BINS - 1, Math.floor(a / (2 * Math.PI / BEARING_BINS)))]++;
+                if (a >= Math.PI) { A.angle.lower++; s.lower++; }
+                if (a > A.angle.max) A.angle.max = a;
+            });
+            A.angle.per.push("n" + seed + ": " + s.lower + "/" + s.n);
         });
-        for (var sd in per) A.angle.per.push("n" + sd + ": " + per[sd].lower + "/" + per[sd].n);
+        var exp = A.angle.n / BEARING_BINS;
+        A.angle.chi = A.angle.n ? A.angle.bins.reduce(function (t, o) { return t + (o - exp) * (o - exp) / exp; }, 0) : NaN;
         LAB.metric("caves_geometry.networks_without_exactly_one_entrance", multi, "networks");
+        LAB.metric("caves_geometry.mouth_bearing_chi_square", A.angle.chi);
     });
 
     // ── verdicts ────────────────────────────────────────────────────────────
@@ -790,10 +813,12 @@ if (LAB.loaded) {
         "[D17; the water-zone wall test calls terrainNoise under the wall noise seed L4978-4987] " +
         (A.water.water >= 1000 ? "" : "PRECONDITION: only " + A.water.water + " water cells in chunks -" + D17_R + ".." + D17_R + " (need >= 1000); ") +
         "wall-on-water " + A.water.wall + "/" + A.water.water + " (" + fx(100 * wFrac, 2) + "%); " + A.water.per.join("; "));
-    LAB.check("caves_geometry: normal Endless cave mouths lie on every side of their region centre (some bearing in 180-360 deg)",
-        A.angle.n >= 10 && A.angle.lower > 0,
+    LAB.check("caves_geometry: normal Endless cave mouth bearings from the region centre are uniform (chi-square over 30-degree bins of the bearing census at most 31.26, p = 0.001)",
+        A.angle.n >= BEARING_MIN_N && A.angle.chi <= BEARING_CHI_MAX,
         "[D16; entryAngle = rng() * 2 pi is the first draw of chunkRng(rx,ry,100), the stream whose first draw passed the 30% gate rng2() <= 0.30] " +
-        (A.angle.n < 10 ? "PRECONDITION: only " + A.angle.n + " networks (need >= 10); " : "") +
+        (A.angle.n < BEARING_MIN_N ? "PRECONDITION: only " + A.angle.n + " networks (need >= " + BEARING_MIN_N + "); " : "") +
+        "chi-square " + fx(A.angle.chi, 1) + " (max " + BEARING_CHI_MAX + ") over " + BEARING_BINS + " x 30 deg bins " + JSON.stringify(A.angle.bins) +
+        " of " + A.angle.n + " mouths within " + BEARING_RADIUS + " regions of spawn on " + BEARING_SEEDS.length + " normal Endless seeds; " +
         A.angle.lower + "/" + A.angle.n + " mouths in 180-360 deg, largest bearing " + fx(A.angle.max * 180 / Math.PI, 1) + " deg; " + A.angle.per.join("; "));
     LAB.metric("caves_geometry.entrances_tested", A.entrancesTested);
     LAB.metric("caves_geometry.entrances_with_open_approach_start", A.open.n);

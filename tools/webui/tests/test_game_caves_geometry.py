@@ -118,9 +118,23 @@ What is checked, and why ANY correct implementation meets the threshold:
                     chunkRng(rx, ry, 100), and a network exists only when the
                     30% gate draws rng2() <= 0.30) still shows: the first rng()
                     draw is then <= 0.30 and entryAngle = rng() * 2 pi stays in
-                    [0, 108 deg]. Over >= 10 normal-Endless networks some mouth
-                    must bear 180-360 deg from its region centre (an unbiased
-                    angle misses that half with probability 0.5^n).
+                    [0, 108 deg]. Each region's network comes from its own
+                    seed, so an unbiased generator gives independent, uniform
+                    bearings. A fixed census (normal Endless seeds 424242,
+                    999983, 123, 777000, 777, 1, 3, 8, 55555, 31337, 12345,
+                    98765, 2024, 4242, 99; every network within 20 regions of
+                    spawn, about 450; --endless-seeds does not change it) is
+                    binned in 12 x 30 deg bins of the mouth's bearing from its
+                    region centre, and the chi-square against uniform must be
+                    at most 31.26, its 0.999 quantile on 11 degrees of freedom:
+                    a correct generator fails with probability 0.001. At least
+                    240 networks are required (20 expected per bin). This
+                    replaced a one-sided contract ("some bearing in 180-360
+                    deg") that a gate drawn from chunkRng stream 101 passed
+                    although its first draw still tracks stream 100's: that
+                    census has 303 of 447 mouths in 180-360 deg and chi-square
+                    97.3. A gate drawn from a hash of the region's own seed
+                    gives 7.5.
 
 METRIC lines (never verdicts): per-world bad counts for the aggregated checks,
 roof start per entrance, caps raised above the natural surface and by how much,
@@ -187,7 +201,8 @@ C_TRUNC = (_P + "every chunk stamps every cell that queryCaveGeometry over all n
 C_WATER = _P + "no more than 0.25% of water cells carry a grid wall"
 C_LEVEE = (_P + "river carving never leaves a step the player cannot climb (STEP_UP 1.0 h) between neighbouring "
            "open ground points where the natural ground had none")
-C_ANGLE = _P + "normal Endless cave mouths lie on every side of their region centre (some bearing in 180-360 deg)"
+C_ANGLE = (_P + "normal Endless cave mouth bearings from the region centre are uniform (chi-square over 30-degree "
+           "bins of the bearing census at most 31.26, p = 0.001)")
 # Retired: winding-chamber-v1 always builds one entrance, so this contract can
 # no longer fail. Its id is kept only to key the audit history below; D16 is
 # now judged by C_ANGLE.
@@ -312,10 +327,12 @@ KNOWN_BUGS = {
         "audit D16, current symptom: rng2 and rng are both chunkRng(regionX, regionY, 100) in "
         "generateCaveNetwork, so a network exists only when the shared stream's first draw is "
         "<= 0.30, and entryAngle = rng() * 2 pi then reuses that draw: every mouth bears 0-108 deg "
-        "from its region centre. 0 of 35 networks within 12 regions of spawn on seeds 424242, "
-        "999983 and 123 bear 180-360 deg (largest 106.2 deg); 106 of 106 over ten seeds sit in "
-        "octants 0-2. Drawing rng2 from stream 101 passes it",
-        r"\b0/[1-9]\d* mouths in 180-360 deg"),
+        "from its region centre. Over the bearing census 0 of 461 mouths bear 180-360 deg (largest "
+        "107.7 deg; bins 130/125/131/75 then eight empty), chi-square 978.8. Gating on a hash of the "
+        "region's own seed passes it (FIX D16, chi-square 7.5); gating on chunkRng stream 101 does not "
+        "(chi-square 97.3, 303 of 447 mouths in 180-360 deg: that stream's first draw still tracks "
+        "stream 100's)",
+        r"\b0/[1-9]\d* mouths in 180-360 deg, largest bearing (?:\d{1,2}|10[0-7])\.\d deg"),
 }
 
 # ── probe anchors (each must occur exactly once in the extracted game JS) ──
@@ -361,6 +378,12 @@ _BLUR = (_NO_BLUR +
          "    }\n"
          "  }\n")
 _LEVEE_CLAMP = "      if (ground > H[q] + WATER_MAX_FILL) ground = H[q] + WATER_MAX_FILL;\n"
+# D16's gate, and a repair that draws it from the murmur3 finalizer of the
+# region's own component-101 seed instead of a second chunkRng stream.
+_GATE = "var rng2 = chunkRng(regionX, regionY, 100);"
+_GATE_HASH = ("var _gh = chunkSeedFor(regionX, regionY, 101); _gh = Math.imul(_gh ^ (_gh >>> 16), 0x85ebca6b); "
+              "_gh = Math.imul(_gh ^ (_gh >>> 13), 0xc2b2ae35); _gh = (_gh ^ (_gh >>> 16)) >>> 0; "
+              "var rng2 = function () { return _gh / 4294967296; };")
 
 PROBES: list = [
     # ── the roof footprint (C table) ──
@@ -372,11 +395,12 @@ PROBES: list = [
      _APPROACH_CEIL, _APPROACH_CEIL.replace("ceilZ: null,", "ceilZ: (approach.along < 30 ? target + e.ceilH : null),"),
      {C_MOUTH: "FAIL", C_ROOF: "PASS"}),
     # ── D16 ──
-    # Cross-suite matrix (third October 2026 pass, this probe alone against
-    # all 12 non-smoke suites, jsc): two collateral PASS->FAIL flips, both
-    # PRECONDITION voids, not detections. Moving the gate to its own stream
-    # changes which normal-Endless regions hold a network, so the windows
-    # those suites re-centre on the nearest network land elsewhere:
+    # Cross-suite matrix (fourth October 2026 pass, this probe alone against
+    # all 12 non-smoke suites, jsc, 387 s): two collateral PASS->FAIL flips,
+    # both PRECONDITION voids, not detections, and one collateral FAIL->PASS
+    # that is not a repair. Moving the gate changes which normal-Endless
+    # regions hold a network, so the windows those suites re-centre on the
+    # nearest network land elsewhere:
     #   - physics "walking off a drop larger than STEP_DOWN on open ground
     #     starts a fall within 3 physics steps": the baseline finds exactly
     #     its 5 required drops, all in the two re-centred windows
@@ -384,10 +408,15 @@ PROBES: list = [
     #     world finds 0;
     #   - enemies "a surface enemy does not chase a player standing in the
     #     cave below it": 3 valid enemy/player pairs at baseline, 0 under the
-    #     fix.
-    # A real D16 repair must give both fixtures subjects again first.
-    ("FIX D16: draw the 30% cave gate from its own RNG stream",
-     "var rng2 = chunkRng(regionX, regionY, 100);", "var rng2 = chunkRng(regionX, regionY, 101);",
+    #     fix;
+    #   - enemies' return-to-patrol known bug (F2) reads PASS, 52/52: its two
+    #     stuck enemies were in re-centred cave windows, and the
+    #     route-planning bug is untouched (its KNOWN_BUGS entry says so).
+    # A real D16 repair must give those fixtures subjects again first. The
+    # third pass ran the old stream-101 gate (now the NOT A FIX probe at the
+    # end) and saw the same two voids without the F2 flip.
+    ("FIX D16: draw the 30% cave gate from a hash of the region's own seed, independent of the network stream",
+     _GATE, _GATE_HASH,
      {C_ANGLE: "PASS"}),
     # ── D6 / D2 headroom ──
     ("BREAK D6: the feather floor lerps toward the surface (above the ceiling); getFloorHeightAt's walkable "
@@ -498,6 +527,14 @@ PROBES: list = [
     ("BREAK: the page throws while loading",
      "function resetEndlessMode() {", "throw new Error('probe: page fails to load'); function resetEndlessMode() {",
      {C_LOAD: "FAIL"}),
+    # Appended in the fourth October 2026 pass, so the slots above keep their
+    # test_probe_NN. The old FIX D16 is not a repair: stream 101's first draw
+    # still tracks stream 100's, so its gate still selects a band of entry
+    # angles. The regex shows it puts mouths in 180-360 deg, which the old
+    # one-sided contract took for a repair.
+    ("NOT A FIX D16: draw the 30% cave gate from chunkRng stream 101 (the bearings stay biased)",
+     _GATE, "var rng2 = chunkRng(regionX, regionY, 101);",
+     {C_ANGLE: ("FAIL", r"\b[1-9]\d*/\d+ mouths in 180-360 deg")}),
 ]
 
 CavesGeometrySuite = suite_testcase("caves_geometry", KNOWN_BUGS, min_checks=20)
