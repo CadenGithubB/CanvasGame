@@ -538,7 +538,8 @@ LAB.check("perf: game script evaluates without throwing", LAB.load(__argv[0]),
         check("perf: walking inside one chunk triggers no window rebuild", rbOk, rbParts.join("; "));
         check("perf: colour-string cache stays bounded (at most 8,192 entries) during play", rgbOk,
             "Object.keys(_rgbCache).length, fresh cache, 60+400 frames near spawn and 60+900 at each of two far sites: " + rgbParts.join("; ") +
-            "; rgbQ L1929-1941 memoises every exact lit/fogged RGB triple and never evicts (comment L1927 expects ~1000-3000)");
+            "; rgbQ (01-config-state.js) starts a fresh generation when a new colour arrives at RGB_CACHE_LIMIT (4,096) entries, " +
+            "audit G6's repair; without that reset it memoises every exact lit/fogged RGB triple and never evicts");
     });
 
     // ════════════════════════════════════════════════════════════════════

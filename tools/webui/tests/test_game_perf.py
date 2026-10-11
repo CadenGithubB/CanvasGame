@@ -19,7 +19,9 @@ What this suite covers (harness: tools/webui/harness/game_perf_harness.js):
     loop() frame), and at most 2 console lines per re-centre;
   - steady-state play (N17, G6): console lines AND console.errors, and
     _rgbCache growth against a generous bound, over real loop() play at one
-    near and two far sites, render errors a precondition;
+    near and two far sites, render errors a precondition (G6, an unbounded
+    colour cache, is repaired: rgbQ starts a fresh generation at
+    RGB_CACHE_LIMIT; a BREAK probe takes that reset out again);
   - frame-rate independence (G7/N1, repaired; this suite owns it): arrow-key yaw, WASD
     walking, gamepad stick yaw and gamepad X walking, the real loop() driven at
     60 fps vs 30 fps for one second of game time;
@@ -178,8 +180,16 @@ _STATE_OFF = (_STATE, "  if (ENDLESS_MODE && loopStart - _stateDumpAt >= 3000 &&
 # loop()'s render call, followed by its performance-logging block.
 _RENDER = "  renderInterpolatedFrame(_physicsAccum / FIXED_DT_MS);\n\n  // Performance logging"
 _WALLS_THROW = ("function drawWalls3D() {", "function drawWalls3D() {\n  if (ENDLESS_MODE) throw new Error('probe walls crash');")
-_RGB_CAP_4096 = ("  _rgbCache[key] = s;\n",
-                 "  if (_cacheStats.rgbQ.size >= 4096) { _rgbCache = {}; _cacheStats.rgbQ.size = 0; }\n  _rgbCache[key] = s;\n")
+# G6's repair (01-config-state.js): rgbQ starts a fresh generation when a new
+# colour arrives at RGB_CACHE_LIMIT entries. Without it the cache memoises
+# every exact lit/fogged RGB triple ever drawn and never evicts.
+_RGB_RESET = ("  if (_cacheStats.rgbQ.size >= RGB_CACHE_LIMIT) {\n"
+              "    if (_cacheStats.rgbQ.size > _cacheStats.rgbQ.peakSize) {\n"
+              "      _cacheStats.rgbQ.peakSize = _cacheStats.rgbQ.size;\n"
+              "    }\n"
+              "    _rgbCache = {};\n"
+              "    _cacheStats.rgbQ.size = 0;\n"
+              "  }\n")
 _HYSTERESIS = ("  if (pcx !== centerCX || pcy !== centerCY) {",
                "  var _hyX = trueX - (centerCX + 0.5) * CHUNK_SIZE, _hyY = trueY - (centerCY + 0.5) * CHUNK_SIZE;\n"
                "  if (Math.abs(_hyX) > CHUNK_SIZE / 2 + 24 || Math.abs(_hyY) > CHUNK_SIZE / 2 + 24) {")
@@ -245,9 +255,12 @@ PROBES: list = [
      "      canvas.height = window.innerHeight || screen.height;\n"
      "    });",
      {_FS: "FAIL"}),
-    ("FIX G6: _rgbCache bounded at 4,096 entries (not the comment's 3,000)",
-     _RGB_CAP_4096[0], _RGB_CAP_4096[1],
-     {_RGB: "PASS"}),
+    # G6 was repaired before the 0.0 snapshot (RGB_CACHE_LIMIT and the
+    # generation reset in rgbQ); its FIX probe added a second 4,096 cap and
+    # passed whether or not it was applied, so it became this BREAK.
+    ("BREAK G6 (repaired): rgbQ never starts a fresh generation, so _rgbCache keeps every colour it has drawn",
+     _RGB_RESET, "",
+     {_RGB: "FAIL"}),
     ("BREAK N11 (repaired): pollInputControls reads SELECT from a pad that has not answered yet (gpLast.valid "
      "unchecked)",
      _N11_BREAK[0], _N11_BREAK[1],
@@ -355,9 +368,9 @@ PROBES: list = [
      [("  if (ENDLESS_MODE) updateChunks();\n\n  // Wall collision", "  /* moved to loop() */\n\n  // Wall collision"),
       (_RENDER, "  if (ENDLESS_MODE) updateChunks();\n" + _RENDER)], None,
      {_JITTER: _still(_JITTER), _NO_REBUILD: "PASS", _G3LINES: _still(_G3LINES)}),
-    ("GUARD G6: with the 4,096 cap, a walls pass that throws every frame must void the cache check (its "
-     "PRECONDITION: render errors during play)",
-     [_RGB_CAP_4096, _WALLS_THROW], None,
+    ("GUARD G6: with the shipped generation reset, a walls pass that throws every frame must void the cache "
+     "check (its PRECONDITION: render errors during play), not pass on the few colours drawn",
+     _WALLS_THROW[0], _WALLS_THROW[1],
      {_RGB: "PRECONDITION"}),
     ("GUARD N11: a loop that never polls the pad's UI controls must FAIL the precondition, not pass vacuously",
      _NO_POLL[0], _NO_POLL[1],
@@ -386,12 +399,13 @@ PROBES: list = [
 
 # Checks whose ONLY flipping probe is a FIX of the known bug (no BREAK possible
 # while the bug is present), for the record:
-#   _E6, _OVERVIEW, _G1, _G2, _G3LINES, _JITTER, _SPAM, _RGB
+#   _E6, _OVERVIEW, _G1, _G2, _G3LINES, _JITTER, _SPAM
 # each has a FIX above (plus a GUARD where a vacuous pass was possible). The
 # repaired checks have BREAK probes that reintroduce their defect by its own
 # mechanism: _TURN/_WALK/_GPTURN/_GPWALK (G7/N1: input once per render frame,
 # or only on a frame's first physics step), _N11 (an unanswered pad's SELECT),
-# _HUD (G8: fps from JS time), _FS (G4: the viewport size), and _L4 (D25: no
+# _HUD (G8: fps from JS time), _FS (G4: the viewport size), _RGB (G6: no
+# generation reset, plus a GUARD that render errors void it), and _L4 (D25: no
 # buffer growth, growth only in Endless, or collecting before it, plus a GUARD
 # that it measures real writes, not culls). A GUARD that voids its check
 # declares "PRECONDITION": the check must FAIL on its precondition.
