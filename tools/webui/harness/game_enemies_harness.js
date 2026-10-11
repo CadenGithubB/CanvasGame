@@ -277,9 +277,42 @@ if (LAB.loaded) (function () {
     // ═════════════════════════════════════════════════════════════════════════
     var GEN = { n: 0, byKind: {}, onWall: [], embedded: [], embByType: {}, typeCount: {}, degenerate: [], degByKind: {},
                 wpInWall: [], wpInWallByKind: {}, worlds: [], noPatrol: 0, noRad: 0, rad: {}, perWorld: {} };
+    // The survey covers the chunks within GEN_R of the centre chunk each world
+    // is built around: 7 x 7 chunks, the start window at today's
+    // WINDOW_CHUNKS = 7. WINDOW_CHUNKS is a setting (the settings panel and
+    // persistence's FIX D23a say 5, which left the only ruin-order witness,
+    // endless 55555's Wolf in chunk 3,-3, outside the survey), so a smaller
+    // window is tiled with more placements. Each chunk is judged once, in the
+    // placement whose centre is nearest it, so no chunk is judged at a window
+    // edge the 7-chunk window would not put it on.
+    var GEN_R = 3;
+    function genCentres() {           // window centre offsets per axis: [0] when one window covers the survey
+        var half = Math.floor(WINDOW_CHUNKS / 2), out = [];
+        if (half >= GEN_R) return [0];
+        for (var c = half - GEN_R; ; c += Math.max(1, 2 * half)) {
+            var cc = Math.min(c, GEN_R - half);
+            out.push(cc);
+            if (cc + half >= GEN_R) break;
+        }
+        return out;
+    }
+    function nearestCentre(cs, d) { var b = cs[0]; cs.forEach(function (c) { if (Math.abs(d - c) < Math.abs(d - b)) b = c; }); return b; }
+    function forSurveyEnemies(fn) {
+        var half = Math.floor(WINDOW_CHUNKS / 2), c0x = windowCX + half, c0y = windowCY + half, cs = genCentres();
+        cs.forEach(function (oy) { cs.forEach(function (ox) {
+            if (cs.length > 1) LAB.placeWorld((c0x + ox + 0.5) * CHUNK_SIZE, (c0y + oy + 0.5) * CHUNK_SIZE, "top");
+            enemies.slice().forEach(function (e) {
+                var dx = Math.floor(wx(e.x) / CHUNK_SIZE) - c0x, dy = Math.floor(wy(e.y) / CHUNK_SIZE) - c0y;
+                if (Math.abs(dx) > GEN_R || Math.abs(dy) > GEN_R) return;
+                if (nearestCentre(cs, dx) !== ox || nearestCentre(cs, dy) !== oy) return;
+                fn(e);
+            });
+        }); });
+        return cs.length * cs.length;
+    }
     forWorlds("generation survey", null, function (W) {
         var n = 0, pw = GEN.perWorld[W.label] = { n: 0, embedded: 0, onWall: 0, degenerate: 0, wpInWall: 0 };
-        enemies.forEach(function (e) {
+        var placements = forSurveyEnemies(function (e) {
             n++; GEN.n++; pw.n++;
             var k = kindOf(e), tk = k + "." + e.enemyType.id, R = moveRad(e);
             GEN.rad[e.enemyType.id] = R;
@@ -306,7 +339,7 @@ if (LAB.loaded) (function () {
             var bad = w.filter(function (p) { return isInGridWall(p.x, p.y, 0); }).length;   // centre in a wall cell
             if (bad) { inc(GEN.wpInWallByKind, k); pw.wpInWall++; GEN.wpInWall.push(W.label + " " + tk + "@" + fmtW(e)); }
         });
-        GEN.worlds.push(W.label + (W.where ? " (" + W.where + ")" : "") + ": " + n);
+        GEN.worlds.push(W.label + (W.where ? " (" + W.where + ")" : "") + ": " + n + (placements > 1 ? " in " + placements + " windows" : ""));
     }, true);
 
     // ═════════════════════════════════════════════════════════════════════════

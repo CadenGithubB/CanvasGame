@@ -11,7 +11,13 @@ survey only, and checks, aggregated over them:
     wall inside its footprint at the radius the game's own movement code uses
     (recorded by spying moveSpatialActor); every patrol's waypoints span at least
     twice the game's arrival radius (measured by bisection on updateEnemies),
-    else it can freeze; no waypoint lies inside a wall cell;
+    else it can freeze; no waypoint lies inside a wall cell. Each world's survey
+    covers the 7 x 7 chunks around the centre chunk it is built on (its start
+    window at today's WINDOW_CHUNKS = 7), tiled with more windows when
+    WINDOW_CHUNKS is smaller, each chunk judged in the window whose centre is
+    nearest it: under persistence's FIX D23a (a 5-chunk start window) the
+    survey judged 383 instead of 892 enemies and lost the only ruin-order
+    witness, and it now judges the same 892;
   - patrol: every patrolling enemy keeps walking (> 20 u of its own movement in
     10 s, after a 15 s warm-up, held out of chase by the market safe zone);
   - chase (regression guard): a lone enemy chasing a player HELD IN PLACE (the
@@ -101,7 +107,9 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
     "enemies: no enemy spawns on a wall cell": (
         "phase-1 enemies finding (ruin order; not in the audit index): the spawn loop checks only that the "
         "enemy's cell is open (L5885), then the chunk's ruin walls are stamped later (L6179-6183) and can land "
-        "on it -- a Wolf on endless 55555 stands inside a ruin wall and can never move",
+        "on it -- a Wolf on endless 55555 stands inside a ruin wall and can never move. It is the only witness, "
+        "in chunk 3,-3 of that world's spawn window; the survey covers those 7 x 7 chunks whatever WINDOW_CHUNKS "
+        "is (persistence's FIX D23a, a 5-chunk window, once left it out and read PASS with the bug untouched)",
         r"[1-9]\d*/\d+ enemies stand on a wall cell e\.g\. .*u from a \w+ ruin\)"),
     "enemies: no enemy on an open cell spawns with a wall inside its footprint (the game's movement radius)": (
         "audit F3; L1340 Brute size 1.4 -> movement radius 8*size*0.6 = 6.72 u (L11360, L11303/L11363/L11443) "
