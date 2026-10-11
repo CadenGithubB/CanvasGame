@@ -29,8 +29,16 @@ LAB.check("tools: game script evaluates without throwing", LAB.load(__argv[0]),
 if (LAB.loaded) {
     var P = "tools: ";
     var SEEDS = LAB.seeds([12345]);          // Cave Test worlds for every scenario
-    var XSEEDS = LAB.seeds([12345, 1]);      // debugCaveAt: seed 1 is where the real smoothed surface fell below the 2.0 the tool once hard-coded
-    if (XSEEDS.indexOf(1) < 0) XSEEDS = XSEEDS.concat([1]); // a custom sweep must not drop the reproducing seed
+    // debugCaveAt worlds. Seed 1 is where the real smoothed surface fell below
+    // the 2.0 the tool once hard-coded. Seed 5668 is a natural hillside cave
+    // whose ceiling stands above 1.0 h beyond its entrance bank, where
+    // queryCaveGeometry's cover clamp (ceiling <= surface - cover) binds on
+    // the surface argument: a hard-coded 2.0 caps the ceiling at 1.0 h there.
+    // A custom sweep must not drop either reproducing seed.
+    var XSEEDS = LAB.seeds([12345, 1, 5668]);
+    [1, 5668].forEach(function (s) { if (XSEEDS.indexOf(s) < 0) XSEEDS = XSEEDS.concat([s]); });
+    var DCA_OLD_SURFACE = 2.0;               // h: the surface debugCaveAt once hard-coded
+    var DCA_MIN_REACH = 50;                  // core cells a hard-coded 2.0 would move by more than the 0.25 h tolerance (161 today, all seed 5668)
     var INSIDE = -100;                       // along: 100 u inside the entrance, under roof + cap
     var H_TOL = 0.05;                        // h: a reported height must match the real one this closely
     var CHART_TOL = 0.5;                     // h: profile-chart floor line vs the player dot
@@ -623,8 +631,12 @@ if (LAB.loaded) {
     // (the cell's NW corner, L5589-5590). Where debugCaveAt reports full cave
     // influence (fade 1) the stamped floor is exactly caveFloorZ and the stamped
     // ceiling exactly ceilZ (L5618, L5621) -- so they must match the mesh.
+    // The fixture must reach the historical defect: core cells where the
+    // game's own queryCaveGeometry, asked with the old hard-coded surface,
+    // misses the mesh by more than the tolerance (the cover clamp binds on the
+    // surface argument there; inside a hillside entrance bank it does not).
     LAB.scenario(P + "debugCaveAt", function () {
-        var core = 0, bad = [], badN = 0, feather = 0, featherOff = 0, worst = 0;
+        var core = 0, bad = [], badN = 0, feather = 0, featherOff = 0, worst = 0, reach = 0;
         XSEEDS.forEach(function (seed) {
             start(seed);
             var m = floorMesh, gs = m.gridSize;
@@ -638,6 +650,9 @@ if (LAB.loaded) {
                 if (!r || typeof r.fade !== "number") { badN++; if (bad.length < 4) bad.push("seed " + seed + " cell " + gx + "," + gy + ": debugCaveAt returned " + JSON.stringify(r)); continue; }
                 if (r.fade < 0.999) { feather++; if (!fl || Math.abs(fl.z - r.caveFloorZ) > 0.25) featherOff++; continue; }
                 core++;
+                var o = queryCaveGeometry(windowOriginX + gx * gs, windowOriginY + gy * gs,
+                    Object.values(endlessCaveNetworks).filter(function (v) { return v; }), DCA_OLD_SURFACE);
+                if (!o || !fl || Math.abs(fl.z - o.caveFloorZ) > 0.25 || typeof o.ceilZ !== "number" || Math.abs(c.z - o.ceilZ) > 0.25) reach++;
                 var df = fl ? Math.abs(fl.z - r.caveFloorZ) : Infinity;
                 var dc = (typeof r.ceilZ === "number") ? Math.abs(c.z - r.ceilZ) : Infinity;
                 var d = Math.max(df, dc);
@@ -650,11 +665,16 @@ if (LAB.loaded) {
             }
             LAB.clearLogs();                 // debugCaveAt console.logs every call
         });
+        var pre = core === 0 ? "no core cave cell" :
+                  reach < DCA_MIN_REACH ? "only " + reach + " core cells (need " + DCA_MIN_REACH + ") where queryCaveGeometry with the old hard-coded " +
+                                          DCA_OLD_SURFACE.toFixed(1) + " h surface misses the mesh by > 0.25 h" : "";
         LAB.check(P + "debugCaveAt reports the assembled mesh's cave floor and ceiling wherever it reports full cave influence",
-            core > 0 && badN === 0,
-            (core === 0 ? "PRECONDITION: no core cave cell || " : "") + badN + "/" + core + " core cells differ by > 0.25 h (worst " + f2(worst) +
-            " h; seeds " + XSEEDS.join(",") + "; debugCaveAt queries the point it was given with getEndlessNaturalSurfaceH there, 05-endless-world.js): " + bad.join("; "));
+            !pre && badN === 0,
+            (pre ? "PRECONDITION: " + pre + " || " : "") + badN + "/" + core + " core cells differ by > 0.25 h (worst " + f2(worst) +
+            " h; seeds " + XSEEDS.join(",") + "; a hard-coded " + DCA_OLD_SURFACE.toFixed(1) + " h surface would miss " + reach + " of them; " +
+            "debugCaveAt queries the point it was given with getEndlessNaturalSurfaceH there, 05-endless-world.js): " + bad.join("; "));
         LAB.metric("tools.debugcaveat.core_cells", core);
+        LAB.metric("tools.debugcaveat.core_cells_old_surface_would_miss", reach);
         LAB.metric("tools.debugcaveat.core_mismatch", badN);
         LAB.metric("tools.debugcaveat.feather_cells", feather);
         LAB.metric("tools.debugcaveat.feather_target_not_mesh_frac", feather ? featherOff / feather : 0);

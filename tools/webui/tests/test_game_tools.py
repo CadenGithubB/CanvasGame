@@ -19,8 +19,8 @@ Tools covered (header lines):
   window.caveGaps     L1476   sensitivity to an injected raised wall base and to
                               a floor drop at each face's far vertex (W/E/N/S)
   window.debugCaveAt  L4796   floor/ceiling vs the assembled mesh at every core
-                              cave cell (seed 1 is always included, even when
-                              --seeds supplies a custom sweep)
+                              cave cell (seeds 1 and 5668 are always included,
+                              even when --seeds supplies a custom sweep)
   window.caveTest     L1720   the legacy async test runs to a returned report
   drawCaveProfileChart L21340 ceiling line; floor line through the player's feet
   drawCaveControlMap  L21582  cells painted as cave floor must have one
@@ -30,13 +30,21 @@ Tools covered (header lines):
                       22262   must change the frame or the log (control: 'Poly
                               types' must)
 
-Worlds: Cave Test seed 12345 (every entrance; --seeds overrides); the
-debugCaveAt check also runs seed 1, where the real smoothed surface fell below
-the 2.0 the tool once hard-coded. That historical risk is gone: debugCaveAt now
-passes getEndlessNaturalSurfaceH(wx, wy), and the core floor and ceiling no
-longer depend on the surface argument at all (putting 2.0 back flips nothing,
-0/1064 core cells). The check's live risk is a tool that queries a different
-point than the one it was given; its BREAK probe samples half a mesh cell east.
+Worlds: Cave Test seed 12345 (every entrance; --seeds overrides). The
+debugCaveAt check also always runs seed 1, where the real smoothed surface fell
+below the 2.0 the tool once hard-coded, and seed 5668, a natural hillside cave.
+debugCaveAt now passes getEndlessNaturalSurfaceH(wx, wy), but the surface
+argument still matters: queryCaveGeometry clamps the ceiling to surface - cover,
+so the core ceiling depends on it wherever floor + headroom > surface - cover.
+That includes the parts of a hillside cave beyond its entrance bank (the bank
+raises the surface it clamps against only within innerLength of the mouth).
+Putting the hard-coded 2.0 back moves none of the 1,064 core cells of the
+descending caves on seeds 12345 and 1; on seed 5668 it caps 161 core ceilings
+at 1.0 h (up to 2.42 h too low). The check requires at least 50 core cells
+where queryCaveGeometry asked with the old 2.0 surface misses the mesh by more
+than 0.25 h, else PRECONDITION (a GUARD probe without hillside caves shows
+it). Its BREAK probes put the 2.0 back and sample half a mesh cell east of the
+given point.
 
 Thresholds, and why ANY correct implementation meets them:
 
@@ -60,7 +68,9 @@ Thresholds, and why ANY correct implementation meets them:
   0.25 h     debugCaveAt at a cell's stamping point with fade 1 must give the
              stamped floor and ceiling (the stamper writes exactly those there,
              L5618/L5621); feather cells are metrics only (debugCaveAt reports the
-             blend TARGET plus fade there, by design).
+             blend TARGET plus fade there, by design). >= 50 core cells must be
+             ones where the old hard-coded 2.0 surface would miss by > 0.25 h
+             (161 today, all on seed 5668).
   found      caveGaps must list a face whose base is raised 1 h above the floor
              it samples (control), and a face whose floor at either vertex is
              dropped 2 h below its base (a floor quad's corner (x*gs, y*gs)
@@ -295,9 +305,10 @@ PROBES: list = [
     ("CONTROL: the same D6 geometry with the map colouring each cell by its lowest walkable layer",
      [_D6_FLOOR_LERP, ("      var fh = floorMesh.l0TopZ[idx];\n      var _ovmLc", _WALKABLE_FH)], None,
      {_MAP: "PASS"}),
-    # The old FIX (pass the stamper's 21x21 surface maximum instead of a
-    # hard-coded 2.0) ships in another form, and the core cells no longer
-    # depend on the surface argument; the live risk is a coordinate offset.
+    # The old FIX (stop passing a hard-coded 2.0 surface) ships in another
+    # form: debugCaveAt passes getEndlessNaturalSurfaceH at the point. The
+    # appended BREAK at the end puts the 2.0 back; this one is a second risk,
+    # a tool that queries a different point than the one it was given.
     ("BREAK: debugCaveAt samples half a mesh cell east of the point it was given",
      "    var r = queryCaveGeometry(wx, wy, nets, getEndlessNaturalSurfaceH(wx, wy));",
      "    var r = queryCaveGeometry(wx + 6, wy, nets, getEndlessNaturalSurfaceH(wx + 6, wy));",
@@ -371,6 +382,20 @@ PROBES: list = [
      "window.caveTest = async function() {",
      "window.caveTest = async function() {\n  throw new Error('probe caveTest rejection');",
      {_I4: "FAIL"}),
+    # Appended in the fourth October 2026 pass, so the slots above keep their
+    # test_probe_NN. The historical debugCaveAt defect, put back: a hard-coded
+    # 2.0 surface caps a hillside cave's ceiling at 2.0 - cover = 1.0 h beyond
+    # its entrance bank (seed 5668); the descending caves never reach it.
+    ("BREAK: debugCaveAt passes the hard-coded 2.0 surface it once used (hillside ceilings clamp to 1.0 h)",
+     "    var r = queryCaveGeometry(wx, wy, nets, getEndlessNaturalSurfaceH(wx, wy));",
+     "    var r = queryCaveGeometry(wx, wy, nets, 2.0);",
+     {_DCA: ("FAIL", r"[1-9]\d*/\d+ core cells differ by > 0\.25 h .*: seed 5668 world \(-?\d+,-?\d+\) mesh [^;]* "
+                     r"vs debugCaveAt floor -?[\d.]+ ceil 1\.00")}),
+    ("GUARD: with no hillside caves (every network descends) the debugCaveAt fixture cannot show the hard-coded "
+     "surface, so the check must FAIL on its PRECONDITION",
+     "  var forcedKind = CAVE_TEST_MODE && typeof window !== 'undefined' ? window._caveTestKindOverride : null;",
+     "  var forcedKind = 'descending';",
+     {_DCA: "PRECONDITION"}),
 ]
 
 ToolsSuite = suite_testcase("tools", KNOWN_BUGS, min_checks=25)
