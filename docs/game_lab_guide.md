@@ -79,6 +79,41 @@ on cave networks the gate moves. That is not a route-planning repair; the
 probe and the known bug both record it. The full frozen-tree FIX matrix was
 not rerun.
 
+A fifth October pass answered a review of the fourth. The enemies PARTIAL
+FIX R2 only probe named the two enemies that stay stuck, and the unmutated
+detail ends with the same two, so an identity mutation passed it. R2 alone
+leaves the same enemies stuck; what it changes is that the Brute's route
+requests are no longer refused at their root (pending 41% of frames instead
+of 2%), and the regex now requires that; a no-engine test checks both
+partial-fix regexes against recorded jsc details. Perf's FIX G6 added a
+second cap to a colour-cache bound the game has shipped since 0.0 and passed
+either way, so the first pass had missed it; a BREAK now removes the shipped
+generation reset (34,266 entries against the 8,192 bound), and the check's
+detail no longer says the cache never evicts. Every probe class now fails on
+a probe the unmutated game already satisfies unless it is a GUARD or CONTROL
+(above); graded against every suite's unmutated run (253 probes), the only
+other probe it reported was loot's re-centre hysteresis control, now
+labelled CONTROL. The return-to-patrol detail had listed only the first four
+returns later than 20 s, despite the third-pass note above; it now lists
+every one. Five retired cave transition checks (the walk-in height step and
+sink, the lateral sink and raise, the mouth sink) are failed only by probes
+that move the player's height directly, which show only that those walk
+oracles see a height excursion. Putting back D1 or N14 (cave geometry's
+BREAKs) makes the ramp impassable and voids the walks on their
+precondition, and physics' D11 and the reopened lateral edge flip nothing
+there, alone, together or with the suite's own D3, D2 and D14 BREAKs. The
+suite now says so; those defects are caught by cave geometry's entrance
+step, walk-in and walk-out support, interior step and headroom checks and
+by physics' floor-picker check. Every suite with probes (enemies, perf,
+loot, cave transition, cave geometry, cave milestone, headless browser,
+persistence, physics, render and tools) and the protocol tests passed their
+base and probe unittests on jsc at the end of this pass. Two fresh jsc runs
+of the changed enemies and perf harnesses agree in every check, detail and
+metric, JXA agrees in check ids and verdicts (472 s and 613 s), their seed
+sweeps fail only known bugs for their documented reasons, and the core gate
+passed. No FIX mutation changed, so the cross-suite matrix was not rerun,
+and the browser pixel gate was not run.
+
 `game_lab.py` extracts the shipping JavaScript from
 `components/hardwareone/WebPage_Games.h`, preserves its header line numbers,
 and runs focused harnesses against the real game functions. The lab covers cave
@@ -118,11 +153,20 @@ declared on a check in its suite's `KNOWN_BUGS` carries one, because there
 the verdict equals the baseline and alone cannot show that the probe changed
 anything; `test_game_lab_protocol` enforces it. For a partial fix that still
 fails, or a BREAK applied on top of a FIX or a known bug, the regex states
-the witness the baseline detail lacks (for example, which enemies stay
-stuck), so a probe whose mutation changed nothing cannot satisfy it. For a
-non-flip declaration beside a flip, or in a GUARD, it states the mechanism
-the check still fails for (the `_still` helper of the tools, perf and
-persistence suites uses the check's `KNOWN_BUGS` regex).
+the witness the baseline detail lacks (which enemies stay stuck, or, when
+the same enemies stay stuck, how their route requests fail), so a probe
+whose mutation changed nothing cannot satisfy it. For a non-flip declaration
+beside a flip, or in a GUARD, it states the mechanism the check still fails
+for (the `_still` helper of the tools, perf and persistence suites uses the
+check's `KNOWN_BUGS` regex).
+
+Each probe class enforces the rule behind both: it grades the unmutated
+suite's run (the same run the suite's own test uses) against every probe,
+and fails if that run already satisfies every declaration of a probe that is
+not labelled GUARD or CONTROL. A probe whose point is that a plausible change
+leaves a verdict alone carries one of those labels. Any other probe that the
+unmodified game passes, such as a FIX of a repair that already shipped or a
+witness regex the baseline detail also matches, is reported.
 
 The common seed arguments have one meaning everywhere: `--seeds` supplies Cave
 Test worlds and `--endless-seeds` supplies normal Endless worlds. A readable

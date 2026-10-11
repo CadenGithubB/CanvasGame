@@ -83,6 +83,16 @@
   two mechanisms made each step. Every probe that expects a known bug to keep
   failing must now say why in a detail regex, and a protocol test enforces
   this.
+- Makes the audit lab reject a probe that passes without its change
+  mattering: every probe class now fails a probe that the unmodified game
+  already satisfies, unless it is labelled GUARD or CONTROL. Besides a loot
+  control that lacked its label, two probes did: the performance lab's fix
+  for a colour-cache bound the game already ships (now a probe that removes
+  the bound) and the enemies lab's route-planning partial fix, whose witness
+  the unmodified game also showed (it now names what the fix changes). The
+  return-to-patrol detail now lists every late return, as documented, and
+  the cave transition lab says which of its checks only synthetic height
+  changes fail and where the original defects are still caught.
 
 ## 0.0 — 2026-09-27
 
