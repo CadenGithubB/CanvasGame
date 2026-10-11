@@ -698,6 +698,10 @@ var LAB = (function () {
         return ok;
     };
     L.metric = function (id, value, unit) {
+        // Timings differ run to run, and the determinism comparison
+        // (docs/game_lab_guide.md) skips exactly the *_ms metrics, so an "ms"
+        // metric must say so in its id.
+        if (unit === "ms" && !/_ms$/.test(id)) throw new Error("LAB.metric: an ms metric's id must end in _ms: " + id);
         var v = (typeof value === "number") ? +value.toFixed(4) : value;
         L.out("METRIC " + id + " " + JSON.stringify(v) + (unit ? " " + unit : ""));
     };

@@ -6,6 +6,11 @@
         if (source.split(anchor).length !== 2) throw new Error('host mutation anchor changed');
         source = source.replace(anchor, '/* state restore disabled */');
     }
+    if (__argv.indexOf('--break-ms-metric-guard') >= 0) {
+        var guard = 'if (unit === "ms" && !/_ms$/.test(id)) throw';
+        if (source.split(guard).length !== 2) throw new Error('host mutation anchor changed');
+        source = source.replace(guard, 'if (false) throw');
+    }
     (0, eval)(source);
 })();
 LAB.init(__out, slurp, __engine, __argv);
@@ -38,5 +43,14 @@ LAB.check("env: game loads", LAB.load(__argv[0]), String(LAB.loadError || ""));
         LAB.check('env: next isolated pass cannot inherit old occlusion', visible > 0 && reset > 0 && sceneDepthAt(20,20) === Infinity);
     });
     beginSceneDepthFrame = begin;
+    // Lab protocol, not the game: two runs are compared check for check and
+    // metric for metric except the *_ms metrics, so a timing ("ms") metric
+    // must carry that suffix or every run would read as non-deterministic.
+    LAB.scenario('env: metric ids', function () {
+        function rejects(id) { try { LAB.metric(id, 0, 'ms'); return false; } catch (e) { return /_ms/.test(String(e.message)); } }
+        var bad = rejects('env.probe.ms.timing'), good = rejects('env.probe.timing_ms');
+        LAB.check('env: a timing (ms) metric whose id does not end in _ms is rejected',
+            bad && !good, 'unsuffixed id rejected ' + bad + ', suffixed id rejected ' + good);
+    });
 })();
 LAB.finish();

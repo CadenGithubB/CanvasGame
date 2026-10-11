@@ -135,11 +135,13 @@ if (LAB.loaded) (function () {
         };
     }
     // LAB.scenario plus a wall-clock METRIC (informational, never a verdict).
+    // Its id ends in _ms: the determinism comparison (docs/game_lab_guide.md)
+    // skips *_ms metrics and compares every other one.
     function scenario(letter, name, fn) {
         if (!want(letter)) return;
         var t0 = LAB.realNow();
         LAB.scenario(name, fn);
-        LAB.metric("physics.ms." + name.replace(/^physics: /, "").replace(/[^A-Za-z0-9]+/g, "_"), LAB.realNow() - t0, "ms");
+        LAB.metric("physics.time." + name.replace(/^physics: /, "").replace(/[^A-Za-z0-9]+/g, "_") + "_ms", LAB.realNow() - t0, "ms");
     }
 
     // ── worlds ───────────────────────────────────────────────────────────────

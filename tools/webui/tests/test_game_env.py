@@ -5,7 +5,7 @@ import unittest
 from tools.webui.game_lab import run_harness, suite_testcase
 from tools.webui.js_engine import JS_ENGINE
 
-EnvironmentSuite = suite_testcase("env", {}, min_checks=5)
+EnvironmentSuite = suite_testcase("env", {}, min_checks=6)
 
 
 @unittest.skipUnless(JS_ENGINE, "a JavaScript engine is required")
@@ -19,6 +19,11 @@ class EnvironmentSensitivityTests(unittest.TestCase):
         run = run_harness("env", ["--break-depth-reset"])
         self.assertEqual("HARNESS_RESULT FAIL 3", run.verdict, run.stdout + run.stderr)
         self.assertFalse(run.by_id()["env: prepared pass writes real scene depth"].ok)
+
+    def test_missing_ms_metric_guard_is_detected(self):
+        run = run_harness("env", ["--break-ms-metric-guard"])
+        self.assertEqual("HARNESS_RESULT FAIL 1", run.verdict, run.stdout + run.stderr)
+        self.assertFalse(run.by_id()["env: a timing (ms) metric whose id does not end in _ms is rejected"].ok)
 
     def test_syntax_error_is_not_blamed_on_the_wrong_header_line(self):
         # LAB.load evaluates the page with an indirect eval. For a SyntaxError
