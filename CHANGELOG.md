@@ -75,6 +75,14 @@
   became defect reintroductions, every cave milestone and retired cave
   transition check has a probe that fails it, and a probe can pin a detail
   regex.
+- Tightens the audit lab's own evidence. The diagnostic tools lab again
+  catches debugCaveAt's old hard-coded cave surface, on a hillside cave where
+  the cover clamp depends on it. The D16 cave mouth check now requires uniform
+  bearings over a 15-seed census, so a cave gate drawn from a correlated RNG
+  stream no longer passes as a repair. The river levee check says which of its
+  two mechanisms made each step. Every probe that expects a known bug to keep
+  failing must now say why in a detail regex, and a protocol test enforces
+  this.
 
 ## 0.0 — 2026-09-27
 
