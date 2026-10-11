@@ -89,7 +89,12 @@ What is checked, and why ANY correct implementation meets the threshold:
                     the fixture must reach >= 1000 carved pairs and >= 50 levee
                     points raised >= 0.5 h. Each failing pair names the
                     picker's answer (getWalkableLayerTopAt) for a player
-                    stepping from the low point onto the high one.
+                    stepping from the low point onto the high one, and which
+                    of the carve's two mechanisms made it: _waterCarvable,
+                    asked about the low point with the water field the carve
+                    used, refuses it (a: the low point keeps its height beside
+                    a levee) or accepts it (b: the levee fell back too
+                    steeply); the detail counts the (a) pairs.
   truncation        every mesh cell of every chunk that could hold a network,
                     where queryCaveGeometry asked with every network of the 5x5
                     surrounding regions says "cave" (fade >= 0.05), was stamped
@@ -313,7 +318,9 @@ KNOWN_BUGS = {
         "unchanged, which makes a step taller than STEP_UP 1.0 that the game's own picker refuses "
         "(getWalkableLayerTopAt answers 'blocked'). Two mechanisms: (a) the levee rises beside ground "
         "_waterCarvable refuses to shape, which keeps its height; (b) the levee falls back over "
-        "WATER_LEVEE_FALL = 18 u, 1.5 height-grid steps. Endless 3 window (9611,-6196): "
+        "WATER_LEVEE_FALL = 18 u, 1.5 height-grid steps. The detail asks _waterCarvable about each step's low "
+        "point: 2 of the 5 steps are (a) (Endless 3 (10278,-6138) and Endless 777000), 3 are (b) (Endless 3 "
+        "(10278,-6222) and (10290,-6198), Endless 8), and the regex requires both. Endless 3 window (9611,-6196): "
         "(10278,-6138)->(10278,-6150) 0.989->2.096, natural 0.989->1.217 (the low point is not "
         "carvable), plus two more pairs; Endless 777000 (7954,3843): (8370,2658)->(8358,2658) "
         "3.220->4.231, natural 3.220->3.313; Endless 8 (3856,3691): (2622,2358)->(2610,2358) "
@@ -321,8 +328,9 @@ KNOWN_BUGS = {
         "0.933 h (Cave Test 12345), so they never reach it. "
         "FIX C (cap a carved point at its lowest natural 4-neighbour + 0.75) and FIX B "
         "(WATER_MAX_FILL 0.6) pass it; a 36 u levee fall alone still fails on mechanism (a)",
-        r"unclimbable carve steps [1-9]\d*/\d+ e\.g\. n\d+@\S+ \([-\d]+,[-\d]+\)->\([-\d]+,[-\d]+\) "
-        r"\S+->\S+ \(natural \S+->\S+, picker blocked\)"),
+        r"unclimbable carve steps [1-9]\d*/\d+, low point refused by _waterCarvable in [1-9]\d* e\.g\. "
+        r"n\d+@\S+ \([-\d]+,[-\d]+\)->\([-\d]+,[-\d]+\) \S+->\S+ \(natural \S+->\S+, picker blocked, "
+        r"low point (?:refused|carvable)\)(?=.*low point carvable\))"),
     C_ANGLE: (
         "audit D16, current symptom: rng2 and rng are both chunkRng(regionX, regionY, 100) in "
         "generateCaveNetwork, so a network exists only when the shared stream's first draw is "
@@ -478,10 +486,12 @@ PROBES: list = [
     ("FIX levee B: carving raises ground at most 0.6 h",
      "var WATER_MAX_FILL = 1.0, WATER_MAX_CUT = 1.0;", "var WATER_MAX_FILL = 0.6, WATER_MAX_CUT = 1.0;",
      {C_LEVEE: "PASS"}),
+    # Baseline: 5 steps, 2 with the low point refused (a). The witness: every
+    # step left is (a); a probe that changed nothing still has 3 (b) steps.
     ("PARTIAL FIX levee A (mechanism witness): a 36 u levee fall alone still leaves the steps beside ground "
      "_waterCarvable refuses to shape",
      "var WATER_LEVEE_FALL = 18;", "var WATER_LEVEE_FALL = 36;",
-     {C_LEVEE: "FAIL"}),
+     {C_LEVEE: ("FAIL", r"unclimbable carve steps ([1-9]\d*)/\d+, low point refused by _waterCarvable in \1 e\.g\.")}),
     ("FIX D17: the water-zone wall test reads terrainNoise under the terrain seed",
      "var wallTerrain = terrainNoise(wx, wy) + (geographyNoise(wx, wy) - 0.5) * 8.0;",
      "var _hw1Ws = noiseSeed; noiseSeed = oldSeed; var wallTerrain = terrainNoise(wx, wy) + "

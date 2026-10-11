@@ -107,7 +107,7 @@ var A = {
     interior: { bad: 0, pairs: 0, per: [], borderBad: 0, borderPairs: 0 },
     seam: { bad: 0, n: 0, per: [] },
     surf: { bad: 0, n: 0, bSamples: 0, per: [], noRecord: [] },
-    levee: { bad: 0, pairs: 0, high: 0, per: [], ex: [] },
+    levee: { bad: 0, refused: 0, unknown: 0, pairs: 0, high: 0, per: [], ex: [] },
     trunc: { miss: 0, extra: 0, want: 0, chunks: 0, per: [], minMargin: Infinity },
     water: { wall: 0, water: 0, bad: false, per: [] },
     angle: { n: 0, lower: 0, max: -1, per: [], bins: Array.apply(null, Array(BEARING_BINS)).map(function () { return 0; }), chi: NaN },
@@ -339,11 +339,18 @@ function scanSurfaceSeam(label) {
 // _waterRestoreCarve writes back). Only plain single-layer ground counts, and
 // a pair counts only where the natural ground had no such step: the carve
 // made it. Each counted pair also records what the game's picker answers to a
-// player standing on the low point who steps onto the high one.
+// player standing on the low point who steps onto the high one, and which of
+// the two mechanisms made it: (a) the low point is ground the carve refuses
+// to shape (_waterCarvable, asked with the water field the carve used, which
+// the carve leaves closed exactly where it was), so it keeps its height beside
+// a levee; (b) the carve shaped the low point too, and the levee fell back too
+// steeply between them.
 var LEVEE_HIGH = 0.5;         // h: a levee point raised at least this much (the fixture must reach high levees)
 function scanLevee(label) {
     var m = floorMesh, W = m.w, H = m.h, saved = m.waterCarveSaved;
     if (!saved || typeof saved !== "object") { A.levee.per.push(label + " no carve record"); return; }
+    var field = (typeof _waterField === "object" && _waterField && _waterField.w === W && _waterField.h === H) ? _waterField.height : null;
+    var canAsk = !!field && typeof _waterCarvable === "function";
     var post = m.l0TopZ, pre = new Float64Array(post), pairs = 0, bad = 0, high = 0;
     for (var k in saved) { pre[+k] = saved[k]; if (post[+k] - saved[k] >= LEVEE_HIGH) high++; }
     _floorCacheTick = (_floorCacheTick + 1) | 0;
@@ -359,8 +366,10 @@ function scanLevee(label) {
             bad++;
             var lo = post[a] < post[b] ? a : b, hi = lo === a ? b : a, hw = LAB.cellWorld(hi), hl = LAB.toLocal(hw.x, hw.y);
             var pick = getWalkableLayerTopAt(hl.x, hl.y, post[lo]);
+            var how = !canAsk ? "unknown" : _waterCarvable(m, field, lo) ? "carvable" : "refused";
+            if (how === "refused") A.levee.refused++; else if (how === "unknown") A.levee.unknown++;
             if (A.levee.ex.length < 6) A.levee.ex.push(label + " " + at(lo) + "->" + at(hi) + " " + fx(post[lo], 3) + "->" + fx(post[hi], 3) +
-                " (natural " + fx(pre[lo], 3) + "->" + fx(pre[hi], 3) + ", picker " + pick.action + ")");
+                " (natural " + fx(pre[lo], 3) + "->" + fx(pre[hi], 3) + ", picker " + pick.action + ", low point " + how + ")");
         }
     }
     A.levee.pairs += pairs; A.levee.bad += bad; A.levee.high += high;
@@ -800,7 +809,9 @@ if (LAB.loaded) {
         leveePre && A.levee.bad === 0,
         "[06-water.js carveWaterRivers: levee up to WATER_MAX_FILL above natural ground, falling back over WATER_LEVEE_FALL u, or not at all beside ground _waterCarvable refuses to shape] " +
         (leveePre ? "" : "PRECONDITION: only " + A.levee.pairs + " carved neighbour pairs (need >= 1000) / " + A.levee.high + " levee points raised >= " + LEVEE_HIGH + " h (need >= 50); ") +
-        "unclimbable carve steps " + A.levee.bad + "/" + A.levee.pairs + (A.levee.ex.length ? " e.g. " + A.levee.ex.join("; ") : "") + "; " + A.levee.per.join("; "));
+        "unclimbable carve steps " + A.levee.bad + "/" + A.levee.pairs + ", low point refused by _waterCarvable in " + A.levee.refused +
+        (A.levee.unknown ? " (" + A.levee.unknown + " not asked: no water field for the window)" : "") +
+        (A.levee.ex.length ? " e.g. " + A.levee.ex.join("; ") : "") + "; " + A.levee.per.join("; "));
     LAB.check("caves_geometry: every chunk stamps every cell that queryCaveGeometry over all nearby networks calls cave (no network truncation)",
         A.trunc.want > 0 && A.trunc.miss === 0,
         "[E3; generateChunk consults the 3x3 regions L5341-5350 and an AABB margin of 100 L5353] " +
