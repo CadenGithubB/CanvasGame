@@ -33,8 +33,11 @@ steering to (with the F1 waypoint fix the spawn is waypoint 0, and the old
 nearest-waypoint budget failed correctly patrolling enemies), its unchased
 control must walk to a waypoint at least two arrival radii from the spawn,
 and a probe applying every patrol fix passes it. The budget is per enemy,
-not the old fixed 20 s: it is looser for slow or wading enemies and tighter
-for fast ones, and the check's detail lists every return later than 20 s.
+not the old fixed 20 s: it scales with the chase path plus the distance to
+the target waypoint, over the enemy's patrol speed and the slowest water on
+that path. 17 of 44 baseline budgets exceed 20 s (13 Brutes, two Soldiers, a
+wading Soldier and a wading Scout) and two Brutes get less than 20 s; the
+check's detail lists every return later than 20 s.
 Vacuous FIX probes in the diagnostic tools (control map) and enemies (D19)
 became BREAK probes; cave transition gained BREAK probes for its lateral,
 mouth-rock and headroom checks and declares every retired check on a probe

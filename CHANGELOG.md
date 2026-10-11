@@ -67,11 +67,14 @@
   records that the carve can leave a step too tall to climb, and that every
   normal Endless cave mouth bears 0-108 degrees from its region centre
   (audit D16). The return-to-patrol check gives each enemy its own walking
-  budget to the waypoint it is steering to instead of a fixed 20 s, so it is
-  looser for slow or wading enemies and tighter for fast ones, and its detail
-  lists every return later than 20 s. Vacuous fix probes became defect
-  reintroductions, every cave milestone and retired cave transition check has
-  a probe that fails it, and a probe can pin a detail regex.
+  budget instead of a fixed 20 s: it scales with the chase path plus the
+  distance to the waypoint the enemy is steering to, over its patrol speed
+  and the slowest water on that path, so 17 of 44 budgets exceed 20 s (13
+  Brutes, two Soldiers, a wading Soldier and a wading Scout) and two Brutes
+  get less. Its detail lists every return later than 20 s. Vacuous fix probes
+  became defect reintroductions, every cave milestone and retired cave
+  transition check has a probe that fails it, and a probe can pin a detail
+  regex.
 
 ## 0.0 — 2026-09-27
 

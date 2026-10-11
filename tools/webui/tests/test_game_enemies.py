@@ -30,10 +30,15 @@ survey only, and checks, aggregated over them:
     spawn's NEAREST waypoint; with F1 repaired the spawn is waypoint 0, so it
     left out the walk to the waypoint actually targeted and failed correctly
     patrolling enemies.) The budget is per enemy, so it is NOT the old fixed
-    20 s: it is looser for slow or wading enemies (17/44 baseline budgets exceed
-    20 s, max 58 s) and tighter for fast ones; the detail lists every return
-    later than 20 s with its route failures, so a route-planning delay the
-    budget absorbs stays visible (KNOWN_BUGS names the two baseline cases).
+    20 s: it scales with the chase path plus the spawn-to-waypoint distance,
+    over the enemy's patrol speed and the slowest water on that path, so path
+    length matters as much as speed or water. 17/44 baseline budgets exceed
+    20 s (13 Brutes, one of them wading with the 58 s maximum; two non-wading
+    Soldiers; a wading Soldier; a wading Scout), and two non-wading Brutes,
+    the slowest type, get less than 20 s (18.0 and 18.9 s) because their
+    paths are short. The detail lists every return later than 20 s with its
+    route failures, so a route-planning delay the budget absorbs stays
+    visible (KNOWN_BUGS names the two baseline cases).
     A trial whose chase ends within the arrival radius of a waypoint would
     return in 0 s and is excluded. Every subject must pass a positive control:
     unchased, from its spawn point, it walks to a waypoint at least twice the
