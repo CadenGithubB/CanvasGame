@@ -621,6 +621,8 @@ function scanWater(label) {
 }
 
 // ── worlds ──────────────────────────────────────────────────────────────────
+// Scans the current window; returns how many entrance paths it tested (the
+// caller records the world, which may take more than one window).
 function testWindow(label, seen) {
     var r = scanWindow(label);
     scanInterior(label, r.groundZ);
@@ -633,7 +635,6 @@ function testWindow(label, seen) {
         if (seen && seen[id]) return;                   // already tested from an earlier window
         if (scanEntrance(label, E)) { tested++; if (seen) seen[id] = true; }
     });
-    A.worlds.push(label + ": entrances in window " + tested);
     return tested;
 }
 // The nearest entrance of a network to spawn, or null (a network may have none).
@@ -652,7 +653,21 @@ if (LAB.loaded) {
             LAB.seedRandom(seed);
             LAB.startCaveTest(seed);
             LAB.freezeDay(0.5);
-            testWindow(label);
+            // The start window is WINDOW_CHUNKS wide, a setting (7 today; the
+            // settings panel and persistence's FIX D23a say 5), so whether it
+            // holds a whole entrance path is not a property of the world. When
+            // it holds none, the world is also tested from a window centred on
+            // the entrance nearest the player, as every normal Endless world is.
+            var seen = {}, tested = testWindow(label, seen), rec = label + ": entrances in window " + tested;
+            if (!tested) {
+                var p = LAB.worldPos(), E = null;
+                LAB.entrances().forEach(function (e) { if (!E || Math.hypot(e.x - p.x, e.y - p.y) < Math.hypot(E.x - p.x, E.y - p.y)) E = e; });
+                if (E) {
+                    LAB.placeWorld(E.x, E.y, "top");
+                    rec += "; re-centred on entrance " + E.key + "#" + E.index + "@(" + fx(E.x, 0) + "," + fx(E.y, 0) + "): " + testWindow(label + "@entrance", seen);
+                }
+            }
+            A.worlds.push(rec);
             scanTruncation(label, allNets());
         });
     });
@@ -674,7 +689,8 @@ if (LAB.loaded) {
                 if (!E) { A.worlds.push("n" + seed + "r" + near.rx + "," + near.ry + ": the network has no entrance, entrances in window 0"); continue; }
                 if (seen[near.rx + "," + near.ry + "#" + near.net.entrances.indexOf(E)]) { A.expectedWorlds--; continue; }   // tested from an earlier window
                 LAB.placeWorld(E.x, E.y, "top");
-                testWindow("n" + seed + "r" + near.rx + "," + near.ry, seen);
+                var wl = "n" + seed + "r" + near.rx + "," + near.ry;
+                A.worlds.push(wl + ": entrances in window " + testWindow(wl, seen));
             }
             scanTruncation("n" + seed, found.map(function (f) { return f.net; }));
         });
@@ -741,9 +757,11 @@ if (LAB.loaded) {
     // ── verdicts ────────────────────────────────────────────────────────────
     var entPre = A.step.n >= MIN_ENTRANCES ? "" : "PRECONDITION: only " + A.step.n + " entrance paths inside a window (need >= " + MIN_ENTRANCES + "); ";
     var skipped = A.open.skipped.length ? " | approach start (+" + APPROACH_OUT + ") is itself under a cave roof: " + A.open.skipped.join("; ") : "";
-    LAB.check("caves_geometry: every world under test has a cave entrance inside its window",
-        A.worlds.length > 0 && A.worlds.length === A.expectedWorlds && A.worlds.every(function (s) { return / [1-9]\d*$/.test(s); }),
-        A.worlds.join("; "));
+    // The suite's coverage gate, not a game contract: a world with no entrance
+    // path in any window it tested has no subjects for the entrance checks.
+    var worldsOk = A.worlds.length > 0 && A.worlds.length === A.expectedWorlds && A.worlds.every(function (s) { return / [1-9]\d*$/.test(s); });
+    LAB.check("caves_geometry: every world under test has a cave entrance inside its window", worldsOk,
+        (worldsOk ? "" : "PRECONDITION: a world under test has no entrance path inside any window it tested; ") + A.worlds.join("; "));
     LAB.check("caves_geometry: every cell's layer stack is sorted by ascending Z",
         A.ceilCells > 0 && A.sorted.bad === 0,
         (A.ceilCells > 0 ? "" : "PRECONDITION: no ceilinged (multi-layer) cell in any window; ") + A.sorted.bad + "/" + A.sorted.cells + " unsorted; " + A.sorted.per.join("; "));

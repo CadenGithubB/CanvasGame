@@ -12,7 +12,13 @@ Worlds: Cave Test seeds 12345, 1, 777, 424242 (--seeds overrides) plus normal
 Endless seeds 424242, 999983 and 123 (--endless-seeds overrides), each
 re-centred on its nearest cave network. Cave Test forces plains and one network
 at region (0,0), so it is not representative on its own; seed 123 is in the
-defaults because it is the one that reaches N14. `--networks N|all` visits the
+defaults because it is the one that reaches N14. A Cave Test world is scanned in
+its start window and, when that window holds no whole entrance path, also in a
+window centred on the entrance nearest the player: the start window is
+WINDOW_CHUNKS wide, a setting (7 today, 5 under persistence's FIX D23a, which
+left Cave Test 424242 with no entrance in it), so the fixture must not depend
+on it. "every world under test has a cave entrance inside its window" is the
+suite's coverage gate and fails only with a PRECONDITION detail. `--networks N|all` visits the
 N nearest networks per Endless seed instead of one (a triage sweep; game_lab's
 CLI does not forward it, so pass it through
 game_lab.run_harness("caves_geometry", ["--networks", "all"])).
@@ -532,7 +538,7 @@ PROBES: list = [
     ("BREAK precondition: no cave networks at all -- nothing may pass vacuously",
      "  var rng = chunkRng(regionX, regionY, 100);\n  var entryAngle",
      "  endlessCaveNetworks[netKey] = null; return null;\n  var rng = chunkRng(regionX, regionY, 100);\n  var entryAngle",
-     {C_WORLD: "FAIL", C_SORTED: "PRECONDITION", C_CAP: "PRECONDITION", C_SEAM: "PRECONDITION",
+     {C_WORLD: "PRECONDITION", C_SORTED: "PRECONDITION", C_CAP: "PRECONDITION", C_SEAM: "PRECONDITION",
       C_TRUNC: "PRECONDITION", C_SURF: "PRECONDITION", C_ANGLE: "PRECONDITION"}),
     ("BREAK: the page throws while loading",
      "function resetEndlessMode() {", "throw new Error('probe: page fails to load'); function resetEndlessMode() {",
