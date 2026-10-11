@@ -39,8 +39,7 @@ Vacuous FIX probes in the diagnostic tools (control map) and enemies (D19)
 became BREAK probes; cave transition gained BREAK probes for its lateral,
 mouth-rock and headroom checks and declares every retired check on a probe
 that fails it; and every cave milestone check is now declared by a probe
-aimed at it. Probe expectations may pin a detail regex (below), which the
-partial-fix witnesses and BREAK-on-top-of-FIX probes use. The enemies,
+aimed at it. Probe expectations may pin a detail regex (below). The enemies,
 diagnostic tools, cave transition, cave milestone, physics and cave geometry
 suites passed their base and probe unittests on jsc at the end of this pass.
 The cross-suite matrix was run only for cave geometry's FIX D16 and the new
@@ -82,11 +81,16 @@ with the `PRECONDITION` marker in its detail, and a marker-free failure or a
 pass does not satisfy it.
 
 An expectation may also be a `(verdict, r"detail regex")` pair: the verdict
-must match and the regex must be found in the check's detail. Use it when the
-declared verdict equals the baseline verdict -- a partial fix that still
-fails, or a BREAK applied on top of a FIX -- because the verdict alone cannot
-show that the probe changed anything; the regex states the witness (for
-example, which enemies stay stuck).
+must match and the regex must be found in the check's detail. Every `FAIL`
+declared on a check in its suite's `KNOWN_BUGS` carries one, because there
+the verdict equals the baseline and alone cannot show that the probe changed
+anything; `test_game_lab_protocol` enforces it. For a partial fix that still
+fails, or a BREAK applied on top of a FIX or a known bug, the regex states
+the witness the baseline detail lacks (for example, which enemies stay
+stuck), so a probe whose mutation changed nothing cannot satisfy it. For a
+non-flip declaration beside a flip, or in a GUARD, it states the mechanism
+the check still fails for (the `_still` helper of the tools, perf and
+persistence suites uses the check's `KNOWN_BUGS` regex).
 
 The common seed arguments have one meaning everywhere: `--seeds` supplies Cave
 Test worlds and `--endless-seeds` supplies normal Endless worlds. A readable

@@ -79,6 +79,26 @@ _WALK_ONLY_PROMPT = (
     rf"airborne frames \d+ min h {_NUM}; rest (?:1[0-7]|\d)\.\d u from the chest; "
     rf"offered=true prompt no prompt drawn at camera pitch {_NUM} = CAM_PITCH_MAX; render errors 0")
 
+
+def _all_walks(walk: str) -> str:
+    """A walk-check FAIL detail in which every one of at least 2 walks matches `walk`."""
+    return rf"^0/(?:[2-9]|[1-9]\d+) walks at 30 fps [^:|]*: {walk}(?: \| {walk})+$"
+
+
+# Witnesses of the two walk BREAKs applied with the near-chest label FIX, so a
+# probe that changed nothing (every walk still the prompt defect) cannot pass:
+# every walk STUCK on its corridor route and never offered the chest; or every
+# walk reached the chest floor, rests 5-18 u out (inside the game's 90 u reach,
+# outside a 5 u one) and is not offered it.
+_WALK_STUCK = (
+    rf"\w+: entrance \({_NUM},{_NUM}\) -> chest \({_NUM},{_NUM}\) \d+ corridor nodes, {_NUM} u, \d+ frames at 30 fps; "
+    rf"STUCK {_NUM} u short of node \d+ at \({_NUM},{_NUM}\); end at [^|]*; offered=false prompt [^|]*; render errors 0")
+_WALK_NOT_OFFERED = (
+    rf"\w+: entrance \({_NUM},{_NUM}\) -> chest \({_NUM},{_NUM}\) \d+ corridor nodes, {_NUM} u, \d+ frames at 30 fps; "
+    rf"end at \({_NUM},{_NUM}\) h={_NUM} chest-cell floor {_NUM} underground=true onFloor=true "
+    rf"airborne frames \d+ min h {_NUM}; rest (?:1[0-7]|[5-9])\.\d u from the chest; "
+    rf"offered=false prompt no prompt drawn at camera pitch {_NUM} = CAM_PITCH_MAX; render errors 0")
+
 # check id -> (why it fails today, regex its FAIL detail must match). The regex
 # pins the documented mechanism, so a known bug that starts failing for another
 # reason stops counting as "expected".
@@ -243,7 +263,7 @@ PROBES: list = [
      "so the walk fails by getting stuck, not on the known prompt defect). Chambers still are, so the teleport "
      "floor check stays PASS; walking in from the entrance must FAIL",
      [(_CORRIDOR_BAND, "      if (false) {"), (_LABEL, _LABEL_FIX)], None,
-     {_WALK: "FAIL", _FLOOR: "PASS"}),
+     {_WALK: ("FAIL", _all_walks(_WALK_STUCK)), _FLOOR: "PASS"}),
     # These two target precondition gates: each gate must FAIL with its
     # PRECONDITION marker (game_lab's "PRECONDITION" expectation).
     ("BREAK: no cave network gets a terminal chamber (generateCaveNetwork's layout) -- every cave-chest "
@@ -264,7 +284,7 @@ PROBES: list = [
     ("BREAK: a 5 u pickup radius, with the near-chest label FIX: the walker resting 6-17 u from the chest is no "
      "longer offered it",
      [(_IN_RANGE, "    var inRange = dist < 5;\n"), (_LABEL, _LABEL_FIX)], None,
-     {_WALK: "FAIL", _FLOOR: "FAIL"}),
+     {_WALK: ("FAIL", _all_walks(_WALK_NOT_OFFERED)), _FLOOR: "FAIL"}),
 ]
 
 LootSuite = suite_testcase("loot", KNOWN_BUGS, min_checks=18)
@@ -356,6 +376,29 @@ class WalkKnownBugDetailTests(unittest.TestCase):
                 self.assertFalse(self.matches(self.detail(walks)), self.detail(walks))
                 self.assertFalse(self.matches(self.detail([bad, self.WALKS[0]])), "first walk")
                 self.assertFalse(self.matches(self.detail([self.WALKS[0], bad])), "last walk")
+
+    # A walk the corridor BREAK prints (jsc, Cave Test 12345, with the label FIX).
+    STUCK = ("cavetest12345: entrance (865.3,426.9) -> chest (699.5,978.0) 8 corridor nodes, 570.7 u, 352 frames at "
+             "30 fps; STUCK 177.7 u short of node 1 at (858.0,426.0); end at (858.1,425.7) h=-4.77 chest-cell floor "
+             "-4.77 underground=false onFloor=false airborne frames 0 min h -4.77; rest 574.7 u from the chest; "
+             "offered=false prompt no prompt drawn at camera pitch 0.07 vs CAM_PITCH_MAX 1.40; render errors 0")
+
+    def test_break_witnesses_reject_the_unbroken_walks(self):
+        # The two walk BREAKs declare the walk's baseline verdict (FAIL), so
+        # their regexes must reject today's prompt-defect walks: a probe whose
+        # mutation changed nothing cannot satisfy them.
+        stuck, not_offered = _all_walks(_WALK_STUCK), _all_walks(_WALK_NOT_OFFERED)
+        base = self.detail(self.WALKS)
+        self.assertIsNone(re.search(stuck, base))
+        self.assertIsNone(re.search(not_offered, base))
+        self.assertIsNotNone(re.search(stuck, self.detail([self.STUCK] * 3)))
+        self.assertIsNone(re.search(stuck, self.detail([self.STUCK, self.WALKS[1], self.STUCK])), "one walk not stuck")
+        unoffered = [w.replace("offered=true", "offered=false") for w in self.WALKS]
+        self.assertIsNotNone(re.search(not_offered, self.detail(unoffered)))
+        self.assertIsNone(re.search(not_offered, self.detail([unoffered[0], self.WALKS[1], unoffered[2]])),
+                          "one walk still offered")
+        self.assertIsNone(re.search(not_offered, self.detail(
+            [unoffered[0], unoffered[1].replace("rest 6.3 u", "rest 4.9 u"), unoffered[2]])), "a rest inside 5 u")
 
 
 if __name__ == "__main__":

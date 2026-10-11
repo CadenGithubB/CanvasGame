@@ -89,3 +89,38 @@ class MutationVerdictTests(unittest.TestCase):
             game_lab.probe_expectation(("FAIL",))
         with self.assertRaises(game_lab.GameLabError):
             game_lab.probe_expectation("FIAL")
+
+
+class BaselineVerdictDeclarationTests(unittest.TestCase):
+    """A probe that declares FAIL on a check already in its suite's KNOWN_BUGS must pin a detail regex.
+
+    The verdict alone equals the baseline there, so a probe whose mutation
+    changed nothing would satisfy it. A partial fix or a BREAK on top of a FIX
+    pins the witness its baseline detail lacks; a non-flip declaration beside a
+    flip pins the mechanism the check still fails for (the suite's _still).
+    """
+
+    def test_every_baseline_equal_fail_declaration_pins_a_detail_regex(self):
+        import importlib
+        import pkgutil
+
+        import tools.webui.tests as suite_tests
+
+        bare, seen = [], 0
+        for info in pkgutil.iter_modules(suite_tests.__path__):
+            if not info.name.startswith("test_game_"):
+                continue
+            mod = importlib.import_module(f"{suite_tests.__name__}.{info.name}")
+            known = getattr(mod, "KNOWN_BUGS", None)
+            if not known:
+                continue
+            for attr in ("PROBES", "MOTION_PROBES"):
+                for desc, _anchor, _replacement, expect in getattr(mod, attr, None) or []:
+                    for cid, spec in expect.items():
+                        verdict, regex = game_lab.probe_expectation(spec)
+                        if cid in known and verdict == "FAIL":
+                            seen += 1
+                            if regex is None:
+                                bare.append(f"{info.name}.{attr}: {desc[:80]!r} -> {cid[:80]}")
+        self.assertGreater(seen, 0, "no suite declares FAIL on a known bug; the scan found nothing to check")
+        self.assertEqual([], bare, "FAIL declared on a KNOWN_BUGS check without a detail regex:\n  " + "\n  ".join(bare))

@@ -423,9 +423,16 @@ if (LAB.loaded) {
         var worldPair = pairPaths(p0m, p0.wx, p0.wy, p1m, p1.wx, p1.wy, 1);
         var originPair = pairPaths(p0m, p0.ox, p0.oy, p1m, p1.ox, p1.oy, 0.5);
         var xyPair = worldPair || originPair;
+        // Per axis, the paths that tracked it across the shift (diagnostic only).
+        function axis(av, bv, tol) {
+            var ps = matchingPaths(p0m, av, tol).filter(function (p) { return p in p1m && Math.abs(p1m[p] - bv) <= tol && Math.abs(p0m[p] - p1m[p]) > tol; });
+            return ps.length ? ps.join(" ") : "none";
+        }
         LAB.check(P + "caveCapture records where the player is in world space (world position or window origin)", !!xyPair,
             xyPair ? "distinct numeric paths " + xyPair.join(",") + " tracked " + (worldPair ? "world position" : "window origin") + " across a two-axis shift" :
-            "no distinct numeric paths tracked both world x/y or origin x/y across a two-axis window shift; player.x/y alone are window-local");
+            "no distinct numeric paths tracked both world x/y or origin x/y across a two-axis window shift (world x: " + axis(p0.wx, p1.wx, 1) +
+            ", world y: " + axis(p0.wy, p1.wy, 1) + ", origin x: " + axis(p0.ox, p1.ox, 0.5) + ", origin y: " + axis(p0.oy, p1.oy, 0.5) +
+            "); player.x/y alone are window-local");
 
         // Same x/y and mesh stack, two airborne heights. Mesh floorH/ceilH are
         // excluded: the capture must carry the player's own height.
@@ -580,7 +587,7 @@ if (LAB.loaded) {
             n > 0 && bad.length === 0,
             (n === 0 ? "PRECONDITION: no seed produced a window without ceilings || " : "") +
             bad.length + "/" + n + " wrong (skipLowCeil++ runs for EVERY non-ceiling layer, L13021): " + det.join("; ") +
-            (pre.length ? " || " + pre.join("; ") : ""));
+            (bad.length ? " | wrong: " + bad.join("; ") : "") + (pre.length ? " || " + pre.join("; ") : ""));
     });
 
     // ═══ 4. the control map's colours vs the mesh ═══════════════════════════

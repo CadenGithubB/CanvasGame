@@ -138,6 +138,13 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"max (?:[3-9]|\d\d+) lines per re-centre"),
 }
 
+
+
+def _still(cid: str) -> tuple[str, str]:
+    """A non-flip declaration: the known bug still FAILs for its documented reason."""
+    return ("FAIL", KNOWN_BUGS[cid][1])
+
+
 # Shared probe texts.
 _BUF = "var _drawFloorCellBuf = new Float32Array(120000);"
 _BUF_20K = (_BUF, "var _drawFloorCellBuf = new Float32Array(60000);")
@@ -194,8 +201,11 @@ _E6_FIX = [
      "      .then(function() { tick._busy = false; });\n  }\n  gpPoll = setInterval(tick, 16);"),
 ]
 
-# (description, anchor, replacement, {check_id: "PASS" | "FAIL"})
+# (description, anchor, replacement, {check_id: "PASS" | "FAIL" | "PRECONDITION" | (verdict, r"detail regex")})
 # (description, [(anchor, replacement), ...], None, {check_id: ...})   multi-site
+# A FAIL declared on a check that already fails at baseline carries a detail
+# regex: _still (the documented mechanism) for a non-flip beside a flip or in a
+# GUARD, the BREAK's own witness for a BREAK on top of a FIX.
 PROBES: list = [
     # ── FIX probes: remove a known bug's cause, its check must go PASS ──
     # D25 is repaired; its two FIX probes became the BREAK probe and the
@@ -211,7 +221,7 @@ PROBES: list = [
      {_L4: "PASS", _ENDLESS_BUF: "PASS"}),
     ("FIX G3: 24 u of hysteresis before re-centring the window",
      _HYSTERESIS[0], _HYSTERESIS[1],
-     {_JITTER: "PASS", _NO_REBUILD: "PASS", _G3LINES: "FAIL"}),
+     {_JITTER: "PASS", _NO_REBUILD: "PASS", _G3LINES: _still(_G3LINES)}),
     ("FIX N17: silence loop()'s periodic [STATE] dump",
      _STATE_OFF[0], _STATE_OFF[1],
      {_SPAM: "PASS"}),
@@ -290,7 +300,7 @@ PROBES: list = [
      "  try { return _assembleWindowQuiet(centerCX, centerCY); } finally { console.log = _awl; console.warn = _aww; }\n"
      "}\n"
      "function _assembleWindowQuiet(centerCX, centerCY) {",
-     {_G3LINES: "PASS", _JITTER: "FAIL"}),
+     {_G3LINES: "PASS", _JITTER: _still(_JITTER)}),
     # G8 was repaired before the 0.0 snapshot: drawPerfHud reads
     # getPerfFrameCadence's rAF intervals. Its FIX probe became this BREAK.
     ("BREAK G8 (repaired): drawPerfHud derives fps from the average JS time per frame again",
@@ -322,7 +332,10 @@ PROBES: list = [
      [_STATE_OFF,
       (_RENDER, "  renderInterpolatedFrame(_physicsAccum / FIXED_DT_MS);\n"
                 "  console.error('[probe] per-frame console.error');\n\n  // Performance logging")], None,
-     {_SPAM: "FAIL"}),
+     # On top of the N17 FIX: the near-spawn site, silent at baseline, now
+     # fails on console.errors alone.
+     {_SPAM: ("FAIL", r"near chunk \(0,0\)[^;]*: 0 lines \+ [1-9]\d* console\.errors in \d+/\d+ frames in-chunk, "
+                      r"e\.g\. error '\[probe\] per-frame console\.error'")}),
     ("BREAK: [STATE] silenced, and the walls pass throws on every Endless frame (render errors void steady state: "
      "both checks must FAIL on their PRECONDITION)",
      [_STATE_OFF, _WALLS_THROW], None,
@@ -341,7 +354,7 @@ PROBES: list = [
     ("GUARD G3: updateChunks moved from gameUpdate into loop() -- still no hysteresis, so jitter must still FAIL",
      [("  if (ENDLESS_MODE) updateChunks();\n\n  // Wall collision", "  /* moved to loop() */\n\n  // Wall collision"),
       (_RENDER, "  if (ENDLESS_MODE) updateChunks();\n" + _RENDER)], None,
-     {_JITTER: "FAIL", _NO_REBUILD: "PASS", _G3LINES: "FAIL"}),
+     {_JITTER: _still(_JITTER), _NO_REBUILD: "PASS", _G3LINES: _still(_G3LINES)}),
     ("GUARD G6: with the 4,096 cap, a walls pass that throws every frame must void the cache check (its "
      "PRECONDITION: render errors during play)",
      [_RGB_CAP_4096, _WALLS_THROW], None,

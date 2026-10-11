@@ -182,10 +182,18 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"cave networks [1-9]\d* -> 0"),
 }
 
+
+
+def _still(cid: str) -> tuple[str, str]:
+    """A non-flip declaration: the known bug still FAILs for its documented reason."""
+    return ("FAIL", KNOWN_BUGS[cid][1])
+
+
 # (description, anchor, replacement, {check id: expected verdict}), or the
 # multi-site form (description, [(anchor, replacement), ...], None, {...}).
 # Anchors must occur exactly once in game_lab.game_js(); replacements keep the
-# line count so header line numbers stay true.
+# line count so header line numbers stay true. A partial fix declares the half
+# it leaves broken with _still: that check FAILs for its documented mechanism.
 #
 # Not probed on purpose:
 #   - RESTART_RESETS' "equipment" clause: LAB.startEndless mirrors the btnEndless
@@ -200,7 +208,7 @@ PROBES = [
     # ── FIX probes: remove a known bug's cause, its check must PASS ──────────
     ("FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
      "windowChunks:   7,", "windowChunks:   5,",
-     {WINDOW_MATCHES_SETTINGS: "PASS", APPLY_RESIZE: "FAIL"}),
+     {WINDOW_MATCHES_SETTINGS: "PASS", APPLY_RESIZE: _still(APPLY_RESIZE)}),
     ("FIX [D23b]: Apply saves entity state with the OLD window size and the rebuild skips its own save pass",
      [("    WINDOW_CHUNKS = settings.chunkWindow;",
        "    var _oldWC = WINDOW_CHUNKS; WINDOW_CHUNKS = settings.chunkWindow;"),
@@ -212,7 +220,7 @@ PROBES = [
       ("function assembleWindow(centerCX, centerCY) {",
        "var _skipWindowSave = false; function assembleWindow(centerCX, centerCY) {")],
      None,
-     {APPLY_RESIZE: "PASS", WINDOW_MATCHES_SETTINGS: "FAIL"}),
+     {APPLY_RESIZE: "PASS", WINDOW_MATCHES_SETTINGS: _still(WINDOW_MATCHES_SETTINGS)}),
     ("FIX [N10]: the Day/Night toggle's hit area covers its checkbox and label, not the panel width",
      "_settingsClickAreas.push({x: dnX, y: dnY, w: panW - pad * 2, h: fpsBoxSize, action: 'toggle', key: 'dayNight'});",
      "_settingsClickAreas.push({x: dnX, y: dnY, w: Math.min(panW - pad * 2, fpsBoxSize + 116 * S), h: fpsBoxSize, action: 'toggle', key: 'dayNight'});",
@@ -256,7 +264,7 @@ PROBES = [
     ("FIX [H3] shift half only: save a swapped chest's quality back to its chunk; eviction still loses the swap",
      "tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId;",
      "tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId; tcChunk.treasureChests[tc._chunkIdx].quality = tc.quality;",
-     {SWAP_SHIFT: "PASS", SWAP_EVICT: "FAIL"}),
+     {SWAP_SHIFT: "PASS", SWAP_EVICT: _still(SWAP_EVICT)}),
     ("FIX [H3] eviction half only: a delta records the chest's item+quality and generateChunk re-applies it",
      [("tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId;",
        "tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId; if (!entityDeltas[tc._chunkKey]) entityDeltas[tc._chunkKey] = {};"
@@ -267,7 +275,7 @@ PROBES = [
        " var _cit = chunk.treasureChests[_cik]; if (_cit) { _cit.equipId = deltas.chestItems[_cik].equipId;"
        " _cit.relicId = deltas.chestItems[_cik].relicId; _cit.quality = deltas.chestItems[_cik].quality; } }")],
      None,
-     {SWAP_EVICT: "PASS", SWAP_SHIFT: "FAIL"}),
+     {SWAP_EVICT: "PASS", SWAP_SHIFT: _still(SWAP_SHIFT)}),
     ("FIX [H3] complete: quality written back to the chunk AND the swap recorded as a chunk delta",
      [("tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId;",
        "tcChunk.treasureChests[tc._chunkIdx].relicId = tc.relicId; tcChunk.treasureChests[tc._chunkIdx].quality = tc.quality;"
@@ -309,7 +317,7 @@ PROBES = [
     ("FIX [H6]: resetEndlessMode clears grid, so every world gets the market/shrine guarantee; eviction still loses it",
      "  chunks = {};\n  entityDeltas = {};",
      "  chunks = {};\n  entityDeltas = {}; grid = null;",
-     {RESTART_SAME_WORLD: "PASS", SPAWN_FEATURES_SURVIVE: "FAIL"}),
+     {RESTART_SAME_WORLD: "PASS", SPAWN_FEATURES_SURVIVE: _still(SPAWN_FEATURES_SURVIVE)}),
     ("FIX [N12] by delta: the injected market/shrine is recorded as a chunk delta and re-applied by generateChunk",
      [("        _rebuildChunkWalls(_mc);",
        "        _rebuildChunkWalls(_mc); if (!entityDeltas[_mk]) entityDeltas[_mk] = {}; entityDeltas[_mk].market = _mc.market;"),
@@ -319,7 +327,11 @@ PROBES = [
        "    if (deltas.market && !chunk.market) chunk.market = deltas.market; if (deltas.shrine && !chunk.shrine) chunk.shrine = deltas.shrine;"
        " if (deltas.shrineUsed && chunk.shrine) chunk.shrine.used = true;")],
      None,
-     {SPAWN_FEATURES_SURVIVE: "PASS", RESTART_SAME_WORLD: "FAIL"}),
+     # With the delta generateChunk re-applies the injected shrine, so the
+     # check no longer lists it as injected in world 1 (its KNOWN_BUGS regex
+     # needs that); the restarted world still lacks it (H6).
+     {SPAWN_FEATURES_SURVIVE: "PASS",
+      RESTART_SAME_WORLD: ("FAIL", r"differ after restart: -?\d+,-?\d+:\S*features; injected in world 1: none ")}),
     ("FIX [N12] by pinning: a chunk holding an injected market/shrine is never evicted",
      [("        _rebuildChunkWalls(_mc);", "        _rebuildChunkWalls(_mc); _mc._pinned = true;"),
       ("        _rebuildChunkWalls(_sc);", "        _rebuildChunkWalls(_sc); _sc._pinned = true;"),

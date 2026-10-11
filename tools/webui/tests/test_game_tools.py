@@ -202,11 +202,20 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
         r"DEBUG_TEXTURE surface .*identical.*underground .*identical"),
 }
 
+
+def _still(cid: str) -> tuple[str, str]:
+    """A non-flip declaration: the known bug still FAILs for its documented reason."""
+    return ("FAIL", KNOWN_BUGS[cid][1])
+
+
 # (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"
 # | (verdict, r"detail regex")}). Anchors occur exactly once in
-# game_lab.game_js(). Every probe was rerun in the third October 2026 pass and
-# flipped no check it does not declare; a declared verdict equal to the
-# baseline verdict (a BREAK on top of a FIX) carries a detail regex.
+# game_lab.game_js(). Every probe was rerun in the fourth October 2026 pass and
+# flipped no check it does not declare. A declared verdict equal to the
+# baseline verdict carries a detail regex: a BREAK on top of a FIX or of a
+# known bug pins the witness the baseline detail lacks, and a non-flip
+# declaration beside a flip (_still) pins the mechanism the check still fails
+# for.
 _WALKABLE_FH = (
     "      var fh = floorMesh.l0TopZ[idx];\n"
     "      for (var _q = 0; _q < floorMesh.layerCount[idx]; _q++) { "
@@ -225,7 +234,7 @@ PROBES: list = [
     ("FIX: caveCapture takes floorH from the walkable layer at the player's height",
      "var pFloorH = (typeof getFloorHeightAt === 'function') ? getFloorHeightAt(pos.x, pos.y) : 0;",
      "var pFloorH = getWalkableLayerTopAt(pos.x, pos.y, (pos.floorZ - 60) / 40).topH;",
-     {_C1: "PASS", _HEIGHT: "FAIL"}),
+     {_C1: "PASS", _HEIGHT: _still(_HEIGHT)}),
     ("FIX: caveCapture reports the lowest ceiling layer ABOVE the player's height (none on the cap)",
      "    if (_plc >= 2 && floorMesh.l1Type[_pidx] === 2) pCeilH = floorMesh.l1TopZ[_pidx];\n"
      "    else if (_plc >= 3 && floorMesh.l2Type[_pidx] === 2) pCeilH = floorMesh.l2TopZ[_pidx];",
@@ -346,10 +355,12 @@ PROBES: list = [
      "Object.defineProperty(window, 'DEBUG_POLY_TYPES', { get: function () { return false; }, "
      "set: function () {}, configurable: true });",
      {_POLY: "FAIL"}),
+    # On top of the known bug (null at baseline): a non-null snapshot that never
+    # changes must still fail.
     ("BREAK: lastTransitionSnapshot is a stale object written once at page load",
      "var __caveStats = {",
      "window.__caveDebugLast = { stale: true };\nvar __caveStats = {",
-     {_SNAP: "FAIL"}),
+     {_SNAP: ("FAIL", r'before=\{"stale":true\} after=\{"stale":true\}')}),
     # Deleting the field makes the stitch-miss increment produce NaN, so both
     # checks void on their non-numeric statistics gate: a setup failure, not a
     # pass. Detection of a dead counter is the outsideBlend BREAK above; _HIST
@@ -361,18 +372,22 @@ PROBES: list = [
       ("  __caveStats.floorOutsideBlend = 0; // repurposed: layer-stitch misses\n", "")],
      None,
      {_OUTSIDE: "PRECONDITION", _HIST: "PRECONDITION"}),
+    # The next three sit on top of a known bug; each regex pins what the
+    # mutation adds: the missing field beside the renamed non-zero one, an x
+    # tracker with no y tracker, and render errors in both scenes.
     ("BREAK: rename skipLowCeil while it still reports non-zero work in a ceiling-free window",
      "      visited: ct, skipLowCeil: cs.ceilSkipLowCeil, skipEntrRange: cs.ceilSkipEntrRange,",
      "      visited: ct, skipLowCeiling: cs.ceilSkipLowCeil, skipEntrRange: cs.ceilSkipEntrRange,",
-     {_NO_CEIL: "FAIL"}),
+     {_NO_CEIL: ("FAIL", r"missing/non-numeric required fields skipLowCeil; skipLowCeiling=[1-9]\d*")}),
     ("BREAK: caveCapture records only originX, so the world y coordinate cannot be recovered",
      "    seed: (typeof WORLD_SEED !== 'undefined') ? WORLD_SEED : null,",
      "    seed: (typeof WORLD_SEED !== 'undefined') ? WORLD_SEED : null,\n    originX: windowOriginX,",
-     {_XY: "FAIL"}),
+     {_XY: ("FAIL", r"world x: none, world y: none, origin x: \.originX, origin y: none\)")}),
     ("BREAK: ticking Floor debug crashes the floor pass; a crash is not a working checkbox",
      "  // Reset debug stats for this frame",
      "  if (DEBUG_FLOOR) __noSuchFloorDebugFn();\n  // Reset debug stats for this frame",
-     {_FLOOR: "FAIL"}),
+     {_FLOOR: ("FAIL", r"DEBUG_FLOOR surface false->true changed stable=true renderErrors=[1-9]\d* .*"
+                       r"underground false->true changed stable=true renderErrors=[1-9]\d* ")}),
     ("BREAK: the underground-only Ceiling wireframe checkbox goes dead",
      "var DEBUG_CEIL_WIRE = false;",
      "Object.defineProperty(window, 'DEBUG_CEIL_WIRE', { get: function () { return false; }, "
