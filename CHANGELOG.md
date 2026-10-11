@@ -59,6 +59,19 @@
   near-chest prompt in caves is recorded as a known game defect, and stale
   fixtures and probes are repaired or re-anchored. The harness runs under Deno
   as well as jsc, and the core gate grows from 160 to 367 tests.
+- Continues the audit lab refresh. The enemies lab now steps enemies the way
+  gameUpdate does, which exposes a patrol route-planning defect (patrol plans
+  to the enemy's own feet height, and the planner refuses a height change on
+  its first off-grid hop) that leaves two enemies stuck after a chase. The
+  cave geometry lab judges the ground surface before the river carve and
+  records that the carve can leave a step too tall to climb, and that every
+  normal Endless cave mouth bears 0-108 degrees from its region centre
+  (audit D16). The return-to-patrol check gives each enemy its own walking
+  budget to the waypoint it is steering to instead of a fixed 20 s, so it is
+  looser for slow or wading enemies and tighter for fast ones, and its detail
+  lists every return later than 20 s. Vacuous fix probes became defect
+  reintroductions, every cave milestone and retired cave transition check has
+  a probe that fails it, and a probe can pin a detail regex.
 
 ## 0.0 — 2026-09-27
 

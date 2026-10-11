@@ -18,12 +18,35 @@ performance, persistence and physics first, then cave geometry, cave
 milestone, cave transition, enemies and the diagnostic tools (and physics
 again, for its D15 wallFaceBase fixture). Each suite passed its base and
 probe unittests on jsc when its pass landed, with known bugs failing for
-their documented reasons. A FIX probe whose repair had
-already shipped passes whether or not it is applied, so those became BREAK
-probes that put the defect back. The frozen-tree FIX matrix below was run
-after the second pass only for the FIX probes it added or changed, so do not
-call the entire historical mutation matrix validated. Browser pixel grading
-also needs a fresh browser baseline, independent of the headless gate.
+their documented reasons. A FIX probe whose repair had already shipped
+passes whether or not it is applied, so those became BREAK probes that put
+the defect back. The frozen-tree FIX matrix below was run after the second
+pass only for the FIX probes whose mutation it added or changed; a
+re-targeted probe with an unchanged mutation (cave geometry's FIX D16) was
+not re-matrixed until the third pass. Do not call the entire historical
+mutation matrix validated. Browser pixel grading also needs a fresh browser
+baseline, independent of the headless gate.
+
+A third October pass answered a review of the second. The enemies
+return-to-patrol budget now covers the walk to the waypoint the game is
+steering to (with the F1 waypoint fix the spawn is waypoint 0, and the old
+nearest-waypoint budget failed correctly patrolling enemies), its unchased
+control must walk to a waypoint at least two arrival radii from the spawn,
+and a probe applying every patrol fix passes it. The budget is per enemy,
+not the old fixed 20 s: it is looser for slow or wading enemies and tighter
+for fast ones, and the check's detail lists every return later than 20 s.
+Vacuous FIX probes in the diagnostic tools (control map) and enemies (D19)
+became BREAK probes; cave transition gained BREAK probes for its lateral,
+mouth-rock and headroom checks and declares every retired check on a probe
+that fails it; and every cave milestone check is now declared by a probe
+aimed at it. Probe expectations may pin a detail regex (below), which the
+partial-fix witnesses and BREAK-on-top-of-FIX probes use. The enemies,
+diagnostic tools, cave transition, cave milestone, physics and cave geometry
+suites passed their base and probe unittests on jsc at the end of this pass.
+The cross-suite matrix was run only for cave geometry's FIX D16 and the new
+enemies all-patrol-fixes probe, each against every non-smoke suite; D16's two
+collateral PASS->FAIL flips are precondition voids and are recorded beside
+that probe. The full frozen-tree FIX matrix was not rerun.
 
 `game_lab.py` extracts the shipping JavaScript from
 `components/hardwareone/WebPage_Games.h`, preserves its header line numbers,
