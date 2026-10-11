@@ -962,8 +962,12 @@ if (LAB.loaded) (function () {
     // re-centre yet), stands for 1 s so overlapping chamber spawns finish
     // separating, then WALKS 60 u across the chunk line: step() ->
     // updateChunks() -> assembleWindow() (L10306, L7491), the same path play
-    // takes. Only enemies that were flagged underground just before the walk
-    // and were too far from it to move are compared, matched by exact position.
+    // takes. Re-centre hysteresis (audit G3's repair: caves_transition's FIX
+    // G3 waits until the player is 48 u past the line) moves the re-centre
+    // further out, so a walk that has not re-centred 30 u past the line walks
+    // on, RECENTRE_STEP u at a time, up to RECENTRE_PAST_MAX u past it. Only
+    // enemies that were flagged underground just before the walk and were too
+    // far from it to move are compared, matched by exact position.
     //
     // Floor tracking: while flagged, an underground enemy's z follows the floor
     // under it (L11458-11459, e.z = getFloorHeightAt * 25). Up to 10 of the
@@ -974,6 +978,7 @@ if (LAB.loaded) (function () {
     // floor differs from the enemy's starting z -- where a z that stopped
     // tracking would show -- so a pass cannot come from flat ground alone.
     var SH = { worlds: 0, recentred: 0, compared: 0, zChanged: [], movedExcluded: 0, notFound: 0, leftWindow: 0, flaggedBefore: 0 };
+    var RECENTRE_STEP = 30, RECENTRE_PAST_MAX = 240;   // 240 u = half a chunk past the line
     var FT = { pre: { n: 0, off: 0, varied: 0, trials: 0, ex: [] }, post: { n: 0, off: 0, varied: 0, trials: 0, flagLost: 0, ex: [] } };
     function floorChase(e, Pw, acc, label) {
         var P = LAB.toLocal(Pw.x, Pw.y);
@@ -1051,10 +1056,19 @@ if (LAB.loaded) (function () {
             var before = enemies.filter(function (e) { return e.underground === true; }).map(function (e) {
                 return { x: wx(e.x), y: wy(e.y), z: e.z, id: e.enemyType.id };
             });
-            var path = [LAB.worldPos()];
-            LAB.walkTo(dest.x, dest.y, { maxTicks: 240, arrive: 6, onTick: function (s) { path.push({ x: s.x, y: s.y }); } });
+            var path = [LAB.worldPos()], onTick = function (s) { path.push({ x: s.x, y: s.y }); };
+            LAB.walkTo(dest.x, dest.y, { maxTicks: 240, arrive: 6, onTick: onTick });
+            var past = 30, blocked = false;
+            while (windowOriginX === ox && windowOriginY === oy && past < RECENTRE_PAST_MAX && !blocked) {
+                past += RECENTRE_STEP;
+                var go = { x: start.x + (30 + past) * E[0], y: start.y + (30 + past) * E[1] };
+                LAB.walkTo(go.x, go.y, { maxTicks: 240, arrive: 6, onTick: onTick });
+                var at = LAB.worldPos();
+                blocked = Math.hypot(at.x - go.x, at.y - go.y) > 6 + RECENTRE_STEP / 2;
+            }
             if (windowOriginX === ox && windowOriginY === oy) {
-                LAB.note("re-centre [" + W.label + "]: walk " + E.join(",") + " across the chunk line did not re-centre");
+                LAB.note("re-centre [" + W.label + "]: walk " + E.join(",") + " across the chunk line did not re-centre (" +
+                    (blocked ? "blocked short of " : "walked to ") + past + " u past it)");
                 continue;
             }
             SH.recentred++;

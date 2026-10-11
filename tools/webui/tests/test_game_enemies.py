@@ -71,7 +71,11 @@ survey only, and checks, aggregated over them:
     tracking needs a cave-stratum marker the re-centre's save pass keeps: the
     underground flag, repaired with D19 -- which the persistence suite owns --
     or the chamber spawn id; the BREAK probe that drops both fails this check,
-    while dropping the flag alone does not reach it).
+    while dropping the flag alone does not reach it). The re-centre is walked:
+    from 30 u inside the centre chunk's edge to 30 u past it, then on, 30 u at
+    a time, up to 240 u past the line until the window moves, so re-centre
+    hysteresis (caves_transition's FIX G3 waits for 48 u, which left both
+    checks without a re-centre in any world) still gives them subjects.
 
 Review disposition: render owns F5's camera-distance walk-cycle observable; E7
 remains a suspected cache issue rather than a game-lab verdict because the

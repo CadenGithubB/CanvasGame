@@ -71,6 +71,8 @@ if (LAB.loaded) {
     var HIGH_EVERY = 48;      // high-jump spots every 48 u of along
     var FPS = 30;             // the real-loop frame rate for the 30 fps walks (2 physics steps per frame)
     var FPS_HALF = 60;        // the 30 fps crossing runs from this far before a chunk line to this far past it
+    var FPS_PAST_MAX = 240;   // ... and on up to this much further (half a chunk) if it has not re-centred yet
+    var PAST_RECORDS = 8;     // ... or until this many records follow its last re-centre (see walk's opts.past)
     var SNAP_R = 3;           // pre-shift stack snapshot radius in cells (+-36 u)
     var SNAP_NEAR = 60;       // take snapshots only within this of a chunk line (where a re-centre can happen)
     var LIGHT_D = [130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0];   // entrance-light sample distances
@@ -230,6 +232,14 @@ if (LAB.loaded) {
     // tx may be a list of WORLD waypoints [[x, y], ...] (ty ignored): one trace,
     // one tracer, the keys held from one waypoint to the next; maxTicks is then
     // per waypoint and `missed` is the worst arrival distance over them.
+    // opts.past = {ux, uy, step, max, after}: when the waypoints end with no
+    // window re-centre in the trace, walk on along (ux, uy), `step` u at a
+    // time, up to `max` u further, until one happens (or the walk is blocked);
+    // and when the last re-centre has fewer than PAST_RECORDS records after
+    // it, walk `after` u more so the level-ground filter (records k..k+6) has
+    // them. A re-centre hysteresis (audit G3's repair) moves the re-centre
+    // past the chunk line; without it the waypoints alone decide, so a walk
+    // that re-centres well before its end is traced exactly as before.
     function walk(W, E, tx, ty, maxTicks, tag, opts) {
         opts = opts || {};
         var spr = opts.fps ? Math.round(60 / opts.fps) : 1;
@@ -242,6 +252,20 @@ if (LAB.loaded) {
             wp = LAB.worldPos(); dist = Math.hypot(wp.x - p[0], wp.y - p[1]);   // arrival, before any settling
             missed = Math.max(missed, dist);
         });
+        var PA = opts.past;
+        var tail = function () { return T.shifts.length ? T.tr.length - 1 - T.shifts[T.shifts.length - 1] : -1; };
+        if (PA && tail() < PAST_RECORDS) {
+            var ext = 0, blocked = false, tail0 = tail();
+            var on = function (d) {        // true when the walk ends more than half a step short
+                var g = { x: LAB.worldPos().x + PA.ux * d, y: LAB.worldPos().y + PA.uy * d };
+                LAB.walkTo(g.x, g.y, { maxTicks: maxTicks, arrive: 4, fps: opts.fps || undefined, onTick: T.rec });
+                return Math.hypot(LAB.worldPos().x - g.x, LAB.worldPos().y - g.y) > 4 + d / 2;
+            };
+            while (!T.shifts.length && ext < PA.max && !blocked) { ext += PA.step; blocked = on(PA.step); }
+            if (T.shifts.length && tail() < PAST_RECORDS && !blocked) { ext += PA.after; on(PA.after); }
+            LAB.note("walk " + tag + ": " + (tail0 < 0 ? "no re-centre by its end" : "re-centred " + tail0 + " record(s) before its end") +
+                     ", walked on " + ext + " u: " + (T.shifts.length ? tail() + " records after the last re-centre" : blocked ? "blocked" : "no re-centre"));
+        }
         // Settle: keys released, ticks until standing on the lowest layer (in)
         // or not airborne (out). The ticks join the trace so every per-tick
         // check sees them. The player coasts on its own momentum meanwhile
@@ -485,10 +509,13 @@ if (LAB.loaded) {
     }
 
     // One straight 30 fps walk through the real loop across a chunk line inside
-    // a corridor, +-FPS_HALF u around the line (>= 6 frames either side at ~1.6
-    // u/frame for the level filter, and past any re-centre hysteresis a G3 fix
-    // might add, e.g. the 48 u of this suite's FIX probe). The 60 Hz re-centres come from the other
-    // walks, which cross chunk lines on their own (METRIC window_shifts_level).
+    // a corridor, +-FPS_HALF u around the line (>= 6 frames either side at ~3.3
+    // u/frame for the level filter). A re-centre hysteresis (a G3 repair; this
+    // suite's FIX G3 waits for 48 u past the line on the crossed axis) puts the
+    // re-centre beyond the walk's end, more so on an oblique corridor, so a
+    // walk that has not re-centred by then walks on (walk's opts.past) up to
+    // FPS_PAST_MAX u further. The 60 Hz re-centres come from the other walks,
+    // which cross chunk lines on their own (METRIC window_shifts_level).
     function fpsCrossing(W, net, label) {
         var CS = CHUNK_SIZE;
         for (var ci = 0; ci < net.corridors.length; ci++) {
@@ -503,8 +530,15 @@ if (LAB.loaded) {
             var tc = Math.min.apply(null, tcs);
             var cx = c.x1 + dx * tc, cy = c.y1 + dy * tc, ux = dx / L, uy = dy / L;
             LAB.placeWorld(cx - ux * FPS_HALF, cy - uy * FPS_HALF, "bottom"); quiet(); LAB.tick(10);
+            // The crossing starts in the window's centre chunk. updateChunks
+            // re-centres on any chunk change today; under hysteresis the
+            // placement can keep the previous centre, and the walk would then
+            // re-centre at its start instead of at the line.
+            var sw = LAB.worldPos(), half = Math.floor(WINDOW_CHUNKS / 2);
+            if (windowCX + half !== Math.floor(sw.x / CS) || windowCY + half !== Math.floor(sw.y / CS)) assembleWindow(Math.floor(sw.x / CS), Math.floor(sw.y / CS));
             if (jumpAirborne || !ceilAbove(LAB.layersAt(pos.x, pos.y), LAB.h())) continue;   // not a roofed corridor floor here
-            return [walk(W, null, cx + ux * FPS_HALF, cy + uy * FPS_HALF, 120, label + " corridor" + ci + " across " + wxy(cx, cy) + " @" + FPS + "fps", { fps: FPS })];
+            return [walk(W, null, cx + ux * FPS_HALF, cy + uy * FPS_HALF, 120, label + " corridor" + ci + " across " + wxy(cx, cy) + " @" + FPS + "fps",
+                         { fps: FPS, past: { ux: ux, uy: uy, step: 12, max: FPS_PAST_MAX, after: FPS_HALF } })];
         }
         return [];
     }

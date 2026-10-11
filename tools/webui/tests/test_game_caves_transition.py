@@ -51,7 +51,12 @@ Thresholds, and why ANY correct implementation meets them:
                 Motion checks use pre-shift stack copies and level ground so a
                 D1/D14 jolt is never blamed on the shift. A 30 fps crossing
                 covers two physics steps per rendered frame; a mouth dither
-                requires rebuild hysteresis.
+                requires rebuild hysteresis. The 30 fps crossing starts with
+                the window centred on its start chunk and, when it has not
+                re-centred at least 8 frames before its end, walks on (up to
+                240 u) until it has: re-centre hysteresis, the G3 repair, moves
+                the re-centre past the chunk line, and this suite's FIX G3 (48
+                u) once left the window-shift checks with no 30 fps subject.
 
 Every check aggregates over seeds and entrances and FAILS with a PRECONDITION
 detail if its scenario never reached the state it tests (walk did not reach the
@@ -363,6 +368,13 @@ PROBES: list = [
      "  if (!covered) { var __d = Infinity; (typeof deepCaveEntrances !== 'undefined' ? deepCaveEntrances : []).forEach(function (e) { "
      "__d = Math.min(__d, Math.hypot(x - e.x, y - e.y)); }); return __d < 120 ? 0.5 * (1 - __d / 120) : 0; }",
      {ENTRANCE_LIGHT: "FAIL"}),
+    # Cross-suite matrix (sixth October 2026 pass, jsc): this hysteresis used to
+    # void SHIFT_POS, SHIFT_H and SHIFT_UG here (the 30 fps crossing ended 1-2
+    # frames after its re-centre, too few for the level-ground filter) and
+    # enemies' two re-centre checks (its 60 u walk ended 30 u past the line,
+    # inside the 48 u). Both fixtures now walk on until the window moves, and
+    # under this probe the 30 fps crossings, enemies' 6/6 re-centres and every
+    # other check of both suites read as at baseline; only DITHER flips.
     ("FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
      "  if (pcx !== centerCX || pcy !== centerCY) {",
      "  if ((pcx !== centerCX || pcy !== centerCY) &&\n"
