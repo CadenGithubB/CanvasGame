@@ -372,6 +372,20 @@ PROBES: list = [
      _APPROACH_CEIL, _APPROACH_CEIL.replace("ceilZ: null,", "ceilZ: (approach.along < 30 ? target + e.ceilH : null),"),
      {C_MOUTH: "FAIL", C_ROOF: "PASS"}),
     # ── D16 ──
+    # Cross-suite matrix (third October 2026 pass, this probe alone against
+    # all 12 non-smoke suites, jsc): two collateral PASS->FAIL flips, both
+    # PRECONDITION voids, not detections. Moving the gate to its own stream
+    # changes which normal-Endless regions hold a network, so the windows
+    # those suites re-centre on the nearest network land elsewhere:
+    #   - physics "walking off a drop larger than STEP_DOWN on open ground
+    #     starts a fall within 3 physics steps": the baseline finds exactly
+    #     its 5 required drops, all in the two re-centred windows
+    #     (endless424242-far 3, endless777000-far 2); under the fix every
+    #     world finds 0;
+    #   - enemies "a surface enemy does not chase a player standing in the
+    #     cave below it": 3 valid enemy/player pairs at baseline, 0 under the
+    #     fix.
+    # A real D16 repair must give both fixtures subjects again first.
     ("FIX D16: draw the 30% cave gate from its own RNG stream",
      "var rng2 = chunkRng(regionX, regionY, 100);", "var rng2 = chunkRng(regionX, regionY, 101);",
      {C_ANGLE: "PASS"}),

@@ -324,7 +324,10 @@ PROBES: list[tuple] = [
     # With F1 repaired the spawn is waypoint 0, so the F2 budget must cover the
     # walk to the waypoint the game actually steers to and the unchased
     # control must walk away from the spawn: this is the contract any correct
-    # implementation meets once every patrol defect is repaired.
+    # implementation meets once every patrol defect is repaired. Cross-suite
+    # matrix (third October 2026 pass, this probe alone against all 12
+    # non-smoke suites, jsc): no collateral PASS->FAIL flip; the one collateral
+    # flip is "no enemy spawns on a wall cell" -> PASS, from its ruin-order part.
     ("FIX every patrol defect: F1 storey-aware validated waypoints + F3 Brute size + ruin order + R1 + R2",
      [_F1_VALIDATED_WAYPOINTS, _F3_BRUTE_SIZE, _RUIN_ORDER, _R2_ROOT_HOP, _R1_WAYPOINT_FEET], None,
      {_F2: "PASS", _PATROL: "PASS", _EMBED: "PASS", _SPAN: "PASS", _WPWALL: "PASS"}),
