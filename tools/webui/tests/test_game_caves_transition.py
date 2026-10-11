@@ -162,11 +162,31 @@ KNOWN_BUGS: dict[str, tuple[str, str]] = {
 
 # (description, anchor, replacement, {check id: "PASS" | "FAIL" | "PRECONDITION"}).
 # Anchors occur exactly once in game_lab.game_js(). Every probe was rerun in the
-# third October 2026 pass and fails each check it declares for its own reason.
+# fifth October 2026 pass and fails each check it declares for its own reason.
 # Collateral flips are not asserted (most are PRECONDITION voids of walks a
 # BREAK stops short), but every check retired from KNOWN_BUGS is declared on a
 # probe that fails it. "walk-in: the walk reaches ..." is the walk precondition
 # itself and can only fail with PRECONDITION (as under the re-centre BREAKs).
+#
+# Five of the retired checks are failed only by SYNTHETIC height excursions:
+# WALK_DH (D1/N4), WALK_SUNK (N14/D11), LAT_SUNK and LAT_RAISE (D11/D14) and
+# MOUTH_SUNK (D3/F6/D11/D14) are declared only on the three probes marked
+# "synthetic" below, which move pos.floorZ directly. They show that the walk
+# oracles see a height step or a sink, not that the historical defects still
+# reach these walks; with today's step limit, walls and spatial movement they
+# do not (fifth October 2026 pass, jsc). caves_geometry's BREAK D1 (the ramp
+# ends 1.5 h above the cave floor) and BREAK N14 (a 15% ramp) make the ramp
+# impassable: the in-walk stops at its lip, so WALK_DH and WALK_SUNK (with 12
+# other walk, dayNight and window-shift checks) fail only on their
+# PRECONDITION, and the lateral and mouth checks still pass. physics' BREAK D11
+# (an h=0 floor for blocked terrain) and caves_geometry's BREAK interior (the
+# lateral edge reopened) flip nothing here, alone or together, and D11 added to
+# this suite's D3, D2, D14 rock or D14/F6 roof BREAK flips none of the five.
+# The historical mechanisms are covered where they still act: caves_geometry's
+# entrance-step and walk-in/walk-out support checks (C_STEP, C_IN, C_OUT) fail
+# under BREAK D1 and BREAK N14, its interior step and headroom checks
+# (C_INTERIOR, C_HEAD) under BREAK interior, and physics' floor-picker check
+# (A1) under BREAK D11.
 _CEIL_CLAMP = (
     "    var _pz0 = pos.floorZ || 60;\n"
     "    pos.floorZ = (pos.floorZ || 60) + jumpVelZ * dt;\n"
@@ -322,7 +342,8 @@ PROBES: list = [
      "function resetEndlessMode() {",
      "function resetEndlessMode() { )",
      {LOAD: "FAIL"}),
-    ("BREAK: sink the player 1.25 h into the floor for the first underground tick of each stretch",
+    ("BREAK walk oracles (synthetic: moves pos.floorZ): sink the player 1.25 h into the floor for the first "
+     "underground tick of each stretch",
      [(_CAVE_SPACE, "var __hw1Sank = 0; " + _CAVE_SPACE),
       (_STEP_START, "function step(dt) {\n  if (__hw1Sank === 1) { pos.floorZ += 50; __hw1Sank = 2; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (!playerUnderground) __hw1Sank = 0; else if (__hw1Sank === 0) { __hw1Sank = 1; pos.floorZ -= 50; }")],
@@ -352,13 +373,15 @@ PROBES: list = [
      "      if ((type === 2 || (type === 4 && h > feetH + 1.0)) && h > feetH + 0.001 && h < ceilingH) ceilingH = h;",
      "      if ((type === 2 || type === 4) && h > feetH + 0.001 && h < ceilingH) ceilingH = h;",
      {CAP_UG: "FAIL"}),
-    ("BREAK network height: raise an underground player 0.5 h for one tick every 40 walking ticks",
+    ("BREAK network height (synthetic: moves pos.floorZ): raise an underground player 0.5 h for one tick every "
+     "40 walking ticks",
      [(_CAVE_SPACE, "var __hw1Bump = 0, __hw1BumpN = 0; " + _CAVE_SPACE),
       (_STEP_START, "function step(dt) {\n  if (__hw1Bump) { pos.floorZ -= 20; __hw1Bump = 0; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1BumpN % 40 === 0) { __hw1Bump = 1; pos.floorZ += 20; }")],
      None,
      {NET_DH: "FAIL", WALK_DH: "FAIL"}),
-    ("BREAK network support: sink an underground player 1.25 h for one tick every 40 walking ticks",
+    ("BREAK network support (synthetic: moves pos.floorZ): sink an underground player 1.25 h for one tick "
+     "every 40 walking ticks",
      [(_CAVE_SPACE, "var __hw1Sink = 0, __hw1SinkN = 0; " + _CAVE_SPACE),
       (_STEP_START, "function step(dt) {\n  if (__hw1Sink) { pos.floorZ += 50; __hw1Sink = 0; }\n  updatePlayerCaveSpace();"),
       (_WALK_EASE, _WALK_EASE + "\n      if (playerUnderground && ++__hw1SinkN % 40 === 0) { __hw1Sink = 1; pos.floorZ -= 50; }")],
@@ -404,7 +427,9 @@ PROBES: list = [
 # still a known baseline failure. Do not silently accept a repaired regression.
 # The FIX probes for the contracts the milestone repaired are now BREAK probes
 # (see the PROBES header): each repaired check is shown to fail again when its
-# defect is put back.
+# defect is put back, except the five height checks the PROBES header names,
+# which only synthetic height excursions fail here (their historical
+# mechanisms are covered by caves_geometry and physics).
 KNOWN_BUGS = {DITHER: KNOWN_BUGS[DITHER]}
 CavesTransitionSuite = suite_testcase("caves_transition", KNOWN_BUGS, min_checks=33)
 CavesTransitionProbes = probe_testcase("caves_transition", PROBES)
