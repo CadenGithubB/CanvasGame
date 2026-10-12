@@ -24,9 +24,11 @@ the defect back. The frozen-tree FIX matrix below was run after the second
 pass only for the FIX probes whose mutation it added or changed; a
 re-targeted probe with an unchanged mutation (cave geometry's FIX D16) was
 not re-matrixed until the third pass, and its mutation was replaced in the
-fourth. Do not call the entire historical mutation matrix validated. Browser
-pixel grading also needs a fresh browser baseline, independent of the
-headless gate.
+fourth. The full frozen-tree protocol, with every suite's FIX probes in the
+matrix, was run after the sixth pass; its results end this section, with
+one problem still open. That matrix covers FIX probes only, so do not call
+the entire historical mutation matrix validated. Browser pixel grading also
+needs a fresh browser baseline, independent of the headless gate.
 
 A third October pass answered a review of the second. The enemies
 return-to-patrol budget now covers the walk to the waypoint the game is
@@ -155,6 +157,95 @@ metric, JXA agrees in check ids and verdicts (cave geometry 132 s, loot
 383 s, enemies 471 s, cave transition 72 s, physics 362 s), and the core gate
 passed (367 tests). Only these two FIX probes were rerun in the matrix, and
 the browser pixel gate was not run.
+
+The full frozen-tree completion protocol was then run on the commit that
+records the sixth pass (2d422a8); no lab file has changed since. Every run
+was serial (`HW1_GAME_JOBS=1`, one run at a time) on jsc with
+`PATH=/usr/bin:/bin:/usr/sbin:/sbin`, in a detached worktree that was clean
+before and after, on a shared 10-core machine at a 1-minute load average of
+4.5 to 11.5. Per suite (FIX matrix: probes x target suites, wall time):
+
+| Suite | FIX matrix | Checks (FAIL) | jsc pair | JXA |
+| --- | --- | --- | --- | --- |
+| render | 1 x 11, 372 s: no flip | 24 (1) | 15.60 / 15.96 s | 228.9 s |
+| loot | 6 x 11, 1,241 s: no flip | 18 (4) | 26.63 / 26.66 s | 398.4 s |
+| browser | no FIX probes | 11 (0) | 5.25 / 5.21 s | 59.5 s |
+| perf | 7 x 11, 1,306 s: no flip | 20 (7) | 42.13 / 42.26 s | 638.6 s |
+| persistence | 17 x 11, 3,220 s: no flip | 31 (16) | 14.82 / 14.64 s | 188.4 s |
+| tools | 14 x 11, 2,752 s: no flip | 25 (16) | 8.89 / 9.10 s | 115.2 s |
+| physics | 1 x 12, 414 s: declared flip only | 16 (1) | 30.02 / 30.29 s | 377.6 s |
+| enemies | 11 x 12, 2,386 s: one undeclared PASS->FAIL (below) | 18 (7) | 40.09 / 40.02 s | 493.3 s |
+| cave milestone | no FIX probes | 60 (0) | 2.81 / 2.63 s | 25.6 s |
+| cave geometry | 6 x 12 (one run with cave transition's: 84 cells, 1,597 s): documented flips only | 20 (3) | 9.55 / 9.67 s | 138.8 s |
+| cave transition | 1 x 12 (same run): documented flips only | 33 (1) | 7.27 / 7.21 s | 75.8 s |
+| smoke | not a matrix target | 13 (0) | 0.90 / 0.95 s | 6.3 s |
+| env | no probe table | not run | not run | not run |
+
+Each matrix ran every FIX probe that `game_probe_matrix --kind fix` selects
+against every other non-smoke suite; the physics, enemies, cave geometry and
+cave transition matrices also targeted the probe's own suite. Physics' FIX
+D21 flips only its declared check (a lethal hit ends the game within 2 s).
+Cave geometry's six probes (FIX D16, NOT A FIX D16, FIX levee C, FIX levee
+B, PARTIAL FIX levee A and FIX D17) and cave transition's FIX G3 ran in one
+invocation, which exits 1 on four collateral PASS->FAIL flips, all
+documented. Levee C, levee B and D17 flip only their own check, partial
+levee A flips nothing, and G3 flips only the dither check and perf's jitter
+check. Both D16 probes void physics' open-ground drop check and enemies'
+surface-enemy-over-cave check, each failing with PRECONDITION on 0
+subjects, and FIX D16 also turns the enemies F2 known bug PASS (52/52), as
+the D16 notes above and on the probes record. Enemies' 11 FIX probes flip
+nothing in any other suite. In their own suite every declared flip happens,
+the R1-only and R2-only partial fixes leave F2 failing as designed, and the
+F1, patrol-freeze and every-patrol-defect probes also turn "no enemy spawns
+on a wall cell" PASS through the ruin-order fix each carries. That matrix
+exits 1 on one undeclared flip, the open problem below. Browser's 5
+probes and cave milestone's 18 are all BREAKs and env has no probe table,
+so those suites have no FIX matrix; smoke is not a matrix target. No cell
+had a harness error, a missing check or a skipped anchor. The render, loot,
+perf, persistence and tools matrices did not target the probe's own suite,
+and probe unittests grade only declared checks, so an undeclared flip
+inside those suites (the kind found in enemies) was not looked for.
+
+Each jsc pair ran in fresh processes and agrees in check ids and order,
+statuses, details, non-`_ms` metrics and NOTEs; every FAIL is in its suite's
+`KNOWN_BUGS` and matches its regex, and every run is under the 60 s budget.
+Each JXA run agrees with jsc in check ids and PASS/FAIL statuses, and in
+details too; the only JXA difference is a tools NOTE saying JXA has no
+synchronous microtask drain, so only jsc drives caveTest to completion.
+Page has no harness: its 11 unittests and the syntax checker's output over
+the built page are identical in two jsc runs (0.45 s each) and on JXA
+(0.5 s), where the checker also flags a deliberately broken region. Env was
+a target of every matrix but had no determinism pair or JXA run.
+
+Base and probe unittests passed for render, loot, browser (its 4 skipped
+tests grade a saved real-browser run), perf, persistence, tools, cave
+geometry and cave transition, and base unittests for smoke and page; no
+unittest of physics, enemies, cave milestone or env was part of this run.
+Seed sweeps of render, loot, browser, perf, persistence and tools flipped no
+verdict against the default run and had no PRECONDITION failure, crash or
+FAIL outside `KNOWN_BUGS`. In loot's `--seeds 12345,1,777 --endless-seeds
+424242,8` sweep the near-chest prompt known bug still fails for its
+documented reason on Cave Test 12345 and 777 (no prompt at 16.8 u and
+6.1 u), but the Cave Test 1 walker rests 24.5 u out, past the 18 u cutoff,
+and sees its prompt, so the detail reads 1/3 and the `KNOWN_BUGS` regex,
+which needs every walk to fail, does not match on that seed set. The seed
+sweeps of physics, enemies, cave milestone, cave geometry, cave transition
+and env, and the browser pixel gate, were not run.
+
+One problem remains open. Enemies' FIX F3 at the spawn site (the 3 x 3
+block around the spawn cell must be open) voids that suite's "a surface
+enemy does not chase a player standing in the cave below it", the check
+both D16 probes also void. It moves spawns (888 enemies instead of 892) and
+leaves the fixture 2 valid surface-enemy/player pairs where the check needs
+3, so it fails with PRECONDITION (0/2 chased the player through the roof);
+the baseline has exactly 3. A separate rerun of that cell reproduced it.
+The earlier full enemies matrix targeted only the other suites, and neither
+the probe nor any document recorded it before this note. Because
+the fixture sits at its 3-pair floor, any repair that moves enemy spawns
+can void the check; it needs more subjects before such a repair is judged.
+Under the same probe the F2 known bug still fails (46/49 returned) and also
+lists endless 777 cave surface.tank@14646,582, which reaches its route only
+after 33.5 s.
 
 `game_lab.py` extracts the shipping JavaScript from
 `components/hardwareone/WebPage_Games.h`, preserves its header line numbers,
