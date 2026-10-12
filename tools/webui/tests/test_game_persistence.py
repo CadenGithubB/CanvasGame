@@ -206,6 +206,16 @@ def _still(cid: str) -> tuple[str, str]:
 #     BREAK flips the whole check.
 PROBES = [
     # ── FIX probes: remove a known bug's cause, its check must PASS ──────────
+    # Cross-suite matrix for FIX D23a (sixth October 2026 pass, jsc): a 5-chunk
+    # start window used to empty fixtures that assumed 7 chunks -- caves
+    # geometry's Cave Test 424242 had no entrance in its window, loot's window
+    # cover (built for +-2 usable chunks) judged 2 of 44 cave chests, voiding
+    # three loot preconditions, and enemies' generation survey lost the only
+    # ruin-order witness (endless 55555, chunk 3,-3), so that known bug read
+    # PASS with nothing repaired. Those fixtures now take their windows from
+    # WINDOW_CHUNKS. Rerun against every non-smoke suite, this probe flips
+    # only WINDOW_MATCHES_SETTINGS (enemies' survey judges the same 892
+    # enemies, loot the same 44 cave chests).
     ("FIX [D23a]: start the window at the settings' size (5); the resize Apply bug (D23b) stays",
      "windowChunks:   7,", "windowChunks:   5,",
      {WINDOW_MATCHES_SETTINGS: "PASS", APPLY_RESIZE: _still(APPLY_RESIZE)}),

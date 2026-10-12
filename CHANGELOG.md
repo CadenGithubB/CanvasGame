@@ -93,6 +93,16 @@
   return-to-patrol detail now lists every late return, as documented, and
   the cave transition lab says which of its checks only synthetic height
   changes fail and where the original defects are still caught.
+- Keeps the audit lab's fixtures independent of the chunk window size and of
+  re-centre hysteresis. Started at the 5-chunk window the settings show, the
+  cave geometry, loot and enemies labs lost their subjects, and an enemy that
+  spawns inside a ruin wall stopped being found, so its known bug read as
+  fixed; they now place their windows from the window size in use. The cave
+  transition and enemies labs walk on past a chunk line until the window
+  actually re-centres, so a hysteresis fix no longer leaves their window-shift
+  checks without subjects. The physics lab's timing metrics now carry the
+  `_ms` suffix that run-to-run comparisons skip, and the lab rejects a timing
+  metric without it.
 
 ## 0.0 — 2026-09-27
 

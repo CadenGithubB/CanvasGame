@@ -372,9 +372,11 @@ PROBES: list = [
     # void SHIFT_POS, SHIFT_H and SHIFT_UG here (the 30 fps crossing ended 1-2
     # frames after its re-centre, too few for the level-ground filter) and
     # enemies' two re-centre checks (its 60 u walk ended 30 u past the line,
-    # inside the 48 u). Both fixtures now walk on until the window moves, and
-    # under this probe the 30 fps crossings, enemies' 6/6 re-centres and every
-    # other check of both suites read as at baseline; only DITHER flips.
+    # inside the 48 u). Both fixtures now walk on until the window moves.
+    # Rerun against every non-smoke suite, this probe flips DITHER and perf's
+    # jitter check (the same G3 defect, which perf's own FIX G3 declares) and
+    # nothing else: the 30 fps crossings and enemies' 6/6 re-centres keep
+    # their subjects.
     ("FIX G3: require 48 u of chunk-boundary hysteresis before re-centring",
      "  if (pcx !== centerCX || pcy !== centerCY) {",
      "  if ((pcx !== centerCX || pcy !== centerCY) &&\n"

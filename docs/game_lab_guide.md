@@ -114,6 +114,48 @@ sweeps fail only known bugs for their documented reasons, and the core gate
 passed. No FIX mutation changed, so the cross-suite matrix was not rerun,
 and the browser pixel gate was not run.
 
+A sixth October pass answered the full frozen-tree protocol run after the
+fifth. Persistence's FIX D23a starts the chunk window at the 5 chunks the
+settings show, and three fixtures had assumed today's 7: cave geometry's Cave
+Test 424242 had no entrance path in its start window (its world check failed
+with no PRECONDITION marker), loot's window cover, built for two usable chunks
+either side of the centre, judged 2 of 44 cave chests and voided three loot
+preconditions, and the enemies generation survey judged 383 instead of 892
+enemies and lost the only ruin-order witness (endless 55555, chunk 3,-3), so
+that known bug read PASS with nothing repaired. Each fixture now follows
+WINDOW_CHUNKS: a Cave Test world whose start window holds no entrance path is
+also scanned from a window centred on the entrance nearest the player, and
+cave geometry's world check, the suite's coverage gate, fails only with
+PRECONDITION; loot places its windows from the usable span of the window in
+use and fails its terminal-chamber precondition when a placement judges
+nothing, instead of dropping the chamber; and the enemies survey covers the
+7 x 7 chunks around each world's centre chunk whatever the window size, each
+chunk judged in the window whose centre is nearest it. Under FIX D23a those
+three suites now read as at baseline. Cave transition's FIX G3 (48 u of
+re-centre hysteresis) voided that suite's three window-shift motion checks
+and enemies' two re-centre checks, and no document said so: the 30 fps
+crossing re-centred a frame or two before its end, too late for the
+level-ground filter, and the enemies walk ended 30 u past the line, inside the
+hysteresis. Both now walk on until the window moves (up to 240 u past the
+line), the crossing starting with the window centred on its start chunk;
+under FIX G3 only the dither check flips in either suite. Physics reported
+its scenario timings as `physics.ms.<scenario>`, which the determinism rule
+above compares, so every pair of runs differed in ten metrics; they are now
+`physics.time.<scenario>_ms`, and `LAB.metric` rejects an `ms` metric whose
+id does not end in `_ms` (an env check, with a test that removes the guard).
+On jsc, the unmutated runs of the changed cave geometry, loot, enemies and
+cave transition harnesses match the frozen-tree runs in every check, detail
+and metric. Every suite passed its base unittests and the changed suites
+(cave geometry, cave transition, physics, loot, persistence, enemies) their
+probe unittests. Rerun against every non-smoke suite, FIX D23a flips only
+its own check, and FIX G3 flips only the dither check and perf's jitter
+check (the same G3 defect, which perf's FIX G3 declares). Two fresh jsc runs
+of each changed harness (and env) agree in every check, detail and non-`_ms`
+metric, JXA agrees in check ids and verdicts (cave geometry 132 s, loot
+383 s, enemies 471 s, cave transition 72 s, physics 362 s), and the core gate
+passed (367 tests). Only these two FIX probes were rerun in the matrix, and
+the browser pixel gate was not run.
+
 `game_lab.py` extracts the shipping JavaScript from
 `components/hardwareone/WebPage_Games.h`, preserves its header line numbers,
 and runs focused harnesses against the real game functions. The lab covers cave
