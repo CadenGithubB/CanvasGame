@@ -364,9 +364,10 @@ Also owed:
     `legacy:false`, and there are no render actions.
   - Its Graphics row expects exactly one button, so `fxBench` stays outside the
     manifest.
-  - 3d-int's render-feature comment says a switch may "change drawing only:
-    never simulation, world data or the random streams". The proposed wording
-    is "never gameplay simulation", and it still needs that owner's sign-off.
+  - 3d-int's render-feature comment said a switch may "change drawing only:
+    never simulation, world data or the random streams". The owner approved
+    the proposed "never gameplay simulation" on 2026-10-12; the comments in
+    01-config-state.js and 23-events-init.js now say so.
   - The single Legacy `render_parity` re-pin foreseen for S2 was not needed: the
     merged-tree pins passed under JavaScriptCore.
   - Re-run 3d-int's suites, including its untracked tests, on the merged tree

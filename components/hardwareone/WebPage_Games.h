@@ -1130,7 +1130,8 @@ document.addEventListener('MSFullscreenChange',     onFullscreenChange);
 // functions. Nothing is persisted, so a separate test tab never changes a
 // player's game. Presets are derived from the definitions on demand, so a
 // feature registered by a later fragment is always included. A switch may
-// change drawing only: never simulation, world data or the random streams.
+// change presentation only (drawing and cosmetic effects): never gameplay
+// simulation, world data or the random streams.
 var RENDER_FEATURE_DEFS = [];      // frozen definitions, registration order
 var RENDER_FEATURES = {};          // live values by key
 var RENDER_ACTIONS = [];           // frozen {key, label, title, run}
@@ -41078,7 +41079,7 @@ document.getElementById('chkPolyTypes').addEventListener('change', function() { 
   });
 
   // G — Recommended/Legacy render A/B at the current view. Presentation only:
-  // never world data, simulation, resolution or the random streams.
+  // never world data, gameplay simulation, resolution or the random streams.
   document.addEventListener('keydown', handleRenderPresetHotkey);
 
   document.addEventListener('keydown', function(e) {

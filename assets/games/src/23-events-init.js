@@ -556,7 +556,7 @@ document.getElementById('chkPolyTypes').addEventListener('change', function() { 
   });
 
   // G — Recommended/Legacy render A/B at the current view. Presentation only:
-  // never world data, simulation, resolution or the random streams.
+  // never world data, gameplay simulation, resolution or the random streams.
   document.addEventListener('keydown', handleRenderPresetHotkey);
 
   document.addEventListener('keydown', function(e) {
